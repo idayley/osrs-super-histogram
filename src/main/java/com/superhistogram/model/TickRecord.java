@@ -21,6 +21,12 @@ public final class TickRecord
 	public int attackLate = -1;
 	public FoodKind eat;
 	public int eatCost;
+	/** Production input used with no matching XP (e.g. a burnt fish). */
+	public boolean failedAction;
+	/** Bank opened right after a production run finished. */
+	public boolean bankClick;
+	/** Ticks between the run's finish and the bank click; set with bankClick. */
+	public int wasted;
 
 	public TickRecord(int tick)
 	{
