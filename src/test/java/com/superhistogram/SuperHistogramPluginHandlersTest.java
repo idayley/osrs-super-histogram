@@ -20,6 +20,9 @@ import net.runelite.api.GameState;
 import net.runelite.api.HitsplatID;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
+import net.runelite.client.game.ItemEquipmentStats;
+import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.ItemStats;
 import net.runelite.api.coords.WorldPoint;
 import org.junit.Before;
 import org.junit.Test;
@@ -30,6 +33,8 @@ public class SuperHistogramPluginHandlersTest
 	private Player me;
 	private SuperHistogramConfig config;
 	private SuperHistogramPlugin plugin;
+	private ItemManager itemManager;
+	private NPC npc;
 
 	@Before
 	public void setUp()
@@ -49,6 +54,9 @@ public class SuperHistogramPluginHandlersTest
 		when(me.getAnimation()).thenReturn(-1);
 		plugin = new SuperHistogramPlugin();
 		plugin.client = client;
+		itemManager = mock(ItemManager.class);
+		npc = mock(NPC.class);
+		plugin.itemManager = itemManager;
 		plugin.config = config;
 		plugin.initModel();
 		plugin.handleGameState(GameState.LOGGED_IN, 0);
@@ -277,6 +285,55 @@ public class SuperHistogramPluginHandlersTest
 		plugin.handleGameState(GameState.LOGGED_IN, 2500);
 		assertEquals(1, plugin.buildState().timeline.peek(0).xp.size());
 		assertEquals(100, plugin.buildState().xp.sessionXp());
+	}
+
+	@Test
+	public void ownAttackAnimationRecordsAttack()
+	{
+		when(me.getInteracting()).thenReturn(npc);
+		when(me.getAnimation()).thenReturn(390);
+		plugin.handleTick(1000);
+		plugin.handleAnimation(me);
+		assertEquals(0, plugin.timeline.peek(0).attackLate);
+	}
+
+	@Test
+	public void eatAnimationIsNotAttack()
+	{
+		when(me.getInteracting()).thenReturn(npc);
+		when(me.getAnimation()).thenReturn(829);
+		plugin.handleTick(1000);
+		plugin.handleAnimation(me);
+		assertEquals(-1, plugin.timeline.peek(0).attackLate);
+	}
+
+	@Test
+	public void animationWithoutNpcTargetIgnored()
+	{
+		when(me.getInteracting()).thenReturn(null);
+		when(me.getAnimation()).thenReturn(390);
+		plugin.handleTick(1000);
+		plugin.handleAnimation(me);
+		assertEquals(-1, plugin.timeline.peek(0).attackLate);
+	}
+
+	@Test
+	public void weaponSpeedFromItemStats()
+	{
+		when(itemManager.getItemStats(4151)).thenReturn(
+			new ItemStats(true, 0.5, 0, ItemEquipmentStats.builder().aspeed(6).build()));
+		plugin.handleWeapon(4151);
+		assertEquals(6, plugin.weaponSpeed);
+	}
+
+	@Test
+	public void missingStatsFallBackTo4()
+	{
+		when(itemManager.getItemStats(1234)).thenReturn(null);
+		plugin.handleWeapon(1234);
+		assertEquals(4, plugin.weaponSpeed);
+		plugin.handleWeapon(-1);
+		assertEquals(4, plugin.weaponSpeed);
 	}
 
 	private static void paint(BarState s)

@@ -12,22 +12,37 @@ import com.superhistogram.model.SessionClock;
 import com.superhistogram.model.TickRecord;
 import com.superhistogram.model.Timeline;
 import com.superhistogram.model.XpTracker;
+import com.superhistogram.collect.EatCollector;
+import com.superhistogram.model.combat.AttackTimer;
 import com.superhistogram.ui.BarOverlay;
 import com.superhistogram.ui.Pulse;
+import java.util.HashMap;
+import java.util.Map;
 import javax.inject.Inject;
 import net.runelite.api.Actor;
+import net.runelite.api.AnimationID;
 import net.runelite.api.Client;
+import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameState;
 import net.runelite.api.HitsplatID;
+import net.runelite.api.InventoryID;
+import net.runelite.api.Item;
+import net.runelite.api.ItemContainer;
+import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
+import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.StatChanged;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.game.ItemEquipmentStats;
+import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.ItemStats;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -40,6 +55,7 @@ public class SuperHistogramPlugin extends Plugin
 	static final int TIMELINE_TICKS = 512;
 	/** A jump of more than this many tiles in one tick is a teleport, not movement. */
 	static final int MAX_STEP_TILES = 2;
+	static final int EAT_ANIMATION = AnimationID.CONSUMING;
 
 	@Inject
 	Client client;
@@ -50,6 +66,9 @@ public class SuperHistogramPlugin extends Plugin
 	@Inject
 	SuperHistogramConfig config;
 
+	@Inject
+	ItemManager itemManager;
+
 	private final ModeDetector modeDetector = new ModeDetector();
 
 	// Replaced wholesale on start/stop, read by the render thread.
@@ -59,6 +78,9 @@ public class SuperHistogramPlugin extends Plugin
 	volatile SessionClock clock;
 	private MovementTracker movement;
 	private ClickCollector clicks;
+	volatile AttackTimer attack;
+	private EatCollector eats;
+	volatile int weaponSpeed = AttackTimer.DEFAULT_SPEED;
 	Pulse pulse;
 	private BarOverlay overlay;
 
@@ -97,6 +119,7 @@ public class SuperHistogramPlugin extends Plugin
 		clock = new SessionClock();
 		movement = new MovementTracker(timeline);
 		clicks = new ClickCollector(timeline);
+		resetCombat();
 		idleThreshold = config.afkAfterSeconds();
 		idle = new IdleTracker(idleThreshold);
 		if (pulse == null)
@@ -111,6 +134,13 @@ public class SuperHistogramPlugin extends Plugin
 		{
 			clock.onLoggedIn(System.currentTimeMillis());
 		}
+	}
+
+	private void resetCombat()
+	{
+		attack = new AttackTimer();
+		eats = new EatCollector(timeline, attack);
+		weaponSpeed = AttackTimer.DEFAULT_SPEED;
 	}
 
 	// ---- event subscriptions: thin wrappers over the testable handlers below ----
@@ -137,6 +167,43 @@ public class SuperHistogramPlugin extends Plugin
 	public void onMenuOptionClicked(MenuOptionClicked e)
 	{
 		handleClick(System.currentTimeMillis());
+		if ("Eat".equals(e.getMenuOption()))
+		{
+			handleEatClick(e.getItemId());
+		}
+	}
+
+	@Subscribe
+	public void onAnimationChanged(AnimationChanged e)
+	{
+		handleAnimation(e.getActor());
+	}
+
+	@Subscribe
+	public void onItemContainerChanged(ItemContainerChanged e)
+	{
+		ItemContainer c = e.getItemContainer();
+		if (c == null)
+		{
+			return;
+		}
+		if (e.getContainerId() == InventoryID.EQUIPMENT.getId())
+		{
+			Item w = c.getItem(EquipmentInventorySlot.WEAPON.getSlotIdx());
+			handleWeapon(w == null ? -1 : w.getId());
+		}
+		else if (e.getContainerId() == InventoryID.INVENTORY.getId())
+		{
+			Map<Integer, Integer> counts = new HashMap<>();
+			for (Item i : c.getItems())
+			{
+				if (i != null && i.getId() > 0)
+				{
+					counts.merge(i.getId(), i.getQuantity(), Integer::sum);
+				}
+			}
+			handleInventory(counts);
+		}
 	}
 
 	@Subscribe
@@ -221,6 +288,54 @@ public class SuperHistogramPlugin extends Plugin
 		}
 	}
 
+	/** An own animation while targeting an NPC counts as an attack unless it is the eat animation. */
+	void handleAnimation(Actor a)
+	{
+		if (timeline == null || a == null || a != client.getLocalPlayer())
+		{
+			return;
+		}
+		int anim = a.getAnimation();
+		if (anim == -1 || anim == EAT_ANIMATION || !(a.getInteracting() instanceof NPC) || !attack.canAttack(tick))
+		{
+			return;
+		}
+		TickRecord r = timeline.at(tick);
+		if (r != null)
+		{
+			r.attackLate = attack.onAttack(tick, weaponSpeed);
+		}
+	}
+
+	void handleEatClick(int itemId)
+	{
+		if (eats != null)
+		{
+			eats.onEatClick(tick, itemId);
+		}
+	}
+
+	void handleInventory(Map<Integer, Integer> counts)
+	{
+		if (eats != null)
+		{
+			eats.onInventory(tick, counts);
+		}
+	}
+
+	/** itemId is the equipped weapon, or -1 for none. */
+	void handleWeapon(int itemId)
+	{
+		weaponSpeed = itemId < 0 ? AttackTimer.DEFAULT_SPEED : weaponSpeed(itemId);
+	}
+
+	private int weaponSpeed(int itemId)
+	{
+		ItemStats stats = itemManager == null ? null : itemManager.getItemStats(itemId);
+		ItemEquipmentStats eq = stats == null ? null : stats.getEquipment();
+		return eq != null && eq.getAspeed() > 0 ? eq.getAspeed() : AttackTimer.DEFAULT_SPEED;
+	}
+
 	void handleClick(long nowMs)
 	{
 		if (clicks != null)
@@ -257,6 +372,7 @@ public class SuperHistogramPlugin extends Plugin
 				xp.rebind(timeline);
 				movement = new MovementTracker(timeline);
 				clicks = new ClickCollector(timeline);
+				resetCombat();
 				tick = -1;
 				idle = new IdleTracker(idleThreshold);
 				lastLocation = null;
