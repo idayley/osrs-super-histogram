@@ -34,6 +34,17 @@ public final class TickRecord
 	/** Ticks lost since the previous cast was ready (0 when on time or after a pause). */
 	public int castLost;
 
+	/** The player animated while a gathering pill was open. */
+	public boolean roll;
+	/** Item id gained by a gathering success this tick; 0 when none. */
+	public int gathered;
+	/** The gathered-from resource ran out this tick. */
+	public boolean depleted;
+	/** Ticks from a resource running out to the click on the next one; 0 when none. */
+	public int reclick;
+	/** Bank click while the inventory was full of gathered items. */
+	public boolean gatherBank;
+
 	public TickRecord(int tick)
 	{
 		this.tick = tick;
