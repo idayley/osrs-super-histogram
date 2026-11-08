@@ -13,6 +13,12 @@ import net.runelite.client.config.Range;
 @ConfigGroup("superhistogram")
 public interface SuperHistogramConfig extends Config
 {
+	enum HullFlashMisses
+	{
+		HIDE,
+		FAINT
+	}
+
 	enum Metronome
 	{
 		OFF,
@@ -142,5 +148,38 @@ public interface SuperHistogramConfig extends Config
 	default boolean showEatCosts()
 	{
 		return true;
+	}
+
+	@ConfigItem(
+		position = 14,
+		keyName = "hullFlash",
+		name = "Flash enemy on hit",
+		description = "Briefly outline the enemy whose hitsplat just landed on you"
+	)
+	default boolean hullFlash()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		position = 15,
+		keyName = "hullFlashAtBosses",
+		name = "Also at bosses",
+		description = "Also flash bosses"
+	)
+	default boolean hullFlashAtBosses()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		position = 16,
+		keyName = "hullFlashMisses",
+		name = "Misses",
+		description = "Whether a 0 hit flashes the enemy faintly grey"
+	)
+	default HullFlashMisses hullFlashMisses()
+	{
+		return HullFlashMisses.FAINT;
 	}
 }

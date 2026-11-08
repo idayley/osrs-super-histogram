@@ -450,4 +450,115 @@ public class SuperHistogramPluginHandlersTest
 		assertEquals(0.333f, r.flickPhase, 0.01f);
 		assertTrue(r.clicks.isEmpty());
 	}
+
+	// ---- hull flash ----
+
+	private void hullSetup(String name)
+	{
+		when(config.hullFlash()).thenReturn(true);
+		when(config.hullFlashAtBosses()).thenReturn(false);
+		when(config.hullFlashMisses()).thenReturn(SuperHistogramConfig.HullFlashMisses.FAINT);
+		when(npc.getIndex()).thenReturn(7);
+		when(npc.getInteracting()).thenReturn(me);
+		when(npc.getAnimation()).thenReturn(422);
+		when(npc.getName()).thenReturn(name);
+	}
+
+	@Test
+	public void hitFlashesSingleAttacker()
+	{
+		hullSetup("Goblin");
+		plugin.handleTick(900);
+		plugin.handleAnimation(npc);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 5, 1000);
+		assertTrue(plugin.flashTarget().npc == npc);
+		assertFalse(plugin.flashTarget().miss);
+		assertEquals(1000, plugin.flashTarget().startMs);
+	}
+
+	@Test
+	public void missFlashesFaint()
+	{
+		hullSetup("Goblin");
+		plugin.handleTick(900);
+		plugin.handleAnimation(npc);
+		plugin.handleHit(me, HitsplatID.BLOCK_ME, 0, 1000);
+		assertTrue(plugin.flashTarget().miss);
+	}
+
+	@Test
+	public void swingAloneDoesNotFlash()
+	{
+		hullSetup("Goblin");
+		plugin.handleTick(900);
+		plugin.handleAnimation(npc);
+		assertNull(plugin.flashTarget());
+	}
+
+	@Test
+	public void twoAttackersSameTickFlashNothing()
+	{
+		hullSetup("Goblin");
+		NPC other = mock(NPC.class);
+		when(other.getIndex()).thenReturn(9);
+		when(other.getInteracting()).thenReturn(me);
+		when(other.getAnimation()).thenReturn(422);
+		when(other.getName()).thenReturn("Goblin");
+		plugin.handleTick(900);
+		plugin.handleAnimation(npc);
+		plugin.handleAnimation(other);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 5, 1000);
+		assertNull(plugin.flashTarget());
+	}
+
+	@Test
+	public void swingAtSomeoneElseIgnored()
+	{
+		hullSetup("Goblin");
+		when(npc.getInteracting()).thenReturn(mock(Player.class));
+		plugin.handleTick(900);
+		plugin.handleAnimation(npc);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 5, 1000);
+		assertNull(plugin.flashTarget());
+	}
+
+	@Test
+	public void bossNotFlashedByDefault()
+	{
+		hullSetup("Vorkath");
+		plugin.handleTick(900);
+		plugin.handleAnimation(npc);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 5, 1000);
+		assertNull(plugin.flashTarget());
+	}
+
+	@Test
+	public void despawnAndLogoutClearAttribution()
+	{
+		hullSetup("Goblin");
+		plugin.handleTick(900);
+		plugin.handleAnimation(npc);
+		plugin.handleNpcDespawned(npc);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 5, 1000);
+		assertNull(plugin.flashTarget());
+
+		plugin.handleAnimation(npc);
+		plugin.handleGameState(GameState.LOGIN_SCREEN, 0);
+		plugin.handleGameState(GameState.LOGGED_IN, 0);
+		plugin.handleTick(1100);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 5, 1200);
+		assertNull(plugin.flashTarget());
+	}
+
+	@Test
+	public void hopClearsAttribution()
+	{
+		hullSetup("Goblin");
+		plugin.handleTick(900);
+		plugin.handleAnimation(npc);
+		plugin.handleGameState(GameState.HOPPING, 0);
+		plugin.handleGameState(GameState.LOGGED_IN, 0);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 5, 1000);
+		assertNull(plugin.flashTarget());
+	}
 }

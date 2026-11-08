@@ -17,7 +17,11 @@ import com.superhistogram.collect.PrayerCollector;
 import com.superhistogram.model.combat.Beat;
 import com.superhistogram.model.combat.FlickClassifier;
 import com.superhistogram.model.combat.AttackTimer;
+import com.superhistogram.model.combat.Bosses;
+import com.superhistogram.model.combat.FlashRule;
+import com.superhistogram.model.combat.HitAttribution;
 import com.superhistogram.ui.BarOverlay;
+import com.superhistogram.ui.HullFlashOverlay;
 import com.superhistogram.ui.Pulse;
 import java.util.HashMap;
 import java.util.Map;
@@ -41,6 +45,7 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.api.events.NpcDespawned;
 import net.runelite.api.events.StatChanged;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -53,6 +58,7 @@ import net.runelite.client.util.HotkeyListener;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.ui.overlay.outline.ModelOutlineRenderer;
 
 @PluginDescriptor(
 	name = "Super Histogram"
@@ -81,6 +87,9 @@ public class SuperHistogramPlugin extends Plugin
 
 	@Inject
 	ClientThread clientThread;
+
+	@Inject
+	ModelOutlineRenderer outlineRenderer;
 
 	private final ModeDetector modeDetector = new ModeDetector();
 
@@ -111,6 +120,10 @@ public class SuperHistogramPlugin extends Plugin
 		}
 	};
 	private BarOverlay overlay;
+	private HullFlashOverlay hullOverlay;
+	private final HitAttribution attribution = new HitAttribution();
+	private final Map<Integer, NPC> swingers = new HashMap<>();
+	private volatile HullFlashOverlay.Target flash;
 
 	/** Own tick counter: unlike the client's, it never goes backwards across logins. */
 	private int tick = -1;
@@ -127,6 +140,8 @@ public class SuperHistogramPlugin extends Plugin
 		pulse = new Pulse();
 		overlay = new BarOverlay(this::buildState, pulse);
 		overlayManager.add(overlay);
+		hullOverlay = new HullFlashOverlay(outlineRenderer, this::flashTarget);
+		overlayManager.add(hullOverlay);
 		keyManager.registerKeyListener(beatHotkey);
 	}
 
@@ -134,6 +149,12 @@ public class SuperHistogramPlugin extends Plugin
 	protected void shutDown() throws Exception
 	{
 		keyManager.unregisterKeyListener(beatHotkey);
+		if (hullOverlay != null)
+		{
+			overlayManager.remove(hullOverlay);
+			hullOverlay = null;
+		}
+		clearFlash();
 		if (overlay != null)
 		{
 			overlayManager.remove(overlay);
@@ -195,6 +216,12 @@ public class SuperHistogramPlugin extends Plugin
 	public void onHitsplatApplied(HitsplatApplied e)
 	{
 		handleHit(e.getActor(), e.getHitsplat().getHitsplatType(), e.getHitsplat().getAmount());
+	}
+
+	@Subscribe
+	public void onNpcDespawned(NpcDespawned e)
+	{
+		handleNpcDespawned(e.getNpc());
 	}
 
 	@Subscribe
@@ -332,6 +359,11 @@ public class SuperHistogramPlugin extends Plugin
 	/** Records a damage or block hitsplat only when it lands on the local player. */
 	void handleHit(Actor actor, int type, int amount)
 	{
+		handleHit(actor, type, amount, System.currentTimeMillis());
+	}
+
+	void handleHit(Actor actor, int type, int amount, long nowMs)
+	{
 		if (timeline == null || !isHitType(type) || actor == null || actor != client.getLocalPlayer())
 		{
 			return;
@@ -342,12 +374,74 @@ public class SuperHistogramPlugin extends Plugin
 		{
 			r.hits.add(new Hit(amount, amount == 0));
 		}
+		flashAttacker(amount == 0, nowMs);
+	}
+
+	/**
+	 * Called only after a hitsplat has landed on the player. Attribution just picks which hull to
+	 * flash; ambiguity flashes nothing.
+	 */
+	private void flashAttacker(boolean miss, long nowMs)
+	{
+		NPC npc = swingers.get(attribution.attribute(tick));
+		if (npc == null)
+		{
+			return;
+		}
+		FlashRule.Flash f = FlashRule.decide(config.hullFlash(), config.hullFlashAtBosses(),
+			Bosses.isBoss(npc.getName()), miss, config.hullFlashMisses() == SuperHistogramConfig.HullFlashMisses.FAINT);
+		if (f != FlashRule.Flash.NONE)
+		{
+			flash = new HullFlashOverlay.Target(npc, nowMs, f == FlashRule.Flash.MISS);
+		}
+	}
+
+	HullFlashOverlay.Target flashTarget()
+	{
+		return flash;
+	}
+
+	void handleNpcDespawned(NPC npc)
+	{
+		if (npc == null)
+		{
+			return;
+		}
+		attribution.forget(npc.getIndex());
+		swingers.remove(npc.getIndex());
+		HullFlashOverlay.Target t = flash;
+		if (t != null && t.npc == npc)
+		{
+			flash = null;
+		}
+	}
+
+	private void clearFlash()
+	{
+		attribution.reset();
+		swingers.clear();
+		flash = null;
 	}
 
 	/** An own animation while targeting an NPC counts as an attack unless it is the eat animation. */
 	void handleAnimation(Actor a)
 	{
-		if (timeline == null || a == null || a != client.getLocalPlayer())
+		if (timeline == null || a == null)
+		{
+			return;
+		}
+		if (a instanceof NPC)
+		{
+			NPC n = (NPC) a;
+			if (n.getAnimation() != -1 && !n.isDead() && n.getInteracting() != null
+				&& n.getInteracting() == client.getLocalPlayer())
+			{
+				attribution.onSwing(n.getIndex(), tick);
+				swingers.put(n.getIndex(), n);
+			}
+			return;
+		}
+		if (a != client.getLocalPlayer())
 		{
 			return;
 		}
@@ -445,11 +539,13 @@ public class SuperHistogramPlugin extends Plugin
 				break;
 			case HOPPING:
 				clock.onHopping();
+				clearFlash();
 				movement.reset();
 				lastLocation = null;
 				break;
 			case LOGIN_SCREEN:
 				loggedIn = false;
+				clearFlash();
 				clock.onLoginScreen();
 				xp.onLoginScreen();
 				movement.reset();
