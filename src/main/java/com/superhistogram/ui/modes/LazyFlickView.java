@@ -8,16 +8,15 @@ import com.superhistogram.model.combat.FoodKind;
 import com.superhistogram.ui.BarLayout;
 import com.superhistogram.ui.CombatPainter;
 import com.superhistogram.ui.Fonts;
+import com.superhistogram.ui.Icons;
 import com.superhistogram.ui.ModeView;
 import com.superhistogram.ui.Palette;
 import com.superhistogram.ui.ReadoutPainter;
 import com.superhistogram.ui.TimelinePainter;
 import java.awt.Font;
 import java.awt.Graphics2D;
-import java.awt.geom.Path2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
-import java.awt.BasicStroke;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -232,13 +231,8 @@ public final class LazyFlickView implements ModeView
 		}
 		else
 		{
-			Path2D check = new Path2D.Float();
-			check.moveTo(vx + 4f * u, 29f * u + dy);
-			check.lineTo(vx + 10f * u, 35f * u + dy);
-			check.lineTo(vx + 22f * u, 23f * u + dy);
 			g.setColor(Palette.mint());
-			g.setStroke(new BasicStroke(3f * u, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-			g.draw(check);
+			g.fill(Icons.icon(Icons.Icon.CHECK, vx + 13f * u, 36.5f * u + dy, 2.2f * u));
 		}
 	}
 }

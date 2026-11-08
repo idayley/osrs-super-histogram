@@ -5,8 +5,6 @@ import com.superhistogram.model.Span;
 import com.superhistogram.model.TickRecord;
 import java.awt.Color;
 import java.awt.Graphics2D;
-import java.awt.geom.Ellipse2D;
-import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
 
 /** Combat-view drawing from lazy-flick.html (62-px frame, scaled by u). Static helpers only. */
@@ -22,50 +20,25 @@ public final class CombatPainter
 		return l.timelineX + l.timelineW;
 	}
 
-	/** White sword (the mockup's path) with its hilt centre at (x, y). */
+	/** White sword with its hilt centre at (x, y) (the grip ends 4.7u below it). */
 	public static void sword(Graphics2D g, float x, float y, float u)
 	{
-		Path2D p = new Path2D.Float();
-		p.moveTo(x - 1 * u, y - 6.5f * u);
-		p.lineTo(x + 1 * u, y - 6.5f * u);
-		p.lineTo(x + 1 * u, y + 0.5f * u);
-		p.lineTo(x + 3.6f * u, y + 0.5f * u);
-		p.lineTo(x + 3.6f * u, y + 2.1f * u);
-		p.lineTo(x + 1 * u, y + 2.1f * u);
-		p.lineTo(x + 1 * u, y + 4.7f * u);
-		p.lineTo(x - 1 * u, y + 4.7f * u);
-		p.lineTo(x - 1 * u, y + 2.1f * u);
-		p.lineTo(x - 3.6f * u, y + 2.1f * u);
-		p.lineTo(x - 3.6f * u, y + 0.5f * u);
-		p.lineTo(x - 1 * u, y + 0.5f * u);
-		p.closePath();
 		g.setColor(Palette.WHITE);
-		g.fill(p);
+		g.fill(Icons.icon(Icons.Icon.SWORD, x, y + 4.7f * u, u));
 	}
 
-	/** One fish in the LOST colour: body ellipse and tail triangle; (cx, cy) is the mockup's x, y. */
+	/** One fish in the LOST colour; (cx, cy) is the mockup's x, y. */
 	public static void fish(Graphics2D g, float cx, float cy, float u)
 	{
 		g.setColor(Palette.LOST);
-		g.fill(new Ellipse2D.Float(cx - 1 * u - 4.5f * u, cy - 2.8f * u, 9 * u, 5.6f * u));
-		Path2D tail = new Path2D.Float();
-		tail.moveTo(cx + 2.5f * u, cy);
-		tail.lineTo(cx + 6.5f * u, cy - 3.2f * u);
-		tail.lineTo(cx + 6.5f * u, cy + 3.2f * u);
-		tail.closePath();
-		g.fill(tail);
+		g.fill(Icons.icon(Icons.Icon.FOOD, cx + 0.5f * u, cy + 3.2f * u, u));
 	}
 
 	/** Upward triangle with its apex at (x, y), 8u wide and 5u tall. */
 	public static void caret(Graphics2D g, float x, float y, float u, Color c)
 	{
-		Path2D p = new Path2D.Float();
-		p.moveTo(x - 4 * u, y + 5 * u);
-		p.lineTo(x, y);
-		p.lineTo(x + 4 * u, y + 5 * u);
-		p.closePath();
 		g.setColor(c);
-		g.fill(p);
+		g.fill(Icons.icon(Icons.Icon.CARET, x, y + 5 * u, u));
 	}
 
 	/** Colour of a "pray-*" span kind; null when the span is not a prayer. */

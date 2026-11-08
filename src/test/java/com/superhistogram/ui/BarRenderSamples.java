@@ -240,6 +240,48 @@ public class BarRenderSamples
 		sheet(new File(dir, "task19b-contact.png"), rows);
 	}
 
+	/** Icon contact sheet: every icon at u=1 and u=2 (shown magnified 4x) with its name. Writes icons-contact.png. */
+	@Test
+	public void writeIconContactSheet() throws IOException
+	{
+		String dir = System.getProperty("superhistogram.renderDir");
+		assumeTrue(dir != null && !dir.isEmpty());
+		Icons.Icon[] kinds = Icons.Icon.values();
+		int cell = 120, zoom = 4, w = kinds.length * cell, h = 220;
+		java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+		java.awt.Graphics2D g = img.createGraphics();
+		g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+		g.setColor(new java.awt.Color(0x14171b));
+		g.fillRect(0, 0, w, h);
+		g.setFont(Fonts.regular(11f));
+		for (int i = 0; i < kinds.length; i++)
+		{
+			int x0 = i * cell;
+			g.setColor(new java.awt.Color(0x30363d));
+			g.drawLine(x0, 0, x0, h);
+			String name = kinds[i].name().toLowerCase().replace('_', ' ');
+			g.setColor(Palette.DIM);
+			g.drawString(name, x0 + cell / 2f - g.getFontMetrics().stringWidth(name) / 2f, 14);
+			g.drawString("u=1", x0 + 6, 34);
+			g.drawString("u=2", x0 + 6, 134);
+			for (int row = 0; row < 2; row++)
+			{
+				int u = row + 1;
+				double cx = x0 + cell / 2.0, base = row == 0 ? 90 : 205;
+				java.awt.Graphics2D z = (java.awt.Graphics2D) g.create();
+				z.translate(cx, base);
+				z.scale(zoom, zoom);
+				z.setColor(new java.awt.Color(0x30363d));
+				z.draw(new java.awt.geom.Rectangle2D.Double(-6 * u, -12 * u, 12 * u, 12 * u));
+				z.setColor(Palette.TEXT);
+				z.fill(Icons.icon(kinds[i], 0, 0, u));
+				z.dispose();
+			}
+		}
+		g.dispose();
+		ImageIO.write(img, "png", new File(dir, "icons-contact.png"));
+	}
+
 	private static void sheet(File file, java.util.List<Object[]> rows) throws IOException
 	{
 		int pad = 8, total = pad;

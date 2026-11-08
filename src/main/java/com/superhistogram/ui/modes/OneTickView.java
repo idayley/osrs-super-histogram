@@ -8,6 +8,7 @@ import com.superhistogram.model.combat.FlickClassifier.Kind;
 import com.superhistogram.ui.BarLayout;
 import com.superhistogram.ui.CombatPainter;
 import com.superhistogram.ui.Fonts;
+import com.superhistogram.ui.Icons;
 import com.superhistogram.ui.ModeView;
 import com.superhistogram.ui.Palette;
 import com.superhistogram.ui.ReadoutPainter;
@@ -17,7 +18,6 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Shape;
-import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
 
 /**
@@ -86,14 +86,8 @@ public final class OneTickView implements ModeView
 					break;
 				case SKIP:
 					float mx = x + l.tickWidth / 2f;
-					Path2D cross = new Path2D.Float();
-					cross.moveTo(mx - 3f * q, cy - 3f * q);
-					cross.lineTo(mx + 3f * q, cy + 3f * q);
-					cross.moveTo(mx + 3f * q, cy - 3f * q);
-					cross.lineTo(mx - 3f * q, cy + 3f * q);
 					g.setColor(Palette.WHITE);
-					g.setStroke(new BasicStroke(1.6f * q, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-					g.draw(cross);
+					g.fill(Icons.icon(Icons.Icon.CROSS, mx, cy + 3.8f * q, q));
 					break;
 				default:
 					break;

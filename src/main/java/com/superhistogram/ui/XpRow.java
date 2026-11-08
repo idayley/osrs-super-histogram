@@ -10,7 +10,6 @@ import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.skill.AlchTopRow;
 import com.superhistogram.ui.modes.AlchView;
 import java.awt.Graphics2D;
-import java.awt.geom.Ellipse2D;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -149,7 +148,7 @@ final class XpRow
 					}
 					if (draw)
 					{
-						g.fill(new Ellipse2D.Float(x, dotY - 2.6f * u, 5.2f * u, 5.2f * u));
+						g.fill(Icons.icon(Icons.Icon.DOT, x + 2.6f * u, dotY + 2.6f * u, u * 5.2f / 6f));
 					}
 					x += 9f * u;
 					continue;

@@ -7,8 +7,6 @@ import com.superhistogram.model.TickRecord;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Shape;
-import java.awt.geom.AffineTransform;
-import java.awt.geom.Path2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 
@@ -21,22 +19,6 @@ public final class TimelinePainter
 {
 	/** Ticks of empty space kept to the right of "now". */
 	private static final int MAX_LEAD_TICKS = 4;
-
-	private static final Path2D DEMON = new Path2D.Float();
-
-	static
-	{
-		DEMON.moveTo(-6, -1);
-		DEMON.lineTo(-7, -7);
-		DEMON.lineTo(-3, -4);
-		DEMON.lineTo(0, -5);
-		DEMON.lineTo(3, -4);
-		DEMON.lineTo(7, -7);
-		DEMON.lineTo(6, -1);
-		DEMON.quadTo(6, 5, 0, 6);
-		DEMON.quadTo(-6, 5, -6, -1);
-		DEMON.closePath();
-	}
 
 	private TimelinePainter()
 	{
@@ -195,9 +177,7 @@ public final class TimelinePainter
 				continue;
 			}
 			g.fill(new RoundRectangle2D.Float(x - 1f, pY - 4f * u, 2f, pH + 8f * u, 2f, 2f));
-			AffineTransform at = AffineTransform.getTranslateInstance(x - 6f * u, pY - 10f * u);
-			at.scale(0.9f * u, 0.9f * u);
-			g.fill(at.createTransformedShape(DEMON));
+			g.fill(Icons.icon(Icons.Icon.HIT, x - 6f * u, pY - 4.6f * u, 1.05f * u));
 			float tx = x + 5f * u;
 			for (Hit h : r.hits)
 			{
