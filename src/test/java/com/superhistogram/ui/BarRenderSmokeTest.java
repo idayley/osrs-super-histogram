@@ -171,6 +171,134 @@ public class BarRenderSmokeTest
 		}
 	}
 
+	// ---- multi-xp ----
+
+	private static final java.awt.Color STR = Palette.skill("Strength"), HP = Palette.skill("Hitpoints"),
+		MAG = Palette.skill("Magic"), FLE = Palette.skill("Fletching");
+
+	@Test
+	public void numbersSideBySide()
+	{
+		BarState s = SampleStates.multiXp(com.superhistogram.model.XpDrops.NUMBERS, true);
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		float u = l.u;
+		int minHp = Integer.MAX_VALUE, maxStr = -1;
+		float x0 = tickX(l, s, SampleStates.NOW_TICK - 10) - 8 * u;
+		for (int y = (int) (6 * u); y < (int) (16 * u); y++)
+		{
+			for (int x = (int) x0; x < x0 + 120 * u; x++)
+			{
+				if (opaque(img, x, y, STR))
+				{
+					maxStr = Math.max(maxStr, x);
+				}
+				if (opaque(img, x, y, HP))
+				{
+					minHp = Math.min(minHp, x);
+				}
+			}
+		}
+		assertTrue("no Strength", maxStr >= 0);
+		assertTrue("no Hitpoints", minHp != Integer.MAX_VALUE);
+		assertTrue("Strength must lie left of Hitpoints", maxStr < minHp);
+	}
+
+	@Test
+	public void dotsHiddenUnderNumbers()
+	{
+		BarState s = SampleStates.multiXp(com.superhistogram.model.XpDrops.NUMBERS, true);
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		float u = l.u;
+		float hx = tickX(l, s, SampleStates.NOW_TICK - 5) - 1.4f * u;
+		float sx = tickX(l, s, SampleStates.NOW_TICK - 3) - 1.4f * u;
+		assertFalse(hasPixel(img, hx - 2 * u, hx + 2 * u, 10 * u, 14 * u, FLE));
+		assertTrue(hasPixel(img, sx - 2 * u, sx + 2 * u, 10 * u, 14 * u, FLE));
+	}
+
+	@Test
+	public void dotsOffShowsFrequentAsNumbers()
+	{
+		BarState s = SampleStates.multiXp(com.superhistogram.model.XpDrops.NUMBERS, false);
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u, x = tickX(l, s, SampleStates.NOW_TICK - 3);
+		assertTrue(hasPixel(render(1026, 62, s, null), x + 4 * u, x + 14 * u, 6 * u, 16 * u, FLE));
+	}
+
+	@Test
+	public void dotsOnlyDrawsDots()
+	{
+		BarState s = SampleStates.multiXp(com.superhistogram.model.XpDrops.DOTS_ONLY, true);
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		float u = l.u, x = tickX(l, s, SampleStates.NOW_TICK - 10);
+		assertTrue(hasPixel(img, x - 1.4f * u - 2 * u, x - 1.4f * u + 2 * u, 10 * u, 14 * u, STR));
+		assertFalse(hasPixel(img, x + 4 * u, x + 18 * u, 5 * u, 17 * u, STR));
+	}
+
+	@Test
+	public void xpDropsOffHidesXp()
+	{
+		BarState s = SampleStates.multiXp(com.superhistogram.model.XpDrops.OFF, true);
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		float u = l.u;
+		for (java.awt.Color c : new java.awt.Color[]{STR, HP, MAG, FLE})
+		{
+			assertFalse(hasPixel(img, 0, l.width, 5 * u, 17 * u, c));
+		}
+	}
+
+	@Test
+	public void eatChipDoesNotCoverXpGroup()
+	{
+		BarState s = SampleStates.meleeSlayer();
+		BarState noEats = SampleStates.meleeSlayer(ActionsRow.ATTACKS);
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage withEats = render(1026, 62, s, null), xpOnly = render(1026, 62, noEats, null);
+		float u = l.u;
+		java.awt.Color slay = Palette.skill("Slayer");
+		// XP at NOW-14 and NOW-10 (after the attacks at NOW-15 / NOW-11) shares its stretch with the eats at
+		// NOW-13 / NOW-9; there the chip must start right of the last XP number and the numbers stay intact.
+		// (The third eat, NOW-5, cannot fit before the next sword, so there the XP gives way instead.)
+		for (int t : new int[]{SampleStates.NOW_TICK - 14, SampleStates.NOW_TICK - 10})
+		{
+			int x0 = (int) tickX(l, s, t), x1 = (int) (tickX(l, s, t + 3) - 5 * u);
+			int lastSlay = -1, firstChip = Integer.MAX_VALUE, slayWith = 0, slayAlone = 0;
+			for (int y = (int) (40 * u); y < (int) (50 * u); y++)
+			{
+				for (int x = x0; x < x1; x++)
+				{
+					if (opaque(withEats, x, y, slay))
+					{
+						lastSlay = Math.max(lastSlay, x);
+						slayWith++;
+					}
+					if (opaque(withEats, x, y, Palette.LOST))
+					{
+						firstChip = Math.min(firstChip, x);
+					}
+					slayAlone += opaque(xpOnly, x, y, slay) ? 1 : 0;
+				}
+			}
+			assertTrue("no Slayer at " + t, slayAlone > 0 && firstChip != Integer.MAX_VALUE);
+			assertEquals("XP removed at " + t, slayAlone, slayWith);
+			assertTrue("eat chip overlaps XP group at " + t, lastSlay < firstChip);
+		}
+	}
+
+	@Test
+	public void combatXpStillLow()
+	{
+		BarState s = SampleStates.lazyFlick();
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		float u = l.u;
+		assertTrue(hasPixel(img, l.timelineX, l.timelineX + l.timelineW, 40 * u, 49 * u, STR));
+		assertFalse(hasPixel(img, l.timelineX, l.timelineX + l.timelineW, 5 * u, 17 * u, STR));
+	}
+
 	// ---- lazy flick ----
 
 	private static boolean opaque(BufferedImage img, int x, int y, java.awt.Color c)

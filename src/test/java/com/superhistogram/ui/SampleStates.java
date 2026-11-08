@@ -69,6 +69,111 @@ public final class SampleStates
 			.build();
 	}
 
+	/**
+	 * General mode with several skills dropping: Strength 120 + Hitpoints 40 at NOW_TICK - 10, Magic 123456
+	 * at NOW_TICK - 6 and Fletching 15 on NOW_TICK - 9, -7, -5, -3, -1.
+	 */
+	static BarState multiXp(com.superhistogram.model.XpDrops d, boolean dots)
+	{
+		Timeline t = new Timeline(512);
+		XpTracker xp = new XpTracker(t);
+		for (String sk : new String[]{"Strength", "Hitpoints", "Magic", "Fletching"})
+		{
+			xp.onStat(sk, 1_000_000, NOW_TICK - 40);
+		}
+		xp.onStat("Strength", 1_000_120, NOW_TICK - 10);
+		xp.onStat("Hitpoints", 1_000_040, NOW_TICK - 10);
+		xp.onStat("Magic", 1_123_456, NOW_TICK - 6);
+		int f = 1_000_000;
+		for (int k = 9; k >= 1; k -= 2)
+		{
+			f += 15;
+			xp.onStat("Fletching", f, NOW_TICK - k);
+		}
+		t.at(NOW_TICK);
+		SessionClock clock = new SessionClock();
+		clock.onLoggedIn(NOW_MS - (2 * 3600 + 14 * 60 + 7) * 1000L);
+		return BarState.builder()
+			.timeline(t).nowTick(NOW_TICK).xp(xp).idle(new IdleTracker(60)).clock(clock)
+			.runEnergyPct(64).modeName("General").modeSub("auto").showRunEnergy(true).showLoginTime(true)
+			.mode(Mode.GENERAL).nowMs(NOW_MS).xpDrops(d).xpDots(dots)
+			.build();
+	}
+
+	/** Contact-sheet sample: the lazy-flick bar with a Slayer drop alongside Strength and Hitpoints. */
+	static BarState meleeSlayer()
+	{
+		return meleeSlayer(ActionsRow.ATTACKS_EATS);
+	}
+
+	static BarState meleeSlayer(ActionsRow row)
+	{
+		return lazyFlick(row, true, Beat.Verdict.EARLY, true);
+	}
+
+	/** Contact-sheet sample (gold arrives with Task 17b): Magic every 5 ticks, Fletching every other tick. */
+	static BarState alchFletch()
+	{
+		Timeline t = new Timeline(512);
+		XpTracker xp = new XpTracker(t);
+		xp.onStat("Magic", 1_000_000, NOW_TICK - 40);
+		xp.onStat("Fletching", 1_000_000, NOW_TICK - 40);
+		int m = 1_000_000, f = 1_000_000;
+		for (int k = 17; k >= 0; k--)
+		{
+			if (k % 2 == 0)
+			{
+				f += 15;
+				xp.onStat("Fletching", f, NOW_TICK - k);
+			}
+			if (k % 5 == 1)
+			{
+				m += 65;
+				xp.onStat("Magic", m, NOW_TICK - k);
+			}
+		}
+		t.openSpan("action", NOW_TICK - 16).endTick = NOW_TICK - 11;
+		t.at(NOW_TICK);
+		return multiBase(t, xp, "Alch + fletch");
+	}
+
+	/** Contact-sheet sample: Fishing and Cooking drops, one tick with both. */
+	static BarState tempoross()
+	{
+		Timeline t = new Timeline(512);
+		XpTracker xp = new XpTracker(t);
+		xp.onStat("Fishing", 1_000_000, NOW_TICK - 40);
+		xp.onStat("Cooking", 1_000_000, NOW_TICK - 40);
+		int fi = 1_000_000, co = 1_000_000;
+		int[][] drops = {{16, 62, 0}, {13, 62, 0}, {10, 62, 0}, {6, 0, 91}, {4, 0, 91}, {2, 40, 30}};
+		for (int[] d : drops)
+		{
+			if (d[1] > 0)
+			{
+				fi += d[1];
+				xp.onStat("Fishing", fi, NOW_TICK - d[0]);
+			}
+			if (d[2] > 0)
+			{
+				co += d[2];
+				xp.onStat("Cooking", co, NOW_TICK - d[0]);
+			}
+		}
+		t.at(NOW_TICK);
+		return multiBase(t, xp, "Tempoross");
+	}
+
+	private static BarState multiBase(Timeline t, XpTracker xp, String name)
+	{
+		SessionClock clock = new SessionClock();
+		clock.onLoggedIn(NOW_MS - (2 * 3600 + 14 * 60 + 7) * 1000L);
+		return BarState.builder()
+			.timeline(t).nowTick(NOW_TICK).xp(xp).idle(new IdleTracker(60)).clock(clock)
+			.runEnergyPct(64).modeName(name).modeSub("auto").showRunEnergy(true).showLoginTime(true)
+			.mode(Mode.GENERAL).nowMs(NOW_MS)
+			.build();
+	}
+
 	/** A timeline with only one click, nothing else that is white. */
 	static BarState singleClick()
 	{
@@ -133,11 +238,20 @@ public final class SampleStates
 	 */
 	static BarState lazyFlick(ActionsRow row, boolean showEatCosts, Beat.Verdict last)
 	{
+		return lazyFlick(row, showEatCosts, last, false);
+	}
+
+	private static BarState lazyFlick(ActionsRow row, boolean showEatCosts, Beat.Verdict last, boolean slayer)
+	{
 		Timeline t = new Timeline(512);
 		XpTracker xp = new XpTracker(t);
 		xp.onStat("Strength", 1_000_000, NOW_TICK - 40);
 		xp.onStat("Hitpoints", 1_000_000, NOW_TICK - 40);
-		int str = 1_000_000, hp = 1_000_000;
+		int str = 1_000_000, hp = 1_000_000, sl = 1_000_000;
+		if (slayer)
+		{
+			xp.onStat("Slayer", sl, NOW_TICK - 40);
+		}
 		for (int a = NOW_TICK - 27; a <= NOW_TICK - 3; a += 4)
 		{
 			t.at(a).attackLate = a == ATTACK_LATE_TICK ? 1 : 0;
@@ -145,6 +259,11 @@ public final class SampleStates
 			xp.onStat("Strength", str, a + 1);
 			hp += 13;
 			xp.onStat("Hitpoints", hp, a + 1);
+			if (slayer)
+			{
+				sl += 16;
+				xp.onStat("Slayer", sl, a + 1);
+			}
 		}
 		TickRecord eatN = t.at(EAT_NORMAL);
 		eatN.eat = FoodKind.NORMAL;

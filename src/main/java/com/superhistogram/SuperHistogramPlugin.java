@@ -653,6 +653,8 @@ public class SuperHistogramPlugin extends Plugin
 			.run(runNow)
 			.timeToFinish(config.timeToFinish())
 			.wastedTicks(config.wastedTicks())
+			.xpDrops(config.xpDrops())
+			.xpDots(config.xpDots())
 			.build();
 	}
 

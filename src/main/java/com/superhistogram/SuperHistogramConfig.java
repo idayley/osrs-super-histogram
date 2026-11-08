@@ -1,6 +1,7 @@
 package com.superhistogram;
 
 import com.superhistogram.model.BaselineSetting;
+import com.superhistogram.model.XpDrops;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.PrayerMode;
 import java.awt.event.KeyEvent;
@@ -201,6 +202,28 @@ public interface SuperHistogramConfig extends Config
 		description = "Show how many ticks passed between the last item and your bank click"
 	)
 	default boolean wastedTicks()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		position = 20,
+		keyName = "xpDrops",
+		name = "XP drops",
+		description = "Show XP drops as numbers, as dots only, or not at all"
+	)
+	default XpDrops xpDrops()
+	{
+		return XpDrops.NUMBERS;
+	}
+
+	@ConfigItem(
+		position = 21,
+		keyName = "xpDots",
+		name = "Frequent skills as dots",
+		description = "Skills that drop XP on 5 of the last 10 ticks show as small dots instead of numbers"
+	)
+	default boolean xpDots()
 	{
 		return true;
 	}

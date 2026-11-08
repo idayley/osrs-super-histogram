@@ -34,6 +34,9 @@ public final class BarState
 	/** Production run; null when none. */
 	public final InventoryRun run;
 	public final boolean timeToFinish, wastedTicks;
+	public final XpDrops xpDrops;
+	/** Frequent skills (5+ drop ticks in the last 10) draw as dots. */
+	public final boolean xpDots;
 
 	private BarState(Builder b)
 	{
@@ -57,6 +60,8 @@ public final class BarState
 		run = b.run;
 		timeToFinish = b.timeToFinish;
 		wastedTicks = b.wastedTicks;
+		xpDrops = b.xpDrops;
+		xpDots = b.xpDots;
 	}
 
 	public static Builder builder()
@@ -83,6 +88,8 @@ public final class BarState
 		private boolean showEatCosts = true;
 		private InventoryRun run;
 		private boolean timeToFinish = true, wastedTicks = true;
+		private XpDrops xpDrops = XpDrops.NUMBERS;
+		private boolean xpDots = true;
 
 		public Builder timeline(Timeline v)
 		{
@@ -201,6 +208,18 @@ public final class BarState
 		public Builder wastedTicks(boolean v)
 		{
 			wastedTicks = v;
+			return this;
+		}
+
+		public Builder xpDrops(XpDrops v)
+		{
+			xpDrops = v;
+			return this;
+		}
+
+		public Builder xpDots(boolean v)
+		{
+			xpDots = v;
 			return this;
 		}
 

@@ -3,7 +3,6 @@ package com.superhistogram.ui;
 import com.superhistogram.model.BarState;
 import com.superhistogram.model.Span;
 import com.superhistogram.model.TickRecord;
-import com.superhistogram.model.XpDrop;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.geom.Ellipse2D;
@@ -115,32 +114,22 @@ public final class CombatPainter
 		}
 	}
 
-	/** Combat XP as "+N" by the sword on the actions row; side by side, skill colours. */
+	/** Combat XP by the sword on the actions row (see {@link XpRow}). */
 	public static void xpLow(Graphics2D g, BarLayout l, BarState s)
 	{
-		if (!hasTicks(s) || l.rows < 3)
-		{
-			return;
-		}
-		float u = l.u;
-		g.setFont(Fonts.bold(10f * u));
-		boolean swords = s.actionsRow != com.superhistogram.model.combat.ActionsRow.OFF;
-		for (int t = TimelinePainter.oldestTick(l, s); t <= s.nowTick; t++)
-		{
-			TickRecord r = s.timeline.peek(t);
-			if (r == null || r.xp.isEmpty())
-			{
-				continue;
-			}
-			float x = TimelinePainter.x(l, s, t) + (swords && r.attackLate >= 0 ? 8f : -4f) * u;
-			for (XpDrop d : r.xp)
-			{
-				String text = "+" + d.amount;
-				g.setColor(Palette.skill(d.skill));
-				g.drawString(text, x, 48f * u);
-				x += g.getFontMetrics().stringWidth(text) + 6f * u;
-			}
-		}
+		XpRow.paint(g, l, s, XpRow.Row.LOW);
+	}
+
+	/** Combat XP that leaves room for the reserved x ranges {left, right}: numbers touching one are dropped. */
+	public static void xpLow(Graphics2D g, BarLayout l, BarState s, java.util.List<float[]> reserved)
+	{
+		XpRow.paint(g, l, s, XpRow.Row.LOW, reserved);
+	}
+
+	/** x ranges {left, right} of each tick's XP number group on the actions row. */
+	public static java.util.List<float[]> xpLowRanges(Graphics2D g, BarLayout l, BarState s)
+	{
+		return XpRow.numberRanges(g, l, s, XpRow.Row.LOW);
 	}
 
 	private static boolean hasTicks(BarState s)

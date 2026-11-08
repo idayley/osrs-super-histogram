@@ -4,7 +4,6 @@ import com.superhistogram.model.BarState;
 import com.superhistogram.model.Hit;
 import com.superhistogram.model.Span;
 import com.superhistogram.model.TickRecord;
-import com.superhistogram.model.XpDrop;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Shape;
@@ -160,31 +159,10 @@ public final class TimelinePainter
 
 	// ---- top row ----
 
-	/** XP drops as "+N" in each skill's colour, side by side within a tick. Hidden in one-row mode. */
+	/** XP drops in the top row (see {@link XpRow}). Hidden in one-row mode. */
 	public static void xp(Graphics2D g, BarLayout l, BarState s)
 	{
-		if (!hasTicks(s) || l.rows == 1)
-		{
-			return;
-		}
-		g.setFont(Fonts.bold(10f * l.u));
-		float y = xpY(l);
-		for (int t = oldestTick(l, s); t <= s.nowTick; t++)
-		{
-			TickRecord r = s.timeline.peek(t);
-			if (r == null || r.xp.isEmpty())
-			{
-				continue;
-			}
-			float x = x(l, s, t) - 4f * l.u;
-			for (XpDrop d : r.xp)
-			{
-				String text = "+" + d.amount;
-				g.setColor(Palette.skill(d.skill));
-				g.drawString(text, x, y);
-				x += g.getFontMetrics().stringWidth(text) + 6f * l.u;
-			}
-		}
+		XpRow.paint(g, l, s, XpRow.Row.TOP);
 	}
 
 	/** Hits on you: yellow line + icon + number; blocked/zero in faint grey. Notches in one-row mode. */

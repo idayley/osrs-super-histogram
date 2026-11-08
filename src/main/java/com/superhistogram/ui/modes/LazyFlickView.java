@@ -18,6 +18,7 @@ import java.awt.geom.Path2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.BasicStroke;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -43,8 +44,7 @@ public final class LazyFlickView implements ModeView
 		TimelinePainter.hits(g, l, s);
 		if (l.rows == 3)
 		{
-			actions(g, l, s);
-			CombatPainter.xpLow(g, l, s);
+			CombatPainter.xpLow(g, l, s, actions(g, l, s));
 		}
 	}
 
@@ -70,13 +70,20 @@ public final class LazyFlickView implements ModeView
 		}
 	}
 
-	private static void actions(Graphics2D g, BarLayout l, BarState s)
+	/**
+	 * Swords and eat chips. A chip starts after the XP number group it would touch (plus a small gap);
+	 * if that pushes it past the next sword it stays put and the XP numbers give way instead.
+	 * Returns the x ranges where XP numbers must not paint.
+	 */
+	private static List<float[]> actions(Graphics2D g, BarLayout l, BarState s)
 	{
+		List<float[]> reserved = new ArrayList<>();
 		if (s.actionsRow == ActionsRow.OFF)
 		{
-			return;
+			return reserved;
 		}
 		float u = l.u;
+		List<float[]> xpRanges = CombatPainter.xpLowRanges(g, l, s);
 		for (int t = TimelinePainter.oldestTick(l, s); t <= s.nowTick; t++)
 		{
 			TickRecord r = s.timeline.peek(t);
@@ -98,6 +105,20 @@ public final class LazyFlickView implements ModeView
 			if (s.actionsRow == ActionsRow.ATTACKS_EATS && r.eat != null)
 			{
 				float ex = x + l.tickWidth / 2f;
+				boolean cost = s.showEatCosts;
+				g.setFont(Fonts.bold(9f * u));
+				String label = r.eatCost <= 0 ? "free" : "+" + r.eatCost;
+				float tail = cost ? 9f * u + g.getFontMetrics().stringWidth(label) : 7.5f * u;
+				float shifted = shiftPastXp(xpRanges, ex, 6.5f * u, tail, 3f * u);
+				float limit = nextSwordX(s, l, t) - 4.5f * u;
+				if (shifted + tail <= limit)
+				{
+					ex = shifted;
+				}
+				else
+				{
+					reserved.add(new float[]{ex - 6.5f * u - 2f * u, ex + tail + 2f * u});
+				}
 				if (r.eat == FoodKind.COMBO)
 				{
 					CombatPainter.fish(g, ex - 1f * u, 41f * u, u);
@@ -116,6 +137,40 @@ public final class LazyFlickView implements ModeView
 				}
 			}
 		}
+		return reserved;
+	}
+
+	/** Moves a chip centred at ex right until it clears every XP range, keeping a gap after the range. */
+	private static float shiftPastXp(List<float[]> ranges, float ex, float left, float tail, float gap)
+	{
+		boolean moved = true;
+		for (int guard = 0; moved && guard <= ranges.size(); guard++)
+		{
+			moved = false;
+			for (float[] r : ranges)
+			{
+				if (ex - left < r[1] + gap && ex + tail > r[0])
+				{
+					ex = r[1] + gap + left;
+					moved = true;
+				}
+			}
+		}
+		return ex;
+	}
+
+	/** x of the first sword after this tick; the right edge of the timeline when there is none. */
+	private static float nextSwordX(BarState s, BarLayout l, int tick)
+	{
+		for (int t = tick + 1; t <= s.nowTick; t++)
+		{
+			TickRecord r = s.timeline.peek(t);
+			if (r != null && r.attackLate >= 0)
+			{
+				return TimelinePainter.x(l, s, t);
+			}
+		}
+		return CombatPainter.rightX(l);
 	}
 
 	@Override

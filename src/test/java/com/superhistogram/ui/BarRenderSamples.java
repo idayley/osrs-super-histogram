@@ -127,6 +127,36 @@ public class BarRenderSamples
 		ImageIO.write(sheet, "png", new File(dir, "task16-contact.png"));
 	}
 
+	/** Multi-XP contact sheet: three samples at 1026x62 plus the melee one at 720x62, stacked, 2x. Writes task17a-contact.png (or -PrenderFile path via superhistogram.renderFile). */
+	@Test
+	public void writeMultiXpContactSheet() throws IOException
+	{
+		String dir = System.getProperty("superhistogram.renderDir");
+		assumeTrue(dir != null && !dir.isEmpty());
+		Object[][] rows = {{1026, SampleStates.meleeSlayer()}, {1026, SampleStates.alchFletch()},
+			{1026, SampleStates.tempoross()}, {720, SampleStates.meleeSlayer()},
+			{1026, SampleStates.meleeSlayer(com.superhistogram.model.combat.ActionsRow.ATTACKS)}};
+		int pad = 8, total = pad;
+		for (int i = 0; i < rows.length; i++)
+		{
+			total += (62 + pad) * 2;
+		}
+		java.awt.image.BufferedImage sheet = new java.awt.image.BufferedImage(1026 * 2 + 2 * pad, total,
+			java.awt.image.BufferedImage.TYPE_INT_RGB);
+		java.awt.Graphics2D g = sheet.createGraphics();
+		g.setColor(new java.awt.Color(0x2b3521));
+		g.fillRect(0, 0, sheet.getWidth(), sheet.getHeight());
+		int y = pad;
+		for (Object[] r : rows)
+		{
+			java.awt.image.BufferedImage img = BarRenderSmokeTest.render((Integer) r[0], 62, (BarState) r[1], null);
+			g.drawImage(img, pad, y, img.getWidth() * 2, img.getHeight() * 2, null);
+			y += (62 + pad) * 2;
+		}
+		g.dispose();
+		ImageIO.write(sheet, "png", new File(dir, "task17a-contact.png"));
+	}
+
 	private static void write(String dir, String name, int w, int h, BarState s) throws IOException
 	{
 		ImageIO.write(BarRenderSmokeTest.render(w, h, s, null), "png", new File(dir, name));
