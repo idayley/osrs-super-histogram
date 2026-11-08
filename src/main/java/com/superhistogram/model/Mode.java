@@ -5,5 +5,6 @@ public enum Mode
 {
 	GENERAL,
 	AFK,
-	MINIMAL
+	MINIMAL,
+	LAZY_FLICK
 }

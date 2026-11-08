@@ -458,7 +458,12 @@ public class SuperHistogramPlugin extends Plugin
 		long now = System.currentTimeMillis();
 		IdleTracker idleNow = idle;
 		boolean afk = idleNow != null && idleNow.isAfk();
-		Mode mode = modeDetector.detect(afk, config.baseline());
+		Player me = client.getLocalPlayer();
+		int tickNow = timeline.newestTick();
+		AttackTimer at = attack;
+		boolean combat = me != null && at != null
+			&& ModeDetector.inCombat(me.getInteracting() instanceof NPC, tickNow, lastHitTick, at.lastAttackTick());
+		Mode mode = modeDetector.detect(afk, combat, config.prayerMode(), config.baseline());
 		return BarState.builder()
 			.timeline(timeline)
 			.nowTick(timeline == null ? -1 : timeline.newestTick())
@@ -467,18 +472,37 @@ public class SuperHistogramPlugin extends Plugin
 			.clock(clock)
 			.runEnergyPct(runEnergyPct)
 			.modeName(modeName(mode))
-			.modeSub(mode == Mode.AFK ? "auto" : "baseline")
+			.modeSub(modeSub(mode))
 			.showRunEnergy(config.showRunEnergy())
 			.showLoginTime(config.showLoginTime())
 			.mode(mode)
 			.nowMs(now)
+			.beat(beat)
+			.weaponSpeed(weaponSpeed)
+			.actionsRow(config.actionsRow())
+			.showEatCosts(config.showEatCosts())
 			.build();
+	}
+
+	private String modeSub(Mode mode)
+	{
+		switch (mode)
+		{
+			case AFK:
+				return "auto";
+			case LAZY_FLICK:
+				return weaponSpeed + "t \u00b7 " + config.beatKey();
+			default:
+				return "baseline";
+		}
 	}
 
 	private static String modeName(Mode mode)
 	{
 		switch (mode)
 		{
+			case LAZY_FLICK:
+				return "Lazy flick";
 			case AFK:
 				return "AFK";
 			case MINIMAL:

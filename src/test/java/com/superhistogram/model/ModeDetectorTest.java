@@ -6,6 +6,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.superhistogram.model.combat.AttackTimer;
+import com.superhistogram.model.combat.PrayerMode;
 import org.junit.Test;
 
 public class ModeDetectorTest
@@ -15,20 +16,38 @@ public class ModeDetectorTest
 	@Test
 	public void afkBeatsBothBaselines()
 	{
-		assertEquals(Mode.AFK, detector.detect(true, BaselineSetting.GENERAL));
-		assertEquals(Mode.AFK, detector.detect(true, BaselineSetting.MINIMAL));
+		assertEquals(Mode.AFK, detector.detect(true, false, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
+		assertEquals(Mode.AFK, detector.detect(true, false, PrayerMode.LAZY_FLICK, BaselineSetting.MINIMAL));
 	}
 
 	@Test
 	public void minimalBaselineGivesMinimal()
 	{
-		assertEquals(Mode.MINIMAL, detector.detect(false, BaselineSetting.MINIMAL));
+		assertEquals(Mode.MINIMAL, detector.detect(false, false, PrayerMode.LAZY_FLICK, BaselineSetting.MINIMAL));
 	}
 
 	@Test
 	public void generalBaselineGivesGeneral()
 	{
-		assertEquals(Mode.GENERAL, detector.detect(false, BaselineSetting.GENERAL));
+		assertEquals(Mode.GENERAL, detector.detect(false, false, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
+	}
+
+	@Test
+	public void combatBeatsBaseline()
+	{
+		assertEquals(Mode.LAZY_FLICK, detector.detect(false, true, PrayerMode.LAZY_FLICK, BaselineSetting.MINIMAL));
+	}
+
+	@Test
+	public void afkBeatsCombat()
+	{
+		assertEquals(Mode.AFK, detector.detect(true, true, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
+	}
+
+	@Test
+	public void noCombatGivesBaseline()
+	{
+		assertEquals(Mode.MINIMAL, detector.detect(false, false, PrayerMode.LAZY_FLICK, BaselineSetting.MINIMAL));
 	}
 
 	@Test

@@ -82,7 +82,7 @@ public final class ReadoutPainter
 	}
 
 	/** Right edge available to the right readout: left of the login time, or the rounded end. */
-	private static float rightLimit(Graphics2D g, BarLayout l, BarState s)
+	public static float rightLimit(Graphics2D g, BarLayout l, BarState s)
 	{
 		float u = l.u, edge = l.width - 26f * u;
 		if (loginVisible(l, s, s == null ? 0 : s.nowMs))

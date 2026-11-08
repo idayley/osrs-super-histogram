@@ -32,6 +32,11 @@ public final class Palette
 	public static final Color NOW_LINE = new Color(233, 236, 239, Math.round(0.5f * 255));
 	public static final Color GAUGE_TRACK = new Color(255, 255, 255, Math.round(0.12f * 255));
 
+	/** The lazy-flick mockup's .lost: "+N" labels and food icons. */
+	public static final Color LOST = hex(0xc9ced4);
+	public static final Color TRAIL_LINE = new Color(255, 255, 255, Math.round(0.12f * 255));
+	public static final Color NEXT_BEAT = new Color(255, 255, 255, Math.round(0.35f * 255));
+
 	/** Alpha of walk / run / idle pills. */
 	public static final float FAINT_ALPHA = 0.22f;
 

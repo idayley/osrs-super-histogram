@@ -1,6 +1,8 @@
 package com.superhistogram;
 
 import com.superhistogram.model.BaselineSetting;
+import com.superhistogram.model.combat.ActionsRow;
+import com.superhistogram.model.combat.PrayerMode;
 import java.awt.event.KeyEvent;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
@@ -107,5 +109,38 @@ public interface SuperHistogramConfig extends Config
 	default Keybind beatKey()
 	{
 		return new Keybind(KeyEvent.VK_F, 0);
+	}
+
+	@ConfigItem(
+		position = 11,
+		keyName = "prayerMode",
+		name = "Prayer mode",
+		description = "How you protect in combat"
+	)
+	default PrayerMode prayerMode()
+	{
+		return PrayerMode.LAZY_FLICK;
+	}
+
+	@ConfigItem(
+		position = 12,
+		keyName = "actionsRow",
+		name = "Actions row",
+		description = "What the combat view shows about your own actions"
+	)
+	default ActionsRow actionsRow()
+	{
+		return ActionsRow.ATTACKS;
+	}
+
+	@ConfigItem(
+		position = 13,
+		keyName = "showEatCosts",
+		name = "Show eat costs",
+		description = "Show how many attack ticks each eat cost you"
+	)
+	default boolean showEatCosts()
+	{
+		return true;
 	}
 }

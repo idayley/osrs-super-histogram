@@ -9,6 +9,8 @@ import com.superhistogram.model.BarState;
 import com.superhistogram.model.Mode;
 import com.superhistogram.model.Timeline;
 import com.superhistogram.model.XpTracker;
+import com.superhistogram.model.combat.ActionsRow;
+import com.superhistogram.model.combat.Beat;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import org.junit.Test;
@@ -165,5 +167,182 @@ public class BarRenderSmokeTest
 				assertEquals("text past the right limit at " + x + "," + y, ref.getRGB(x, y), img.getRGB(x, y));
 			}
 		}
+	}
+
+	// ---- lazy flick ----
+
+	private static boolean opaque(BufferedImage img, int x, int y, java.awt.Color c)
+	{
+		int argb = img.getRGB(x, y);
+		return (argb >>> 24) == 255 && (argb & 0xffffff) == (c.getRGB() & 0xffffff);
+	}
+
+	/** Any opaque pixel of colour c with x in [x0, x1) and y in [y0, y1) (clamped to the image). */
+	private static boolean hasPixel(BufferedImage img, float x0, float x1, float y0, float y1, java.awt.Color c)
+	{
+		for (int y = Math.max(0, (int) Math.floor(y0)); y < Math.min(img.getHeight(), Math.ceil(y1)); y++)
+		{
+			for (int x = Math.max(0, (int) Math.floor(x0)); x < Math.min(img.getWidth(), Math.ceil(x1)); x++)
+			{
+				if (opaque(img, x, y, c))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private static float tickX(BarLayout l, BarState s, int tick)
+	{
+		return TimelinePainter.x(l, s, tick);
+	}
+
+	@Test
+	public void lazyFlickRendersAtThreeSizes()
+	{
+		BarState s = SampleStates.lazyFlick();
+		render(1026, 62, s, new Pulse());
+		render(1026, 46, s, new Pulse());
+		render(600, 30, s, new Pulse());
+	}
+
+	@Test
+	public void lazyFlickWithIdleBeatIsSafe()
+	{
+		for (ActionsRow row : ActionsRow.values())
+		{
+			BarState s = SampleStates.lazyFlick(row, true, Beat.Verdict.ON_TIME);
+			BarState idle = BarState.builder()
+				.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
+				.modeName("Lazy flick").modeSub("4t").mode(Mode.LAZY_FLICK).nowMs(s.nowMs)
+				.beat(new Beat()).actionsRow(row).build();
+			render(1026, 62, idle, new Pulse());
+			render(1026, 30, idle, null);
+		}
+	}
+
+	@Test
+	public void caretUnderBeatTick()
+	{
+		BarState s = SampleStates.lazyFlick();
+		int b = SampleStates.FLICK_PRESS + 16;
+		BarLayout l62 = BarLayout.of(1026, 62);
+		float x = tickX(l62, s, b), u = l62.u;
+		assertTrue(hasPixel(render(1026, 62, s, null), x - 4 * u, x + 4 * u, 55 * u, 60 * u, Palette.WHITE));
+		BarLayout l46 = BarLayout.of(1026, 46);
+		float x46 = tickX(l46, s, b);
+		assertFalse(hasPixel(render(1026, 46, s, null), x46 - 4 * l46.u, x46 + 4 * l46.u, 55 * l46.u, 60 * l46.u,
+			Palette.WHITE));
+	}
+
+	@Test
+	public void swordsHiddenWhenActionsRowOff()
+	{
+		int t = SampleStates.NOW_TICK - 15;
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u;
+		BarState on = SampleStates.lazyFlick(ActionsRow.ATTACKS, true, Beat.Verdict.ON_TIME);
+		BarState off = SampleStates.lazyFlick(ActionsRow.OFF, true, Beat.Verdict.ON_TIME);
+		float x = tickX(l, on, t);
+		assertTrue(hasPixel(render(1026, 62, on, null), x - 3 * u, x + 3 * u, 38 * u, 51 * u, Palette.WHITE));
+		assertFalse(hasPixel(render(1026, 62, off, null), x - 3 * u, x + 3 * u, 38 * u, 51 * u, Palette.WHITE));
+	}
+
+	@Test
+	public void eatCostsNeedAttacksAndEats()
+	{
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u;
+		int normal = SampleStates.EAT_NORMAL, free = SampleStates.EAT_FREE;
+		BarState all = SampleStates.lazyFlick(ActionsRow.ATTACKS_EATS, true, Beat.Verdict.ON_TIME);
+		BarState noCost = SampleStates.lazyFlick(ActionsRow.ATTACKS_EATS, false, Beat.Verdict.ON_TIME);
+		BarState attacks = SampleStates.lazyFlick(ActionsRow.ATTACKS, true, Beat.Verdict.ON_TIME);
+		float nx = tickX(l, all, normal) + l.tickWidth / 2, fx = tickX(l, all, free) + l.tickWidth / 2;
+		BufferedImage a = render(1026, 62, all, null);
+		assertTrue(hasPixel(a, nx + 9 * u, nx + 24 * u, 41 * u, 49 * u, Palette.LOST));
+		assertTrue(hasPixel(a, fx + 9 * u, fx + 24 * u, 41 * u, 49 * u, Palette.MINT));
+		BufferedImage n = render(1026, 62, noCost, null);
+		assertFalse(hasPixel(n, nx + 9 * u, nx + 24 * u, 41 * u, 49 * u, Palette.LOST));
+		assertFalse(hasPixel(n, fx + 9 * u, fx + 24 * u, 41 * u, 49 * u, Palette.MINT));
+		BufferedImage at = render(1026, 62, attacks, null);
+		assertFalse(hasPixel(at, nx + 9 * u, nx + 24 * u, 41 * u, 49 * u, Palette.LOST));
+		assertFalse(hasPixel(at, fx + 9 * u, fx + 24 * u, 41 * u, 49 * u, Palette.MINT));
+	}
+
+	@Test
+	public void trailVerdictPaints()
+	{
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u, rx = CombatPainter.rightX(l);
+		BarState late = SampleStates.withoutLogin(SampleStates.lazyFlick(ActionsRow.ATTACKS, true, Beat.Verdict.LATE));
+		BarState ok = SampleStates.withoutLogin(SampleStates.lazyFlick(ActionsRow.ATTACKS, true, Beat.Verdict.ON_TIME));
+		assertTrue(hasPixel(render(1026, 62, late, null), rx + 140 * u, rx + 190 * u, 22 * u, 40 * u, Palette.WHITE));
+		assertFalse(hasPixel(render(1026, 62, late, null), rx + 140 * u, rx + 190 * u, 22 * u, 40 * u, Palette.MINT));
+		assertTrue(hasPixel(render(1026, 62, ok, null), rx + 140 * u, rx + 190 * u, 22 * u, 40 * u, Palette.MINT));
+		assertFalse(hasPixel(render(1026, 62, ok, null), rx + 140 * u, rx + 190 * u, 22 * u, 40 * u, Palette.WHITE));
+	}
+
+	@Test
+	public void lazyFlickTrailDoesNotOverlapLoginTime()
+	{
+		for (int w : new int[]{1026, 720})
+		{
+			for (Beat.Verdict last : new Beat.Verdict[]{Beat.Verdict.EARLY, Beat.Verdict.ON_TIME})
+			{
+				BarState s = SampleStates.lazyFlick(ActionsRow.ATTACKS_EATS, true, last);
+				BarLayout l = BarLayout.of(w, 62);
+				BufferedImage img = render(w, 62, s, null);
+				BufferedImage ref = render(w, 62, SampleStates.withoutBeat(s), null);
+				Graphics2D g = img.createGraphics();
+				int tw = g.getFontMetrics(Fonts.semiBold(11f * l.u)).stringWidth(s.clock.format(s.nowMs));
+				g.dispose();
+				int x1 = (int) (l.width - 26f * l.u), x0 = x1 - tw - 2;
+				for (int y = (int) (14f * l.u); y < (int) (50f * l.u); y++)
+				{
+					for (int x = x0; x < l.width; x++)
+					{
+						assertEquals("w=" + w + " " + last + " paint over login time at " + x + "," + y,
+							ref.getRGB(x, y), img.getRGB(x, y));
+					}
+				}
+				// And the trail did paint something in the readout area.
+				boolean painted = false;
+				for (int y = 0; y < 62 && !painted; y++)
+				{
+					for (int x = (int) CombatPainter.rightX(l); x < x0 && !painted; x++)
+					{
+						painted = img.getRGB(x, y) != ref.getRGB(x, y);
+					}
+				}
+				assertTrue("w=" + w + " " + last + " trail not painted", painted);
+			}
+		}
+	}
+
+	@Test
+	public void nothingAheadOfNowExceptNextBeat()
+	{
+		BarState s = SampleStates.lazyFlick();
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		float u = l.u, now = TimelinePainter.nowX(l), right = CombatPainter.rightX(l);
+		float cx = tickX(l, s, s.beat.nextBeat());
+		int rulerTop = (int) Math.floor(l.height - 9f * u) - 1, rulerBottom = (int) Math.ceil(l.height - 6f * u) + 1;
+		int ground = Palette.GROUND.getRGB();
+		for (int x = (int) now + 3; x < right; x++)
+		{
+			for (int y = 0; y < l.height; y++)
+			{
+				boolean ruler = y >= rulerTop && y <= rulerBottom;
+				boolean caretBox = Math.abs(x - cx) <= 4 * u + 1 && y >= 55 * u - 1 && y <= 60 * u + 1;
+				if (ruler || caretBox)
+				{
+					continue;
+				}
+				assertEquals("paint ahead of now at " + x + "," + y, ground, img.getRGB(x, y));
+			}
+		}
+		assertTrue(s.beat.nextBeat() > s.nowTick);
 	}
 }

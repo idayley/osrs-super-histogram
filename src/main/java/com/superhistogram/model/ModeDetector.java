@@ -1,13 +1,20 @@
 package com.superhistogram.model;
 
-/** Picks the bar's view: AFK wins; otherwise the baseline setting. */
+import com.superhistogram.model.combat.PrayerMode;
+
+/** Picks the bar's view: AFK wins, then combat; otherwise the baseline setting. */
 public final class ModeDetector
 {
-	public Mode detect(boolean afk, BaselineSetting baseline)
+	public Mode detect(boolean afk, boolean inCombat, PrayerMode prayerMode, BaselineSetting baseline)
 	{
 		if (afk)
 		{
 			return Mode.AFK;
+		}
+		if (inCombat)
+		{
+			// ONE_TICK maps here too until its own view exists.
+			return Mode.LAZY_FLICK;
 		}
 		return baseline == BaselineSetting.MINIMAL ? Mode.MINIMAL : Mode.GENERAL;
 	}

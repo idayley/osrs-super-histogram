@@ -1,5 +1,8 @@
 package com.superhistogram.model;
 
+import com.superhistogram.model.combat.ActionsRow;
+import com.superhistogram.model.combat.Beat;
+
 /**
  * Read-only snapshot of everything the painters need for one frame. Any
  * reference may be null (logged out, not yet initialised); painters skip
@@ -19,6 +22,11 @@ public final class BarState
 	public final Mode mode;
 	/** Wall-clock time the snapshot was taken, for time-based readouts. */
 	public final long nowMs;
+	/** Lazy-flick metronome; null when none. */
+	public final Beat beat;
+	public final int weaponSpeed;
+	public final ActionsRow actionsRow;
+	public final boolean showEatCosts;
 
 	private BarState(Builder b)
 	{
@@ -34,6 +42,10 @@ public final class BarState
 		showLoginTime = b.showLoginTime;
 		mode = b.mode;
 		nowMs = b.nowMs;
+		beat = b.beat;
+		weaponSpeed = b.weaponSpeed;
+		actionsRow = b.actionsRow;
+		showEatCosts = b.showEatCosts;
 	}
 
 	public static Builder builder()
@@ -53,6 +65,10 @@ public final class BarState
 		private boolean showRunEnergy = true, showLoginTime = true;
 		private Mode mode = Mode.GENERAL;
 		private long nowMs;
+		private Beat beat;
+		private int weaponSpeed = 4;
+		private ActionsRow actionsRow = ActionsRow.ATTACKS;
+		private boolean showEatCosts = true;
 
 		public Builder timeline(Timeline v)
 		{
@@ -123,6 +139,30 @@ public final class BarState
 		public Builder nowMs(long v)
 		{
 			nowMs = v;
+			return this;
+		}
+
+		public Builder beat(Beat v)
+		{
+			beat = v;
+			return this;
+		}
+
+		public Builder weaponSpeed(int v)
+		{
+			weaponSpeed = v;
+			return this;
+		}
+
+		public Builder actionsRow(ActionsRow v)
+		{
+			actionsRow = v;
+			return this;
+		}
+
+		public Builder showEatCosts(boolean v)
+		{
+			showEatCosts = v;
 			return this;
 		}
 
