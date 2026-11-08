@@ -304,8 +304,10 @@ public class SuperHistogramPluginHandlersTest
 	public void ownAttackAnimationRecordsAttack()
 	{
 		when(me.getInteracting()).thenReturn(npc);
+		when(npc.getCombatLevel()).thenReturn(2);
 		when(me.getAnimation()).thenReturn(390);
 		plugin.handleTick(1000);
+		plugin.handleHit(npc, HitsplatID.DAMAGE_ME, 2);
 		plugin.handleAnimation(me);
 		assertEquals(0, plugin.timeline.peek(0).attackLate);
 	}
@@ -360,9 +362,12 @@ public class SuperHistogramPluginHandlersTest
 
 	// ---- Task 11: beat, prayer spans, metronome ----
 
+	/** A real fight: the player targets a combat NPC that has just been hit. */
 	private void fight()
 	{
 		when(me.getInteracting()).thenReturn(npc);
+		when(npc.getCombatLevel()).thenReturn(2);
+		plugin.handleHit(npc, HitsplatID.DAMAGE_ME, 2);
 		when(client.getVarcStrValue(net.runelite.api.VarClientStr.CHATBOX_TYPED_TEXT)).thenReturn("");
 	}
 
@@ -1203,11 +1208,11 @@ public class SuperHistogramPluginHandlersTest
 	}
 
 	@Test
-	public void hitIsCombatWhenAgilityNotShowing()
+	public void hitAloneIsNotCombatWhenAgilityNotShowing()
 	{
 		onCourse();
 		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 3);
-		assertEquals(Mode.LAZY_FLICK, plugin.buildState().mode);
+		assertEquals(Mode.GENERAL, plugin.buildState().mode);
 	}
 
 	@Test
@@ -1492,5 +1497,205 @@ public class SuperHistogramPluginHandlersTest
 		when(config.size()).thenReturn(com.superhistogram.model.BarSize.SMALL);
 		plugin.handleConfigChanged("other", "size");
 		assertEquals(new java.awt.Dimension(1026, 80), o.getPreferredSize());
+	}
+
+	// ---- real combat: an NPC target with a combat level that took a hitsplat (final review C1, I3) ----
+
+	/** The player interacts with npc (index 7) of the given name and combat level. */
+	private void target(String name, int combatLevel)
+	{
+		when(npc.getIndex()).thenReturn(7);
+		when(npc.getName()).thenReturn(name);
+		when(npc.getCombatLevel()).thenReturn(combatLevel);
+		when(me.getInteracting()).thenReturn(npc);
+	}
+
+	private boolean anyAttackRecorded()
+	{
+		for (int t = 0; t <= ticks; t++)
+		{
+			TickRecord r = plugin.timeline.peek(t);
+			if (r != null && r.attackLate >= 0)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	@Test
+	public void fishingSpotIsNotCombat()
+	{
+		ticks = 0;
+		target("Rod Fishing spot", 0);
+		plugin.handleInventory(java.util.Collections.singletonMap(335, 6), 22);
+		plugin.handleStat("Fishing", 1_000_000);
+		tickOnly();
+		plugin.handleGatherClick("Fishing", SuperHistogramPlugin.npcKey(7), "Rod Fishing spot");
+		when(me.getAnimation()).thenReturn(622);
+		for (int i = 0; i < 3; i++)
+		{
+			tickOnly();
+			plugin.handleAnimation(me);
+		}
+		assertEquals(Mode.GATHERING, plugin.buildState().mode);
+		assertFalse(anyAttackRecorded());
+	}
+
+	@Test
+	public void npcDialogueIsNotCombat()
+	{
+		ticks = 0;
+		target("Man", 2);
+		for (int i = 0; i < 4; i++)
+		{
+			tickOnly();
+		}
+		assertEquals(Mode.GENERAL, plugin.buildState().mode);
+	}
+
+	@Test
+	public void bankerIsNotCombat()
+	{
+		cookRun(28);
+		assertEquals(Mode.PRODUCTION, plugin.buildState().mode);
+		target("Banker", 0);
+		plugin.handleBankClick();
+		tickOnly();
+		assertEquals(Mode.PRODUCTION, plugin.buildState().mode);
+	}
+
+	@Test
+	public void pickpocketIsNotCombat()
+	{
+		ticks = 0;
+		target("Man", 2);
+		when(me.getAnimation()).thenReturn(881);
+		tickOnly();
+		plugin.handleAnimation(me);
+		tickOnly();
+		// Caught: the stun hit lands on the player, not the NPC.
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 1);
+		plugin.handleAnimation(me);
+		tickOnly();
+		assertEquals(Mode.GENERAL, plugin.buildState().mode);
+		assertFalse(anyAttackRecorded());
+		assertEquals(1, plugin.timeline.peek(1).hits.size());
+	}
+
+	@Test
+	public void realFightIsCombat()
+	{
+		ticks = 0;
+		target("Goblin", 2);
+		when(me.getAnimation()).thenReturn(390);
+		tickOnly();
+		plugin.handleHit(npc, HitsplatID.DAMAGE_ME, 3);
+		assertEquals(Mode.LAZY_FLICK, plugin.buildState().mode);
+		for (int i = 0; i < 4; i++)
+		{
+			tickOnly();
+		}
+		plugin.handleAnimation(me);
+		assertTrue(anyAttackRecorded());
+		// Target gone (it died): the recent attack keeps combat on.
+		when(me.getInteracting()).thenReturn(null);
+		tickOnly();
+		assertEquals(Mode.LAZY_FLICK, plugin.buildState().mode);
+	}
+
+	@Test
+	public void talkingToNpcSomeoneElseIsFightingIsNotCombat()
+	{
+		ticks = 0;
+		target("Guard", 21);
+		for (int i = 0; i < 3; i++)
+		{
+			tickOnly();
+			// Another player's hits land on the NPC the player is talking to.
+			plugin.handleHit(npc, HitsplatID.DAMAGE_OTHER, 4, i * 600L, false);
+		}
+		assertEquals(Mode.GENERAL, plugin.buildState().mode);
+		plugin.handleHit(npc, HitsplatID.DAMAGE_ME, 4, 1800, true);
+		assertEquals(Mode.LAZY_FLICK, plugin.buildState().mode);
+	}
+
+	@Test
+	public void hitOnTargetTooLongAgoIsNotCombat()
+	{
+		ticks = 0;
+		target("Goblin", 2);
+		tickOnly();
+		plugin.handleHit(npc, HitsplatID.DAMAGE_ME, 3);
+		for (int i = 0; i < 11; i++)
+		{
+			tickOnly();
+		}
+		assertEquals(Mode.GENERAL, plugin.buildState().mode);
+	}
+
+	@Test
+	public void hitsOnPlayerWhileGatheringKeepGathering()
+	{
+		detectChopping(3);
+		when(me.getInteracting()).thenReturn(null);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 6);
+		tickOnly();
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 4);
+		BarState s = plugin.buildState();
+		assertEquals(Mode.GATHERING, s.mode);
+		assertEquals(1, s.timeline.peek(ticks - 2).hits.size());
+		assertEquals(1, s.timeline.peek(ticks - 1).hits.size());
+	}
+
+	// ---- session rates over accumulated logged-in time (final review I2) ----
+
+	@Test
+	public void relogRateUsesAccumulatedLoggedInTime()
+	{
+		// setUp logged in at 0 ms. 200k Magic XP over 2 h, logout, then 1 min back in.
+		plugin.handleTick(0);
+		plugin.handleStat("Magic", 1_000_000);
+		plugin.handleStat("Magic", 1_200_000);
+		plugin.handleGameState(GameState.LOGIN_SCREEN, 7_200_000);
+		plugin.handleGameState(GameState.LOGGED_IN, 7_300_000);
+		plugin.handleStat("Magic", 1_200_000);
+		BarState s = plugin.buildState(7_360_000);
+		// 200,000 xp / (2 h + 1 min) = 99,173 xp/hr; dividing by the 1 min login alone would give 12M/hr.
+		assertEquals("99.1k/hr", com.superhistogram.ui.modes.MinimalView.headline(s));
+		assertEquals(60_000, s.clock.onlineMs(s.nowMs));
+	}
+
+	@Test
+	public void profileChangeResetsSessionTotals()
+	{
+		setHaPrice(39000);
+		magicBaseline();
+		alchCast(1);
+		tickOnly();
+		assertTrue(plugin.alch.sessionGold() > 0);
+		assertEquals(65, plugin.xp.sessionXp("Magic"));
+		plugin.handleGameState(GameState.LOGIN_SCREEN, 7_200_000);
+		plugin.handleGameState(GameState.LOGGED_IN, 7_300_000);
+		plugin.handleProfileChanged(7_300_000);
+		assertEquals(0, plugin.alch.sessionGold());
+		assertEquals(0, plugin.xp.sessionXp());
+		assertEquals(0, plugin.xp.sessionXp("Magic"));
+		assertNull(plugin.xp.topSkill());
+		assertEquals(30_000, plugin.clock.sessionMs(7_330_000));
+		// The new account's first stats are still baselines.
+		plugin.handleStat("Magic", 5_000_000);
+		assertEquals(0, plugin.xp.sessionXp());
+	}
+
+	@Test
+	public void perHourIsDashBeforeAMinute()
+	{
+		plugin.handleTick(0);
+		plugin.handleStat("Magic", 1_000_000);
+		plugin.handleStat("Magic", 1_000_500);
+		assertEquals("\u2014/hr", com.superhistogram.ui.modes.MinimalView.headline(plugin.buildState(30_000)));
+		assertEquals("Magic \u00b7 level 74", com.superhistogram.ui.modes.MinimalView.smallLine(plugin.buildState(30_000)));
+		assertEquals("30k/hr", com.superhistogram.ui.modes.MinimalView.headline(plugin.buildState(60_000)));
 	}
 }

@@ -133,15 +133,19 @@ public final class AlchView implements ModeView
 		{
 			return new String[]{"", ""};
 		}
-		long ms = s.clock == null ? 0 : s.clock.onlineMs(s.nowMs);
+		// Rates divide by session time (summed across relogs) and show "—" in its first minute.
+		boolean ready = ReadoutPainter.ratesReady(s);
+		long ms = ReadoutPainter.sessionMs(s);
 		boolean perHour = s.rightSide != RightSide.SESSION;
-		long gold = a.sessionGold(), goldRate = a.goldPerHour(ms);
+		long gold = a.sessionGold(), goldRate = ready ? a.goldPerHour(ms) : 0;
 		long xp = s.xp == null ? 0 : s.xp.sessionXp("Magic");
-		long xpRate = s.xp == null ? 0 : s.xp.xpPerHour("Magic", ms);
-		String goldHead = perHour ? formatCoins(goldRate) + "/hr" : formatCoins(gold);
-		String goldRest = perHour ? formatCoins(gold) + " this session" : formatCoins(goldRate) + "/hr";
-		String xpHead = perHour ? ReadoutPainter.compact(xpRate) + " xp/hr" : ReadoutPainter.compact(xp) + " xp";
-		String xpRest = perHour ? ReadoutPainter.compact(xp) + " xp" : ReadoutPainter.compact(xpRate) + "/hr";
+		long xpRate = s.xp == null || !ready ? 0 : s.xp.xpPerHour("Magic", ms);
+		String goldRateText = ready ? formatCoins(goldRate) : ReadoutPainter.NO_RATE;
+		String xpRateText = ready ? ReadoutPainter.compact(xpRate) : ReadoutPainter.NO_RATE;
+		String goldHead = perHour ? goldRateText + "/hr" : formatCoins(gold);
+		String goldRest = perHour ? formatCoins(gold) + " this session" : goldRateText + "/hr";
+		String xpHead = perHour ? xpRateText + " xp/hr" : ReadoutPainter.compact(xp) + " xp";
+		String xpRest = perHour ? ReadoutPainter.compact(xp) + " xp" : xpRateText + "/hr";
 		String level = MinimalView.levelPart(s, "Magic", xpRate);
 		if (level != null)
 		{

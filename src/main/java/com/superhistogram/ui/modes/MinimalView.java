@@ -21,12 +21,33 @@ public final class MinimalView implements ModeView
 	@Override
 	public void paintRight(Graphics2D g, BarLayout l, BarState s)
 	{
-		String skill = s.xp == null ? null : s.xp.topSkill();
-		long sessionMs = s.clock == null ? 0 : s.clock.onlineMs(s.nowMs);
-		long perHour = skill == null ? 0 : s.xp.xpPerHour(skill, sessionMs);
-		ReadoutPainter.right(g, l, s, ReadoutPainter.compact(perHour) + "/hr", Palette.WHITE, smallLine(s, skill, perHour));
+		ReadoutPainter.right(g, l, s, headline(s), Palette.WHITE, smallLine(s));
 	}
 
+	private static String topSkill(BarState s)
+	{
+		return s.xp == null ? null : s.xp.topSkill();
+	}
+
+	/** XP/hr of the skill over session time; 0 when unknown or in the session's first minute. */
+	private static long perHour(BarState s, String skill)
+	{
+		return skill == null || !ReadoutPainter.ratesReady(s) ? 0 : s.xp.xpPerHour(skill, ReadoutPainter.sessionMs(s));
+	}
+
+	/** "99k/hr", or "—/hr" in the session's first minute. */
+	public static String headline(BarState s)
+	{
+		String rate = ReadoutPainter.ratesReady(s) ? ReadoutPainter.compact(perHour(s, topSkill(s))) : ReadoutPainter.NO_RATE;
+		return rate + "/hr";
+	}
+
+	/** "Magic · level 87 in 1h 5m"; no time to level in the session's first minute. */
+	public static String smallLine(BarState s)
+	{
+		String skill = topSkill(s);
+		return smallLine(s, skill, perHour(s, skill));
+	}
 	static String smallLine(BarState s, String skill, long perHour)
 	{
 		if (skill == null)

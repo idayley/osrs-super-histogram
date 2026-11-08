@@ -48,6 +48,14 @@ public final class XpTracker
 		lastTotal.clear();
 	}
 
+	/** A new account: session totals are forgotten; the current baselines are kept. */
+	public void resetSession()
+	{
+		gained.clear();
+		sessionXp = 0;
+		lastDrop = null;
+	}
+
 	public long sessionXp()
 	{
 		return sessionXp;

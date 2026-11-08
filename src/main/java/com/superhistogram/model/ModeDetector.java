@@ -61,9 +61,24 @@ public final class ModeDetector
 			: gathering ? Mode.GATHERING : null;
 	}
 
-	/** In combat: interacting with an NPC, or a hit on you or your own attack within the last 10 ticks. */
-	public static boolean inCombat(boolean interactingNpc, int tick, int lastHitTick, int lastAttackTick)
+	/** Ticks a hit on the target or an own attack keeps combat on. */
+	public static final int COMBAT_WINDOW = 10;
+
+	/**
+	 * In combat: the player targets a real combat NPC (see {@link #realTarget}), or made an own attack within the
+	 * last 10 ticks. Hits on the player never count by themselves (Wintertodt, Tempoross, thieving stuns, falls).
+	 */
+	public static boolean inCombat(boolean realTarget, int tick, int lastAttackTick)
 	{
-		return interactingNpc || tick - lastHitTick <= 10 || tick - lastAttackTick <= 10;
+		return realTarget || tick - lastAttackTick <= COMBAT_WINDOW;
+	}
+
+	/**
+	 * A real combat target: an NPC with a combat level (fishing spots, bankers and most quest NPCs have 0) that
+	 * took a damage or block hitsplat within the last 10 ticks (so dialogue and pickpocketing are excluded).
+	 */
+	public static boolean realTarget(int combatLevel, int lastHitOnTargetTick, int tick)
+	{
+		return combatLevel > 0 && tick - lastHitOnTargetTick <= COMBAT_WINDOW;
 	}
 }

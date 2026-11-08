@@ -51,13 +51,23 @@ public class ModeDetectorTest
 	}
 
 	@Test
-	public void combatLingers10TicksAfterHit()
+	public void combatIsARealTargetOrAnOwnAttackInTheLast10Ticks()
 	{
 		int never = AttackTimer.NEVER;
-		assertTrue(ModeDetector.inCombat(false, 110, 100, never));
-		assertFalse(ModeDetector.inCombat(false, 111, 100, never));
-		assertTrue(ModeDetector.inCombat(true, 500, never, never));
-		assertTrue(ModeDetector.inCombat(false, 110, never, 100));
+		assertTrue(ModeDetector.inCombat(true, 500, never));
+		assertTrue(ModeDetector.inCombat(false, 110, 100));
+		assertFalse(ModeDetector.inCombat(false, 111, 100));
+		assertFalse(ModeDetector.inCombat(false, 500, never));
+	}
+
+	@Test
+	public void realTargetNeedsCombatLevelAndAHitInTheWindow()
+	{
+		int never = AttackTimer.NEVER;
+		assertTrue(ModeDetector.realTarget(2, 100, 110));
+		assertFalse(ModeDetector.realTarget(2, 100, 111));
+		assertFalse(ModeDetector.realTarget(0, 100, 100));
+		assertFalse(ModeDetector.realTarget(2, never, 100));
 	}
 
 	@Test

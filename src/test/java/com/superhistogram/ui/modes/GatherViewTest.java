@@ -81,4 +81,12 @@ public class GatherViewTest
 		assertArrayEquals(new String[0],
 			GatherView.headlineFallbacks(SampleStates.gathering(GatherPhase.CHOPPING)));
 	}
+
+	@Test
+	public void rateIsDashInTheFirstMinute()
+	{
+		BarState s = SampleStates.gathering(GatherPhase.CHOPPING);
+		s.clock.resetSession(s.nowMs - 30_000);
+		assertArrayEquals(new String[]{"12/28", "full in ~1:40 · \u2014 logs/hr"}, GatherView.rightLines(s));
+	}
 }

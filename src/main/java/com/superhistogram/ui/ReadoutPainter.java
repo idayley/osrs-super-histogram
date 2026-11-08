@@ -238,6 +238,21 @@ public final class ReadoutPainter
 
 	// ---- formatting ----
 
+	/** Shown in place of a per-hour number until the session has a minute of logged-in time. */
+	public static final String NO_RATE = "\u2014";
+
+	/** True once per-hour rates may be shown (a minute of session time). */
+	public static boolean ratesReady(BarState s)
+	{
+		return s.clock != null && s.clock.ratesReady(s.nowMs);
+	}
+
+	/** Logged-in time summed across relogs: the divisor of every session per-hour rate. */
+	public static long sessionMs(BarState s)
+	{
+		return s.clock == null ? 0 : s.clock.sessionMs(s.nowMs);
+	}
+
 	/** 950, 12.4k, 124k, 1.2M. */
 	public static String compact(long n)
 	{

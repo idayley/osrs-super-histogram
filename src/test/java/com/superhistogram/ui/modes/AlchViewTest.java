@@ -81,4 +81,15 @@ public class AlchViewTest
 	{
 		assertArrayEquals(new String[]{"", ""}, AlchView.rightLines(SampleStates.withoutAlch(SampleStates.alchText(1L))));
 	}
+
+	@Test
+	public void ratesAreDashInTheFirstMinute()
+	{
+		com.superhistogram.model.BarState s = SampleStates.alchText(AlchTopRow.BOTH, RightSide.PER_HOUR, 200L, 40L);
+		s.clock.resetSession(s.nowMs - 30_000);
+		assertArrayEquals(new String[]{"\u2014/hr", "+240 this session · \u2014 xp/hr"}, AlchView.rightLines(s));
+		s = SampleStates.alchText(AlchTopRow.XP, RightSide.SESSION, 200L, 40L);
+		s.clock.resetSession(s.nowMs - 30_000);
+		assertArrayEquals(new String[]{"130 xp", "\u2014/hr · level 99"}, AlchView.rightLines(s));
+	}
 }

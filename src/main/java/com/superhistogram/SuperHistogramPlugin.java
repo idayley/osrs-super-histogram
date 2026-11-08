@@ -44,6 +44,7 @@ import net.runelite.api.AnimationID;
 import net.runelite.api.Client;
 import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameState;
+import net.runelite.api.Hitsplat;
 import net.runelite.api.HitsplatID;
 import net.runelite.api.InventoryID;
 import net.runelite.api.ItemComposition;
@@ -151,7 +152,8 @@ public class SuperHistogramPlugin extends Plugin
 	int loadingTick = Integer.MIN_VALUE;
 	/** Newest inventory item counts; null before the first inventory event and after logout. */
 	volatile Map<Integer, Integer> latestInventory;
-	private int lastHitTick = AttackTimer.NEVER;
+	/** NPC index to the tick a damage or block hitsplat last landed on it; dropped on despawn, hop and logout. */
+	private final Map<Integer, Integer> npcHitTicks = new HashMap<>();
 	Pulse pulse;
 	private final HotkeyListener beatHotkey = new HotkeyListener(() -> config.beatKey())
 	{
@@ -231,7 +233,7 @@ public class SuperHistogramPlugin extends Plugin
 		latestFreeSlots = -1;
 		loadingTick = Integer.MIN_VALUE;
 		latestInventory = null;
-		lastHitTick = AttackTimer.NEVER;
+		npcHitTicks.clear();
 		idleThreshold = config.afkAfterSeconds();
 		idle = new IdleTracker(idleThreshold);
 		if (pulse == null)
@@ -272,7 +274,8 @@ public class SuperHistogramPlugin extends Plugin
 	@Subscribe
 	public void onHitsplatApplied(HitsplatApplied e)
 	{
-		handleHit(e.getActor(), e.getHitsplat().getHitsplatType(), e.getHitsplat().getAmount());
+		Hitsplat h = e.getHitsplat();
+		handleHit(e.getActor(), h.getHitsplatType(), h.getAmount(), System.currentTimeMillis(), h.isMine());
 	}
 
 	@Subscribe
@@ -572,19 +575,41 @@ public class SuperHistogramPlugin extends Plugin
 			|| (type >= HitsplatID.DAMAGE_ME_POISE && type <= HitsplatID.DAMAGE_MAX_ME_POISE);
 	}
 
-	/** Records a damage or block hitsplat only when it lands on the local player. */
+	/** Test shorthand: a hitsplat the player dealt (or, on the player, took). */
 	void handleHit(Actor actor, int type, int amount)
 	{
-		handleHit(actor, type, amount, System.currentTimeMillis());
+		handleHit(actor, type, amount, System.currentTimeMillis(), true);
 	}
 
+	/** Test shorthand, as above. */
 	void handleHit(Actor actor, int type, int amount, long nowMs)
 	{
-		if (timeline == null || !isHitType(type) || actor == null || actor != client.getLocalPlayer())
+		handleHit(actor, type, amount, nowMs, true);
+	}
+
+	/**
+	 * A damage or block hitsplat. On the local player it is drawn; on an NPC it marks a real combat target only when
+	 * mine ({@code Hitsplat.isMine()}), so an NPC someone else is fighting is not.
+	 */
+	void handleHit(Actor actor, int type, int amount, long nowMs, boolean mine)
+	{
+		if (timeline == null || !isHitType(type) || actor == null)
 		{
 			return;
 		}
-		lastHitTick = tick;
+		if (actor instanceof NPC)
+		{
+			if (mine)
+			{
+				npcHitTicks.put(((NPC) actor).getIndex(), tick);
+			}
+			return;
+		}
+		if (actor != client.getLocalPlayer())
+		{
+			return;
+		}
+		// Drawn in every mode, but a hit on the player never switches the mode by itself.
 		TickRecord r = timeline.at(tick);
 		if (r != null)
 		{
@@ -629,6 +654,7 @@ public class SuperHistogramPlugin extends Plugin
 		}
 		attribution.forget(npc.getIndex());
 		swingers.remove(npc.getIndex());
+		npcHitTicks.remove(npc.getIndex());
 		HullFlashOverlay.Target t = flash;
 		if (t != null && t.npc == npc)
 		{
@@ -640,10 +666,26 @@ public class SuperHistogramPlugin extends Plugin
 	{
 		attribution.reset();
 		swingers.clear();
+		npcHitTicks.clear();
 		flash = null;
 	}
 
-	/** An own animation while targeting an NPC counts as an attack unless it is the eat animation. */
+	/**
+	 * The player's target is a real combat NPC: it has a combat level and took a hitsplat in the combat window.
+	 * Fishing spots, bankers, dialogue and pickpocket targets are not.
+	 */
+	private boolean realTarget(Actor target, int now)
+	{
+		if (!(target instanceof NPC))
+		{
+			return false;
+		}
+		NPC n = (NPC) target;
+		Integer hit = npcHitTicks.get(n.getIndex());
+		return hit != null && ModeDetector.realTarget(n.getCombatLevel(), hit, now);
+	}
+
+	/** An own animation (other than eating) while targeting a real combat NPC counts as an attack. */
 	void handleAnimation(Actor a)
 	{
 		if (timeline == null || a == null)
@@ -666,7 +708,7 @@ public class SuperHistogramPlugin extends Plugin
 			return;
 		}
 		int anim = a.getAnimation();
-		if (anim == -1 || anim == EAT_ANIMATION || !(a.getInteracting() instanceof NPC) || !attack.canAttack(tick))
+		if (anim == -1 || anim == EAT_ANIMATION || !realTarget(a.getInteracting(), tick) || !attack.canAttack(tick))
 		{
 			return;
 		}
@@ -906,7 +948,7 @@ public class SuperHistogramPlugin extends Plugin
 			return;
 		}
 		beat.press(tick, weaponSpeed,
-			ModeDetector.inCombat(me.getInteracting() instanceof NPC, tick, lastHitTick, attack.lastAttackTick()));
+			ModeDetector.inCombat(realTarget(me.getInteracting(), tick), tick, attack.lastAttackTick()));
 	}
 
 	private int weaponSpeed(int itemId)
@@ -932,9 +974,29 @@ public class SuperHistogramPlugin extends Plugin
 		}
 	}
 
-	/** The active RuneScape profile changed: the saved bests belong to another account now. */
 	void handleProfileChanged()
 	{
+		handleProfileChanged(System.currentTimeMillis());
+	}
+
+	/**
+	 * The active RuneScape profile changed: the saved bests belong to another account now, and the session
+	 * totals (XP, alch gold) and the session time behind every per-hour rate start again.
+	 */
+	void handleProfileChanged(long nowMs)
+	{
+		if (xp != null)
+		{
+			xp.resetSession();
+		}
+		if (alch != null)
+		{
+			alch.reset();
+		}
+		if (clock != null)
+		{
+			clock.resetSession(nowMs);
+		}
 		AgilityCourse ag = agility;
 		if (ag != null)
 		{
@@ -972,7 +1034,7 @@ public class SuperHistogramPlugin extends Plugin
 			case LOGIN_SCREEN:
 				loggedIn = false;
 				clearFlash();
-				clock.onLoginScreen();
+				clock.onLoginScreen(nowMs);
 				xp.onLoginScreen();
 				movement.reset();
 				// Fresh timeline so nothing from this session reappears after relog;
@@ -997,7 +1059,6 @@ public class SuperHistogramPlugin extends Plugin
 				latestFreeSlots = -1;
 				loadingTick = Integer.MIN_VALUE;
 				latestInventory = null;
-				lastHitTick = AttackTimer.NEVER;
 				tick = -1;
 				idle = new IdleTracker(idleThreshold);
 				lastLocation = null;
@@ -1014,11 +1075,16 @@ public class SuperHistogramPlugin extends Plugin
 	 */
 	BarState buildState()
 	{
+		return buildState(System.currentTimeMillis());
+	}
+
+	/** As above, at the given wall-clock time. Package-private for tests. */
+	BarState buildState(long now)
+	{
 		if (!loggedIn || timeline == null)
 		{
 			return null;
 		}
-		long now = System.currentTimeMillis();
 		IdleTracker idleNow = idle;
 		boolean afk = idleNow != null && idleNow.isAfk();
 		Player me = client.getLocalPlayer();
@@ -1026,10 +1092,9 @@ public class SuperHistogramPlugin extends Plugin
 		AttackTimer at = attack;
 		AgilityCourse agilityNow = agility;
 		boolean agilityOn = agilityNow != null && agilityNow.showing(tickNow);
-		// A fall hits the player; while agility shows, only an NPC target or an own attack means combat.
+		// Hits on the player (falls, Wintertodt, stuns) never switch the mode; only a real target or own attack does.
 		boolean combat = me != null && at != null
-			&& ModeDetector.inCombat(me.getInteracting() instanceof NPC, tickNow,
-				agilityOn ? AttackTimer.NEVER : lastHitTick, at.lastAttackTick());
+			&& ModeDetector.inCombat(realTarget(me.getInteracting(), tickNow), tickNow, at.lastAttackTick());
 		InventoryRun runNow = run;
 		AlchTracker alchNow = alch;
 		GatherRun gatherNow = gather;

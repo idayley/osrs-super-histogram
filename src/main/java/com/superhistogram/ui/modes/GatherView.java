@@ -191,13 +191,14 @@ public final class GatherView implements ModeView
 		{
 			b.append(etaPrefix).append(eta(eta));
 		}
-		if (perHour > 0)
+		boolean ready = ReadoutPainter.ratesReady(s);
+		if (!ready || perHour > 0)
 		{
 			if (b.length() > 0)
 			{
 				b.append(DOT);
 			}
-			b.append(ReadoutPainter.compact(perHour)).append(' ').append(noun).append("/hr");
+			b.append(ready ? ReadoutPainter.compact(perHour) : ReadoutPainter.NO_RATE).append(' ').append(noun).append("/hr");
 		}
 		return b.length() == 0 ? noun : b.toString();
 	}
