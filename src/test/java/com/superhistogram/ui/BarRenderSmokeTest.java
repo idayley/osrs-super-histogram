@@ -12,6 +12,7 @@ import com.superhistogram.model.XpTracker;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
 import com.superhistogram.model.combat.FlickClassifier;
+import com.superhistogram.ui.SampleStates.ProdPhase;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import org.junit.Test;
@@ -420,5 +421,151 @@ public class BarRenderSmokeTest
 				assertTrue("w=" + w + " " + last + " readout not painted", painted);
 			}
 		}
+	}
+
+	// ---- production ----
+
+	private static final int NOW = SampleStates.NOW_TICK;
+
+	@Test
+	public void productionRendersAtThreeSizes()
+	{
+		for (ProdPhase p : ProdPhase.values())
+		{
+			BarState s = SampleStates.cooking(p);
+			render(1026, 62, s, new Pulse());
+			render(1026, 46, s, new Pulse());
+			render(600, 30, s, new Pulse());
+		}
+	}
+
+	@Test
+	public void cookedPillSolidRemainingFaint()
+	{
+		BarState s = SampleStates.cooking(ProdPhase.RUNNING);
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		float u = l.u;
+		int y = (int) (29 * u);
+		assertEquals(Palette.COOK_PILL.getRGB(), img.getRGB((int) tickX(l, s, NOW - 10), y));
+		int x = (int) (tickX(l, s, NOW + 1) + 16 * u);
+		assertEquals(Palette.GROUND.getRGB(), img.getRGB(x, y));
+		// ... but the outline is there at the pill's top edge.
+		assertTrue(hasPixelAlpha(img, x, x + 1, 22 * u - 1, 22 * u + 2 * u));
+	}
+
+	private static boolean hasPixelAlpha(BufferedImage img, float x0, float x1, float y0, float y1)
+	{
+		for (int y = (int) y0; y < (int) Math.ceil(y1); y++)
+		{
+			for (int x = (int) x0; x < (int) Math.ceil(x1); x++)
+			{
+				if (img.getRGB(x, y) != Palette.GROUND.getRGB())
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	@Test
+	public void finishFlagAheadOfNow()
+	{
+		BarState s = SampleStates.cooking(ProdPhase.RUNNING);
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u, fx = tickX(l, s, NOW + 2);
+		assertTrue(hasPixel(render(1026, 62, s, null), fx - u, fx + 9 * u, 42 * u, 60 * u, Palette.WHITE));
+		BarLayout l46 = BarLayout.of(1026, 46);
+		float fx46 = tickX(l46, s, NOW + 2);
+		assertFalse(hasPixel(render(1026, 46, s, null), fx46 - l46.u, fx46 + 9 * l46.u, 42 * l46.u, 60 * l46.u,
+			Palette.WHITE));
+		BarState off = SampleStates.cooking(ProdPhase.RUNNING, false, true);
+		assertFalse(hasPixel(render(1026, 62, off, null), fx - u, fx + 9 * u, 42 * u, 60 * u, Palette.WHITE));
+	}
+
+	@Test
+	public void wastedLabelOnlyWhenEnabled()
+	{
+		BarState on = SampleStates.cooking(ProdPhase.BANKED);
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u, x0 = tickX(l, on, NOW - 5), x1 = tickX(l, on, NOW - 2);
+		assertTrue(hasPixel(render(1026, 62, on, null), x0, x1, 34 * u, 42 * u, Palette.LOST));
+		BarState off = SampleStates.cooking(ProdPhase.BANKED, true, false);
+		assertFalse(hasPixel(render(1026, 62, off, null), x0, x1, 34 * u, 42 * u, Palette.LOST));
+	}
+
+	@Test
+	public void burntIsGrey()
+	{
+		BarState s = SampleStates.cooking(ProdPhase.RUNNING);
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u, x = tickX(l, s, SampleStates.cookingItemTick(SampleStates.BURNT_B, 27, NOW - 2));
+		assertTrue(hasPixel(render(1026, 62, s, null), x - 12 * u, x + 12 * u, 6 * u, 16 * u, Palette.BURNT));
+	}
+
+	@Test
+	public void productionRightDoesNotOverlapLoginTime()
+	{
+		for (int w : new int[]{1026, 720})
+		{
+			for (ProdPhase p : ProdPhase.values())
+			{
+				BarState s = SampleStates.cooking(p);
+				BarLayout l = BarLayout.of(w, 62);
+				BufferedImage img = render(w, 62, s, null);
+				BufferedImage ref = render(w, 62, SampleStates.withoutRun(s), null);
+				Graphics2D g = img.createGraphics();
+				int tw = g.getFontMetrics(Fonts.semiBold(11f * l.u)).stringWidth(s.clock.format(s.nowMs));
+				g.dispose();
+				int x1 = (int) (l.width - 26f * l.u), x0 = x1 - tw - 2;
+				for (int y = (int) (14f * l.u); y < (int) (50f * l.u); y++)
+				{
+					for (int x = x0; x < l.width; x++)
+					{
+						assertEquals("w=" + w + " " + p + " paint over login time at " + x + "," + y,
+							ref.getRGB(x, y), img.getRGB(x, y));
+					}
+				}
+				boolean painted = false;
+				for (int y = 0; y < 62 && !painted; y++)
+				{
+					for (int x = (int) CombatPainter.rightX(l); x < x0 && !painted; x++)
+					{
+						painted = img.getRGB(x, y) != ref.getRGB(x, y);
+					}
+				}
+				assertTrue("w=" + w + " " + p + " readout not painted", painted);
+			}
+		}
+	}
+
+	@Test
+	public void bankingHeadlineKeepsWastedTicksWhenNarrow()
+	{
+		BarState s = SampleStates.cooking(ProdPhase.BANKED);
+		BarLayout l = BarLayout.of(720, 62);
+		BufferedImage img = render(720, 62, s, null);
+		Graphics2D g = img.createGraphics();
+		float x = l.timelineX + l.timelineW + 10f * l.u;
+		float room = ReadoutPainter.rightLimit(g, l, s) - x;
+		String full = com.superhistogram.ui.modes.ProductionView.rightLines(s)[0];
+		java.awt.Font f = Fonts.bold(20f * l.u);
+		assertTrue("full headline should not fit at 720", g.getFontMetrics(f).stringWidth(full) > room);
+		String picked = ReadoutPainter.pickHeadline(g, f, room, full,
+			com.superhistogram.ui.modes.ProductionView.headlineFallbacks(s));
+		g.dispose();
+		assertEquals("Bank +3", picked);
+		assertTrue(hasPixel(img, x, x + room, 14 * l.u, 36 * l.u, Palette.MINT));
+	}
+
+	@Test
+	public void finishedRunHasNoOutline()
+	{
+		BarState s = SampleStates.cooking(ProdPhase.DONE);
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		int x = (int) (tickX(l, s, NOW - 3) + 8 * l.u), y = (int) (22 * l.u + 1);
+		assertEquals(Palette.GROUND.getRGB(), img.getRGB(x, y));
 	}
 }

@@ -2,10 +2,19 @@ package com.superhistogram.model;
 
 import com.superhistogram.model.combat.PrayerMode;
 
-/** Picks the bar's view: AFK wins, then combat; otherwise the baseline setting. */
+/** Picks the bar's view: AFK wins, then combat, then a skilling view; otherwise the baseline setting. */
 public final class ModeDetector
 {
 	public Mode detect(boolean afk, boolean inCombat, PrayerMode prayerMode, BaselineSetting baseline)
+	{
+		return detect(afk, inCombat, null, prayerMode, baseline);
+	}
+
+	/**
+	 * @param skilling the skilling view to show (PRODUCTION, ALCH) or null; it beats the baseline
+	 *                 but not AFK or combat
+	 */
+	public Mode detect(boolean afk, boolean inCombat, Mode skilling, PrayerMode prayerMode, BaselineSetting baseline)
 	{
 		if (afk)
 		{
@@ -14,6 +23,10 @@ public final class ModeDetector
 		if (inCombat)
 		{
 			return prayerMode == PrayerMode.ONE_TICK ? Mode.ONE_TICK : Mode.LAZY_FLICK;
+		}
+		if (skilling != null)
+		{
+			return skilling;
 		}
 		return baseline == BaselineSetting.MINIMAL ? Mode.MINIMAL : Mode.GENERAL;
 	}

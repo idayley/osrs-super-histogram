@@ -50,6 +50,8 @@ public class SuperHistogramPluginHandlersTest
 		when(config.showLoginTime()).thenReturn(true);
 		when(config.afkWarning()).thenReturn(true);
 		when(config.blinkWhenDone()).thenReturn(true);
+		when(config.timeToFinish()).thenReturn(true);
+		when(config.wastedTicks()).thenReturn(true);
 		when(client.getLocalPlayer()).thenReturn(me);
 		when(client.getEnergy()).thenReturn(7100);
 		when(me.getAnimation()).thenReturn(-1);
@@ -560,5 +562,144 @@ public class SuperHistogramPluginHandlersTest
 		plugin.handleGameState(GameState.LOGGED_IN, 0);
 		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 5, 1000);
 		assertNull(plugin.flashTarget());
+	}
+
+	// ---- production ----
+
+	/** Number of handleTick calls so far in the production tests (tick numbers start at 0). */
+	private int ticks;
+
+	private void tickOnly()
+	{
+		plugin.handleTick(ticks * 600L);
+		ticks++;
+	}
+
+	/** The baseline inventory and stat, on tick 0. */
+	private void cookingBaseline()
+	{
+		ticks = 0;
+		tickOnly();
+		plugin.handleInventory(java.util.Collections.singletonMap(383, 28));
+		plugin.handleStat("Cooking", 1_000_000);
+	}
+
+	/** Raw sharks leave the inventory with Cooking XP on a new tick: the k-th (1-based) item. */
+	private void cookAction(int k)
+	{
+		tickOnly();
+		plugin.handleInventory(java.util.Collections.singletonMap(383, 28 - k));
+		plugin.handleStat("Cooking", 1_000_000 + 210 * k);
+	}
+
+	/** Cooks items 1..n one per tick, then one more tick so the last one is processed. */
+	private void cookRun(int n)
+	{
+		cookingBaseline();
+		for (int k = 1; k <= n; k++)
+		{
+			cookAction(k);
+		}
+		tickOnly();
+	}
+
+	@Test
+	public void productionDetectedAfterTwoActions()
+	{
+		cookingBaseline();
+		cookAction(1);
+		for (int i = 0; i < 4; i++)
+		{
+			tickOnly();
+		}
+		assertEquals(Mode.GENERAL, plugin.buildState().mode);
+		cookAction(2);
+		tickOnly();
+		BarState s = plugin.buildState();
+		assertEquals(Mode.PRODUCTION, s.mode);
+		assertEquals("Cooking", s.modeName);
+		assertEquals("auto", s.modeSub);
+	}
+
+	@Test
+	public void inventoryDoneBlinks()
+	{
+		cookRun(28);
+		assertTrue(plugin.pulse.mintAlpha((ticks - 1) * 600L) > 0f);
+	}
+
+	@Test
+	public void inventoryDoneDoesNotBlinkWhenDisabled()
+	{
+		when(config.blinkWhenDone()).thenReturn(false);
+		cookRun(28);
+		assertEquals(0f, plugin.pulse.mintAlpha((ticks - 1) * 600L), 0f);
+	}
+
+	@Test
+	public void cueOnFinishTick()
+	{
+		when(config.metronome()).thenReturn(SuperHistogramConfig.Metronome.CUE_TICK);
+		cookingBaseline();
+		for (int k = 1; k <= 4; k++)
+		{
+			tickOnly();
+			cookAction(k);
+		}
+		tickOnly();
+		int finish = plugin.run.finishTick();
+		assertTrue(plugin.run.running());
+		while (ticks < finish - 1)
+		{
+			tickOnly();
+		}
+		long before = ticks * 600L;
+		tickOnly();
+		assertEquals(0f, plugin.pulse.outlineAlpha(before), 0f);
+		long at = ticks * 600L;
+		tickOnly();
+		assertTrue(plugin.pulse.outlineAlpha(at) > 0.9f);
+	}
+
+	@Test
+	public void bankClickRecordsWasted()
+	{
+		cookRun(28);
+		assertEquals(28, plugin.run.finishTick());
+		tickOnly();
+		tickOnly();
+		int now = ticks - 1;
+		assertEquals(31, now);
+		plugin.handleBankClick();
+		assertEquals(3, plugin.timeline.peek(now).wasted);
+	}
+
+	@Test
+	public void isBankClickMatches()
+	{
+		assertTrue(SuperHistogramPlugin.isBankClick("Bank", "<col=ffff>Banker"));
+		assertTrue(SuperHistogramPlugin.isBankClick("Bank", null));
+		assertTrue(SuperHistogramPlugin.isBankClick("Use", "<col=ffff>Bank chest"));
+		assertFalse(SuperHistogramPlugin.isBankClick("Use", "Raw shark"));
+		assertFalse(SuperHistogramPlugin.isBankClick("Use", null));
+		assertFalse(SuperHistogramPlugin.isBankClick(null, "Bank"));
+	}
+
+	@Test
+	public void logoutClearsRun()
+	{
+		cookRun(5);
+		assertTrue(plugin.run.running());
+		plugin.handleGameState(GameState.LOGIN_SCREEN, 100_000);
+		assertFalse(plugin.run.running());
+		assertNull(plugin.latestInventory);
+	}
+
+	@Test
+	public void hoppingKeepsRun()
+	{
+		cookRun(5);
+		plugin.handleGameState(GameState.HOPPING, 100_000);
+		assertTrue(plugin.run.running());
 	}
 }

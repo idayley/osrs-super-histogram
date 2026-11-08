@@ -37,6 +37,11 @@ public final class Palette
 	public static final Color TRAIL_LINE = new Color(255, 255, 255, Math.round(0.12f * 255));
 	public static final Color NEXT_BEAT = new Color(255, 255, 255, Math.round(0.35f * 255));
 
+	/** Production view (cooking.html): the cooking pill, a burnt item's label, the "wasted ticks" line. */
+	public static final Color COOK_PILL = hex(0xd9a35b);
+	public static final Color BURNT = hex(0x6b737c);
+	public static final Color WASTED_LINE = new Color(255, 255, 255, Math.round(0.55f * 255));
+
 	/** Alpha of walk / run / idle pills. */
 	public static final float FAINT_ALPHA = 0.22f;
 

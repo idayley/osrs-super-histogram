@@ -65,4 +65,25 @@ public class ModeDetectorTest
 	{
 		assertEquals(Mode.ONE_TICK, detector.detect(false, true, PrayerMode.ONE_TICK, BaselineSetting.GENERAL));
 	}
+
+	@Test
+	public void productionBeatsBaseline()
+	{
+		assertEquals(Mode.PRODUCTION,
+			detector.detect(false, false, Mode.PRODUCTION, PrayerMode.LAZY_FLICK, BaselineSetting.MINIMAL));
+	}
+
+	@Test
+	public void combatBeatsProduction()
+	{
+		assertEquals(Mode.LAZY_FLICK,
+			detector.detect(false, true, Mode.PRODUCTION, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
+	}
+
+	@Test
+	public void afkBeatsProduction()
+	{
+		assertEquals(Mode.AFK,
+			detector.detect(true, false, Mode.PRODUCTION, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
+	}
 }

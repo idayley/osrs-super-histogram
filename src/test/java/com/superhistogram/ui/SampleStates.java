@@ -13,12 +13,15 @@ import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
 import com.superhistogram.model.combat.FlickClassifier;
 import com.superhistogram.model.combat.FoodKind;
+import com.superhistogram.model.skill.InventoryRun;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Sample bar states shared by the render tests. */
-final class SampleStates
+public final class SampleStates
 {
-	static final long NOW_MS = 10_000_000L;
-	static final int NOW_TICK = 200;
+	public static final long NOW_MS = 10_000_000L;
+	public static final int NOW_TICK = 200;
 
 	private SampleStates()
 	{
@@ -258,6 +261,124 @@ final class SampleStates
 	private static void pray(Timeline t, String kind, int from, int to)
 	{
 		t.openSpan(kind, from).endTick = to;
+	}
+
+	// ---- production (cooking.html) ----
+
+	/** Where a sample production run stands. */
+	public enum ProdPhase
+	{
+		/** 27 of 28 made, the last at NOW_TICK - 2, so the finish is 2 ticks ahead. */
+		RUNNING,
+		/** All 28 made, the last at NOW_TICK - 3, no bank click yet. */
+		DONE,
+		/** The last item at NOW_TICK - 5, the bank click at NOW_TICK - 2 (3 wasted). */
+		BANKED
+	}
+
+	public static final int RAW_SHARK = 383, COOKED_SHARK = 385, BURNT_SHARK = 387;
+	public static final int COOK_TICKS = 4, COOK_ITEMS = 28;
+	/** Items (1-based) that burn in the cooking sample. */
+	public static final int BURNT_A = 9, BURNT_B = 25;
+
+	public static BarState cooking(ProdPhase p)
+	{
+		return cooking(p, true, true);
+	}
+
+	public static BarState cooking(ProdPhase p, boolean timeToFinish, boolean wastedTicks)
+	{
+		switch (p)
+		{
+			case RUNNING:
+				return production("Cooking", RAW_SHARK, COOKED_SHARK, COOK_ITEMS, COOK_TICKS, 27, NOW_TICK - 2, -1,
+					timeToFinish, wastedTicks);
+			case DONE:
+				return production("Cooking", RAW_SHARK, COOKED_SHARK, COOK_ITEMS, COOK_TICKS, 28, NOW_TICK - 3, -1,
+					timeToFinish, wastedTicks);
+			default:
+				return cookingBanked(3, timeToFinish, wastedTicks);
+		}
+	}
+
+	/** A finished cooking run whose bank click came {@code wasted} ticks after the last item. */
+	public static BarState cookingBanked(int wasted, boolean timeToFinish, boolean wastedTicks)
+	{
+		return production("Cooking", RAW_SHARK, COOKED_SHARK, COOK_ITEMS, COOK_TICKS, 28, NOW_TICK - 5,
+			NOW_TICK - 5 + wasted, timeToFinish, wastedTicks);
+	}
+
+	/** A fletching run in the same shape as the RUNNING cooking sample (3 ticks per item, nothing burns). */
+	public static BarState fletching()
+	{
+		return production("Fletching", 1511, 52, 28, 3, 27, NOW_TICK - 2, -1, true, true);
+	}
+
+	/** Tick of the n-th (1-based) cooking item in the sample for the given last item tick. */
+	public static int cookingItemTick(int n, int made, int lastTick)
+	{
+		return lastTick - (made - n) * COOK_TICKS;
+	}
+
+	/**
+	 * Drives a real InventoryRun like the plugin does: each made item is one tick with the input
+	 * leaving the inventory and XP arriving on the same tick (burnt items, cooking only, get no XP).
+	 */
+	private static BarState production(String skill, int in, int out, int items, int per, int made, int lastTick,
+		int bankTick, boolean timeToFinish, boolean wastedTicks)
+	{
+		Timeline t = new Timeline(512);
+		XpTracker xp = new XpTracker(t);
+		InventoryRun run = new InventoryRun(t);
+		int first = cookingItemTick(1, made, lastTick) - per;
+		int total = 1_000_000;
+		xp.onStat(skill, total, first - 1);
+		Map<Integer, Integer> inv = new HashMap<>();
+		inv.put(in, items);
+		t.at(first - 1);
+		run.onTick(first - 1, t.at(first - 1).xp, new HashMap<>(inv));
+		int n = 0;
+		for (int tick = first; tick <= NOW_TICK; tick++)
+		{
+			t.at(tick);
+			Map<Integer, Integer> changed = null;
+			if (n < made && tick == cookingItemTick(n + 1, made, lastTick))
+			{
+				n++;
+				boolean burnt = skill.equals("Cooking") && (n == BURNT_A || n == BURNT_B);
+				inv.put(in, items - n);
+				inv.put(burnt ? BURNT_SHARK : out, inv.getOrDefault(burnt ? BURNT_SHARK : out, 0) + 1);
+				changed = new HashMap<>(inv);
+				if (!burnt)
+				{
+					total += 210;
+					xp.onStat(skill, total, tick);
+				}
+			}
+			run.onTick(tick, t.at(tick).xp, changed);
+			if (tick == bankTick)
+			{
+				run.onBankClick(tick);
+			}
+		}
+		SessionClock clock = new SessionClock();
+		clock.onLoggedIn(NOW_MS - (2 * 3600 + 14 * 60 + 7) * 1000L);
+		return BarState.builder()
+			.timeline(t).nowTick(NOW_TICK).xp(xp).idle(new IdleTracker(60)).clock(clock)
+			.runEnergyPct(64).modeName(skill).modeSub("auto").showRunEnergy(true)
+			.showLoginTime(true).mode(Mode.PRODUCTION).nowMs(NOW_MS)
+			.run(run).timeToFinish(timeToFinish).wastedTicks(wastedTicks)
+			.build();
+	}
+
+	/** The same state without its run. */
+	static BarState withoutRun(BarState s)
+	{
+		return BarState.builder()
+			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
+			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
+			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.build();
 	}
 
 	/** The same state without the login time. */

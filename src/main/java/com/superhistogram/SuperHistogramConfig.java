@@ -99,7 +99,7 @@ public interface SuperHistogramConfig extends Config
 		position = 7,
 		keyName = "blinkWhenDone",
 		name = "Blink when done",
-		description = "Flash the bar mint when the AFK logout warning fires"
+		description = "Flash the bar mint when an inventory finishes or the AFK logout warning fires"
 	)
 	default boolean blinkWhenDone()
 	{
@@ -181,5 +181,27 @@ public interface SuperHistogramConfig extends Config
 	default HullFlashMisses hullFlashMisses()
 	{
 		return HullFlashMisses.FAINT;
+	}
+
+	@ConfigItem(
+		position = 24,
+		keyName = "timeToFinish",
+		name = "Time to finish",
+		description = "Show the finish flag and the time left while an inventory is being made"
+	)
+	default boolean timeToFinish()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		position = 25,
+		keyName = "wastedTicks",
+		name = "Wasted ticks (+N)",
+		description = "Show how many ticks passed between the last item and your bank click"
+	)
+	default boolean wastedTicks()
+	{
+		return true;
 	}
 }

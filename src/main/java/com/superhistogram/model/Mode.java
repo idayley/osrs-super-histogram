@@ -7,5 +7,6 @@ public enum Mode
 	AFK,
 	MINIMAL,
 	LAZY_FLICK,
-	ONE_TICK
+	ONE_TICK,
+	PRODUCTION
 }

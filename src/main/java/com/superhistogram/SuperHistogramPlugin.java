@@ -11,6 +11,7 @@ import com.superhistogram.model.MovementTracker;
 import com.superhistogram.model.SessionClock;
 import com.superhistogram.model.TickRecord;
 import com.superhistogram.model.Timeline;
+import com.superhistogram.model.XpDrop;
 import com.superhistogram.model.XpTracker;
 import com.superhistogram.collect.EatCollector;
 import com.superhistogram.collect.PrayerCollector;
@@ -20,9 +21,11 @@ import com.superhistogram.model.combat.AttackTimer;
 import com.superhistogram.model.combat.Bosses;
 import com.superhistogram.model.combat.FlashRule;
 import com.superhistogram.model.combat.HitAttribution;
+import com.superhistogram.model.skill.InventoryRun;
 import com.superhistogram.ui.BarOverlay;
 import com.superhistogram.ui.HullFlashOverlay;
 import com.superhistogram.ui.Pulse;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import javax.inject.Inject;
@@ -53,6 +56,7 @@ import net.runelite.client.game.ItemEquipmentStats;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStats;
 import net.runelite.client.input.KeyManager;
+import net.runelite.client.util.Text;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.util.HotkeyListener;
 import net.runelite.client.plugins.Plugin;
@@ -109,6 +113,9 @@ public class SuperHistogramPlugin extends Plugin
 	volatile Beat beat;
 	private PrayerCollector prayers;
 	volatile FlickClassifier flicks;
+	volatile InventoryRun run;
+	/** Newest inventory item counts; null before the first inventory event and after logout. */
+	volatile Map<Integer, Integer> latestInventory;
 	private int lastHitTick = AttackTimer.NEVER;
 	Pulse pulse;
 	private final HotkeyListener beatHotkey = new HotkeyListener(() -> config.beatKey())
@@ -174,6 +181,8 @@ public class SuperHistogramPlugin extends Plugin
 		beat = new Beat();
 		prayers = new PrayerCollector(timeline);
 		flicks = new FlickClassifier();
+		run = new InventoryRun(timeline);
+		latestInventory = null;
 		lastHitTick = AttackTimer.NEVER;
 		idleThreshold = config.afkAfterSeconds();
 		idle = new IdleTracker(idleThreshold);
@@ -240,6 +249,10 @@ public class SuperHistogramPlugin extends Plugin
 		{
 			handleEatClick(e.getItemId());
 		}
+		if (isBankClick(option, e.getMenuTarget()))
+		{
+			handleBankClick();
+		}
 	}
 
 	@Subscribe
@@ -301,6 +314,12 @@ public class SuperHistogramPlugin extends Plugin
 			prev.flickPhase = flicks.phase();
 		}
 		beat.onTick(tick, overhead != null);
+		boolean finished = run.onTick(tick - 1, prev == null ? Collections.<XpDrop>emptyList() : prev.xp, latestInventory);
+		if (finished && config.blinkWhenDone())
+		{
+			pulse.done(nowMs);
+		}
+		boolean cue = beat.isBeat(tick) || (run.running() && run.finishTick() == tick);
 
 		Player me = client.getLocalPlayer();
 		if (me != null)
@@ -327,9 +346,9 @@ public class SuperHistogramPlugin extends Plugin
 		SuperHistogramConfig.Metronome metronome = config.metronome();
 		if (metronome == SuperHistogramConfig.Metronome.EVERY_TICK)
 		{
-			pulse.tick(nowMs, beat.isBeat(tick));
+			pulse.tick(nowMs, cue);
 		}
-		else if (metronome == SuperHistogramConfig.Metronome.CUE_TICK && beat.isBeat(tick))
+		else if (metronome == SuperHistogramConfig.Metronome.CUE_TICK && cue)
 		{
 			pulse.tick(nowMs, true);
 		}
@@ -468,10 +487,30 @@ public class SuperHistogramPlugin extends Plugin
 
 	void handleInventory(Map<Integer, Integer> counts)
 	{
+		latestInventory = new HashMap<>(counts);
 		if (eats != null)
 		{
 			eats.onInventory(tick, counts);
 		}
+	}
+
+	/** The player clicked a bank (booth, banker, chest) or used an item on one. */
+	void handleBankClick()
+	{
+		InventoryRun r = run;
+		if (r != null)
+		{
+			r.onBankClick(tick);
+		}
+	}
+
+	static boolean isBankClick(String option, String target)
+	{
+		if ("Bank".equals(option))
+		{
+			return true;
+		}
+		return "Use".equals(option) && target != null && Text.removeTags(target).contains("Bank");
 	}
 
 	/** itemId is the equipped weapon, or -1 for none. */
@@ -559,6 +598,8 @@ public class SuperHistogramPlugin extends Plugin
 				beat.reset();
 				prayers = new PrayerCollector(timeline);
 				flicks.reset();
+				run = new InventoryRun(timeline);
+				latestInventory = null;
 				lastHitTick = AttackTimer.NEVER;
 				tick = -1;
 				idle = new IdleTracker(idleThreshold);
@@ -588,7 +629,9 @@ public class SuperHistogramPlugin extends Plugin
 		AttackTimer at = attack;
 		boolean combat = me != null && at != null
 			&& ModeDetector.inCombat(me.getInteracting() instanceof NPC, tickNow, lastHitTick, at.lastAttackTick());
-		Mode mode = modeDetector.detect(afk, combat, config.prayerMode(), config.baseline());
+		InventoryRun runNow = run;
+		Mode skilling = runNow != null && runNow.showing(tickNow) ? Mode.PRODUCTION : null;
+		Mode mode = modeDetector.detect(afk, combat, skilling, config.prayerMode(), config.baseline());
 		return BarState.builder()
 			.timeline(timeline)
 			.nowTick(timeline == null ? -1 : timeline.newestTick())
@@ -596,7 +639,7 @@ public class SuperHistogramPlugin extends Plugin
 			.idle(idleNow)
 			.clock(clock)
 			.runEnergyPct(runEnergyPct)
-			.modeName(modeName(mode))
+			.modeName(mode == Mode.PRODUCTION ? runNow.skill() : modeName(mode))
 			.modeSub(modeSub(mode))
 			.showRunEnergy(config.showRunEnergy())
 			.showLoginTime(config.showLoginTime())
@@ -607,6 +650,9 @@ public class SuperHistogramPlugin extends Plugin
 			.weaponSpeed(weaponSpeed)
 			.actionsRow(config.actionsRow())
 			.showEatCosts(config.showEatCosts())
+			.run(runNow)
+			.timeToFinish(config.timeToFinish())
+			.wastedTicks(config.wastedTicks())
 			.build();
 	}
 
@@ -618,6 +664,8 @@ public class SuperHistogramPlugin extends Plugin
 				return "auto";
 			case ONE_TICK:
 				return "every tick";
+			case PRODUCTION:
+				return "auto";
 			case LAZY_FLICK:
 				return weaponSpeed + "t \u00b7 " + config.beatKey();
 			default:

@@ -54,6 +54,16 @@ public final class ReadoutPainter
 	 */
 	public static void right(Graphics2D g, BarLayout l, BarState s, String big, Color bigColor, String small)
 	{
+		right(g, l, s, big, bigColor, small, new String[0]);
+	}
+
+	/**
+	 * As above; {@code fallbacks} are shorter headlines tried in order when the full one does not fit
+	 * (the first that fits is used; if none does, the full headline is ellipsized).
+	 */
+	public static void right(Graphics2D g, BarLayout l, BarState s, String big, Color bigColor, String small,
+		String... fallbacks)
+	{
 		if (!l.showRight)
 		{
 			return;
@@ -64,11 +74,11 @@ public final class ReadoutPainter
 		{
 			float size = Math.max(10f, 20f * u);
 			Font f = Fonts.bold(size);
-			text(g, fit(g, big, f, room), f, bigColor, x, l.height / 2f + size * 0.35f);
+			text(g, pickHeadline(g, f, room, big, fallbacks), f, bigColor, x, l.height / 2f + size * 0.35f);
 			return;
 		}
 		Font bf = Fonts.bold(20f * u), sf = Fonts.semiBold(10.5f * u);
-		text(g, fit(g, big, bf, room), bf, bigColor, x, 33f * u);
+		text(g, pickHeadline(g, bf, room, big, fallbacks), bf, bigColor, x, 33f * u);
 		String line = small;
 		if (line != null && width(g, line, sf) > room)
 		{
@@ -79,6 +89,23 @@ public final class ReadoutPainter
 			}
 		}
 		text(g, fit(g, line, sf, room), sf, Palette.DIM, x, 48f * u);
+	}
+
+	/** The first of full, fallbacks... that fits in room; the ellipsized full headline when none does. */
+	static String pickHeadline(Graphics2D g, Font f, float room, String full, String... fallbacks)
+	{
+		if (full == null || width(g, full, f) <= room)
+		{
+			return full;
+		}
+		for (String c : fallbacks)
+		{
+			if (c != null && width(g, c, f) <= room)
+			{
+				return c;
+			}
+		}
+		return fit(g, full, f, room);
 	}
 
 	/** Right edge available to the right readout: left of the login time, or the rounded end. */

@@ -79,7 +79,7 @@ public final class TimelinePainter
 	}
 
 	/** Baseline of the XP numbers (top row). */
-	static float xpY(BarLayout l)
+	public static float xpY(BarLayout l)
 	{
 		return pillY(l) - 7f * l.u;
 	}

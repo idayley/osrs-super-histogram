@@ -3,6 +3,7 @@ package com.superhistogram.model;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
 import com.superhistogram.model.combat.FlickClassifier;
+import com.superhistogram.model.skill.InventoryRun;
 
 /**
  * Read-only snapshot of everything the painters need for one frame. Any
@@ -30,6 +31,9 @@ public final class BarState
 	public final int weaponSpeed;
 	public final ActionsRow actionsRow;
 	public final boolean showEatCosts;
+	/** Production run; null when none. */
+	public final InventoryRun run;
+	public final boolean timeToFinish, wastedTicks;
 
 	private BarState(Builder b)
 	{
@@ -50,6 +54,9 @@ public final class BarState
 		weaponSpeed = b.weaponSpeed;
 		actionsRow = b.actionsRow;
 		showEatCosts = b.showEatCosts;
+		run = b.run;
+		timeToFinish = b.timeToFinish;
+		wastedTicks = b.wastedTicks;
 	}
 
 	public static Builder builder()
@@ -74,6 +81,8 @@ public final class BarState
 		private int weaponSpeed = 4;
 		private ActionsRow actionsRow = ActionsRow.ATTACKS;
 		private boolean showEatCosts = true;
+		private InventoryRun run;
+		private boolean timeToFinish = true, wastedTicks = true;
 
 		public Builder timeline(Timeline v)
 		{
@@ -174,6 +183,24 @@ public final class BarState
 		public Builder showEatCosts(boolean v)
 		{
 			showEatCosts = v;
+			return this;
+		}
+
+		public Builder run(InventoryRun v)
+		{
+			run = v;
+			return this;
+		}
+
+		public Builder timeToFinish(boolean v)
+		{
+			timeToFinish = v;
+			return this;
+		}
+
+		public Builder wastedTicks(boolean v)
+		{
+			wastedTicks = v;
 			return this;
 		}
 
