@@ -6,6 +6,7 @@ import com.superhistogram.ui.modes.AfkView;
 import com.superhistogram.ui.modes.GeneralView;
 import com.superhistogram.ui.modes.LazyFlickView;
 import com.superhistogram.ui.modes.MinimalView;
+import com.superhistogram.ui.modes.OneTickView;
 import java.awt.BasicStroke;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -28,6 +29,7 @@ public final class BarPainter
 		views.put(Mode.AFK, new AfkView());
 		views.put(Mode.MINIMAL, new MinimalView());
 		views.put(Mode.LAZY_FLICK, new LazyFlickView());
+		views.put(Mode.ONE_TICK, new OneTickView());
 	}
 
 	/** Paints the bar at (0,0) in the layout's size. A null state paints the empty ground. */

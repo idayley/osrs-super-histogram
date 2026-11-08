@@ -15,6 +15,7 @@ import com.superhistogram.model.XpTracker;
 import com.superhistogram.collect.EatCollector;
 import com.superhistogram.collect.PrayerCollector;
 import com.superhistogram.model.combat.Beat;
+import com.superhistogram.model.combat.FlickClassifier;
 import com.superhistogram.model.combat.AttackTimer;
 import com.superhistogram.ui.BarOverlay;
 import com.superhistogram.ui.Pulse;
@@ -83,6 +84,9 @@ public class SuperHistogramPlugin extends Plugin
 
 	private final ModeDetector modeDetector = new ModeDetector();
 
+	// Widget groups of the prayer book and the minimap orbs (where quick-prayer is toggled).
+	private static final int PRAYERBOOK_GROUP = net.runelite.api.gameval.InterfaceID.PRAYERBOOK, ORBS_GROUP = net.runelite.api.gameval.InterfaceID.ORBS;
+
 	// Replaced wholesale on start/stop, read by the render thread.
 	volatile Timeline timeline;
 	volatile XpTracker xp;
@@ -95,6 +99,7 @@ public class SuperHistogramPlugin extends Plugin
 	volatile int weaponSpeed = AttackTimer.DEFAULT_SPEED;
 	volatile Beat beat;
 	private PrayerCollector prayers;
+	volatile FlickClassifier flicks;
 	private int lastHitTick = AttackTimer.NEVER;
 	Pulse pulse;
 	private final HotkeyListener beatHotkey = new HotkeyListener(() -> config.beatKey())
@@ -147,6 +152,7 @@ public class SuperHistogramPlugin extends Plugin
 		resetCombat();
 		beat = new Beat();
 		prayers = new PrayerCollector(timeline);
+		flicks = new FlickClassifier();
 		lastHitTick = AttackTimer.NEVER;
 		idleThreshold = config.afkAfterSeconds();
 		idle = new IdleTracker(idleThreshold);
@@ -194,7 +200,15 @@ public class SuperHistogramPlugin extends Plugin
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked e)
 	{
-		handleClick(System.currentTimeMillis());
+		long now = System.currentTimeMillis();
+		handleClick(now);
+		int group = e.getWidgetId() >>> 16;
+		String option = e.getMenuOption();
+		if ((group == PRAYERBOOK_GROUP || group == ORBS_GROUP)
+			&& ("Activate".equals(option) || "Deactivate".equals(option)))
+		{
+			handlePrayerClick(now);
+		}
 		if ("Eat".equals(e.getMenuOption()))
 		{
 			handleEatClick(e.getItemId());
@@ -253,6 +267,12 @@ public class SuperHistogramPlugin extends Plugin
 		clicks.onTick(nowMs);
 		String overhead = PrayerCollector.overheadKind(client);
 		prayers.onTick(tick, overhead);
+		TickRecord prev = timeline.peek(tick - 1);
+		if (prev != null && flicks != null)
+		{
+			prev.flick = flicks.classify(prev.prayerClicks, overhead != null);
+			prev.flickPhase = flicks.phase();
+		}
 		beat.onTick(tick, overhead != null);
 
 		Player me = client.getLocalPlayer();
@@ -403,6 +423,14 @@ public class SuperHistogramPlugin extends Plugin
 		}
 	}
 
+	void handlePrayerClick(long nowMs)
+	{
+		if (clicks != null)
+		{
+			clicks.onPrayerClick(tick, nowMs);
+		}
+	}
+
 	void handleGameState(GameState state, long nowMs)
 	{
 		if (clock == null)
@@ -434,6 +462,7 @@ public class SuperHistogramPlugin extends Plugin
 				resetCombat();
 				beat.reset();
 				prayers = new PrayerCollector(timeline);
+				flicks.reset();
 				lastHitTick = AttackTimer.NEVER;
 				tick = -1;
 				idle = new IdleTracker(idleThreshold);
@@ -478,6 +507,7 @@ public class SuperHistogramPlugin extends Plugin
 			.mode(mode)
 			.nowMs(now)
 			.beat(beat)
+			.flicks(flicks)
 			.weaponSpeed(weaponSpeed)
 			.actionsRow(config.actionsRow())
 			.showEatCosts(config.showEatCosts())
@@ -490,6 +520,8 @@ public class SuperHistogramPlugin extends Plugin
 		{
 			case AFK:
 				return "auto";
+			case ONE_TICK:
+				return "every tick";
 			case LAZY_FLICK:
 				return weaponSpeed + "t \u00b7 " + config.beatKey();
 			default:
@@ -501,6 +533,8 @@ public class SuperHistogramPlugin extends Plugin
 	{
 		switch (mode)
 		{
+			case ONE_TICK:
+				return "1-tick flick";
 			case LAZY_FLICK:
 				return "Lazy flick";
 			case AFK:

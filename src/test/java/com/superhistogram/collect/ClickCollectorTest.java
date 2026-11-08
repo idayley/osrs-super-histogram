@@ -35,4 +35,16 @@ public class ClickCollectorTest
 		new ClickCollector(t).onClick(-1, 5);
 		assertNull(t.peek(0));
 	}
+
+	@Test
+	public void prayerClickRecordedSeparately()
+	{
+		Timeline t = new Timeline(512);
+		ClickCollector c = new ClickCollector(t);
+		c.onTick(0);
+		c.onPrayerClick(5, 300);
+		assertEquals(1, t.peek(5).prayerClicks.size());
+		assertEquals(0.5f, t.peek(5).prayerClicks.get(0), 0.001f);
+		assertEquals(0, t.peek(5).clicks.size());
+	}
 }

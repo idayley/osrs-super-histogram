@@ -59,4 +59,10 @@ public class ModeDetectorTest
 		assertTrue(ModeDetector.inCombat(true, 500, never, never));
 		assertTrue(ModeDetector.inCombat(false, 110, never, 100));
 	}
+
+	@Test
+	public void oneTickModeWhenConfigured()
+	{
+		assertEquals(Mode.ONE_TICK, detector.detect(false, true, PrayerMode.ONE_TICK, BaselineSetting.GENERAL));
+	}
 }

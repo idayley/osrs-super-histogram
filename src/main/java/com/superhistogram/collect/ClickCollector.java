@@ -25,11 +25,25 @@ public final class ClickCollector
 	public void onClick(int tick, long nowMs)
 	{
 		TickRecord r = timeline.at(tick);
-		if (r == null)
+		if (r != null)
 		{
-			return;
+			r.clicks.add(fraction(nowMs));
 		}
+	}
+
+	/** Records a prayer toggle click, kept apart from the general clicks. */
+	public void onPrayerClick(int tick, long nowMs)
+	{
+		TickRecord r = timeline.at(tick);
+		if (r != null)
+		{
+			r.prayerClicks.add(fraction(nowMs));
+		}
+	}
+
+	private float fraction(long nowMs)
+	{
 		float f = lastTickMs < 0 ? 0f : (nowMs - lastTickMs) / (float) TICK_MS;
-		r.clicks.add(Math.max(0f, Math.min(0.99f, f)));
+		return Math.max(0f, Math.min(0.99f, f));
 	}
 }

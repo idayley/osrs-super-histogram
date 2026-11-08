@@ -13,8 +13,7 @@ public final class ModeDetector
 		}
 		if (inCombat)
 		{
-			// ONE_TICK maps here too until its own view exists.
-			return Mode.LAZY_FLICK;
+			return prayerMode == PrayerMode.ONE_TICK ? Mode.ONE_TICK : Mode.LAZY_FLICK;
 		}
 		return baseline == BaselineSetting.MINIMAL ? Mode.MINIMAL : Mode.GENERAL;
 	}

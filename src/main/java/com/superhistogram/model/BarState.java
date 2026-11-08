@@ -2,6 +2,7 @@ package com.superhistogram.model;
 
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
+import com.superhistogram.model.combat.FlickClassifier;
 
 /**
  * Read-only snapshot of everything the painters need for one frame. Any
@@ -24,6 +25,8 @@ public final class BarState
 	public final long nowMs;
 	/** Lazy-flick metronome; null when none. */
 	public final Beat beat;
+	/** 1-tick flick classifier; null when none. */
+	public final FlickClassifier flicks;
 	public final int weaponSpeed;
 	public final ActionsRow actionsRow;
 	public final boolean showEatCosts;
@@ -43,6 +46,7 @@ public final class BarState
 		mode = b.mode;
 		nowMs = b.nowMs;
 		beat = b.beat;
+		flicks = b.flicks;
 		weaponSpeed = b.weaponSpeed;
 		actionsRow = b.actionsRow;
 		showEatCosts = b.showEatCosts;
@@ -66,6 +70,7 @@ public final class BarState
 		private Mode mode = Mode.GENERAL;
 		private long nowMs;
 		private Beat beat;
+		private FlickClassifier flicks;
 		private int weaponSpeed = 4;
 		private ActionsRow actionsRow = ActionsRow.ATTACKS;
 		private boolean showEatCosts = true;
@@ -145,6 +150,12 @@ public final class BarState
 		public Builder beat(Beat v)
 		{
 			beat = v;
+			return this;
+		}
+
+		public Builder flicks(FlickClassifier v)
+		{
+			flicks = v;
 			return this;
 		}
 

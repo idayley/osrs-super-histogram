@@ -11,6 +11,7 @@ import com.superhistogram.model.Timeline;
 import com.superhistogram.model.XpTracker;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
+import com.superhistogram.model.combat.FlickClassifier;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import org.junit.Test;
@@ -344,5 +345,80 @@ public class BarRenderSmokeTest
 			}
 		}
 		assertTrue(s.beat.nextBeat() > s.nowTick);
+	}
+
+	// ---- 1-tick flick ----
+
+	@Test
+	public void oneTickRendersAtThreeSizes()
+	{
+		BarState s = SampleStates.oneTick(FlickClassifier.Kind.OK);
+		render(1026, 62, s, new Pulse());
+		render(1026, 46, s, new Pulse());
+		render(600, 30, s, new Pulse());
+		render(220, 22, SampleStates.empty(Mode.ONE_TICK), null);
+	}
+
+	@Test
+	public void oneTickVerdictPaints()
+	{
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u, f = l.height / 52f, rx = CombatPainter.rightX(l);
+		BarState ok = SampleStates.withoutLogin(SampleStates.oneTick(FlickClassifier.Kind.OK));
+		BarState split = SampleStates.withoutLogin(SampleStates.oneTick(FlickClassifier.Kind.SPLIT));
+		assertTrue(hasPixel(render(1026, 62, ok, null), rx + 128 * u, rx + 160 * u, 17 * f, 36 * f, Palette.MINT));
+		assertFalse(hasPixel(render(1026, 62, ok, null), rx + 128 * u, rx + 160 * u, 17 * f, 36 * f, Palette.WHITE));
+		assertTrue(hasPixel(render(1026, 62, split, null), rx + 128 * u, rx + 160 * u, 17 * f, 36 * f, Palette.WHITE));
+		assertFalse(hasPixel(render(1026, 62, split, null), rx + 128 * u, rx + 160 * u, 17 * f, 36 * f, Palette.MINT));
+	}
+
+	@Test
+	public void splitBinsAreWhite()
+	{
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u, f = l.height / 52f, hx = CombatPainter.rightX(l) + 16 * u;
+		BarState s = SampleStates.withoutLogin(SampleStates.oneTick(FlickClassifier.Kind.OK));
+		BufferedImage img = render(1026, 62, s, null);
+		assertTrue(hasPixel(img, hx + 80 * u, hx + 96 * u, 9 * f, 35 * f, Palette.WHITE));
+		assertFalse(hasPixel(img, hx + 80 * u, hx + 96 * u, 9 * f, 35 * f, Palette.MINT));
+		assertTrue(hasPixel(img, hx, hx + 80 * u, 9 * f, 35 * f, Palette.MINT));
+		assertFalse(hasPixel(img, hx, hx + 80 * u, 9 * f, 35 * f, Palette.WHITE));
+	}
+
+	@Test
+	public void oneTickHistogramDoesNotOverlapLoginTime()
+	{
+		for (int w : new int[]{1026, 720})
+		{
+			for (FlickClassifier.Kind last : new FlickClassifier.Kind[]{FlickClassifier.Kind.OK,
+				FlickClassifier.Kind.DRAIN})
+			{
+				BarState s = SampleStates.oneTick(last);
+				BarLayout l = BarLayout.of(w, 62);
+				BufferedImage img = render(w, 62, s, null);
+				BufferedImage ref = render(w, 62, SampleStates.withoutFlicks(s), null);
+				Graphics2D g = img.createGraphics();
+				int tw = g.getFontMetrics(Fonts.semiBold(11f * l.u)).stringWidth(s.clock.format(s.nowMs));
+				g.dispose();
+				int x1 = (int) (l.width - 26f * l.u), x0 = x1 - tw - 2;
+				for (int y = (int) (14f * l.u); y < (int) (50f * l.u); y++)
+				{
+					for (int x = x0; x < l.width; x++)
+					{
+						assertEquals("w=" + w + " " + last + " paint over login time at " + x + "," + y,
+							ref.getRGB(x, y), img.getRGB(x, y));
+					}
+				}
+				boolean painted = false;
+				for (int y = 0; y < 62 && !painted; y++)
+				{
+					for (int x = (int) CombatPainter.rightX(l); x < x0 && !painted; x++)
+					{
+						painted = img.getRGB(x, y) != ref.getRGB(x, y);
+					}
+				}
+				assertTrue("w=" + w + " " + last + " readout not painted", painted);
+			}
+		}
 	}
 }

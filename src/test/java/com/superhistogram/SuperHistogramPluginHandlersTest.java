@@ -437,4 +437,17 @@ public class SuperHistogramPluginHandlersTest
 		assertEquals("pray-magic", spans.get(0).kind);
 		assertEquals(0, spans.get(0).startTick);
 	}
+
+	@Test
+	public void prayerClicksClassifyThePreviousTick()
+	{
+		plugin.handleTick(1000);
+		plugin.handlePrayerClick(1200);
+		plugin.handlePrayerClick(1250);
+		plugin.handleTick(1600);
+		TickRecord r = plugin.buildState().timeline.peek(0);
+		assertEquals(com.superhistogram.model.combat.FlickClassifier.Kind.OK, r.flick);
+		assertEquals(0.333f, r.flickPhase, 0.01f);
+		assertTrue(r.clicks.isEmpty());
+	}
 }

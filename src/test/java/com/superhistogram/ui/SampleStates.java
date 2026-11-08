@@ -11,6 +11,7 @@ import com.superhistogram.model.Timeline;
 import com.superhistogram.model.XpTracker;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
+import com.superhistogram.model.combat.FlickClassifier;
 import com.superhistogram.model.combat.FoodKind;
 
 /** Sample bar states shared by the render tests. */
@@ -190,6 +191,70 @@ final class SampleStates
 			.build();
 	}
 
+	/**
+	 * Mirrors one-tick-flick.html: 40 classified ticks (up to NOW_TICK - 1) of mostly clean flicks
+	 * at phases .2-.45, two splits, a skip, a 4-tick drain, hits, and a pray-magic then pray-ranged
+	 * span. {@code last} decides the final classified tick (OK, SPLIT, SKIP or DRAIN).
+	 */
+	static BarState oneTick(FlickClassifier.Kind last)
+	{
+		Timeline t = new Timeline(512);
+		FlickClassifier fc = new FlickClassifier();
+		int first = NOW_TICK - 40;
+		for (int i = 0; i < 40; i++)
+		{
+			java.util.List<Float> clicks = new java.util.ArrayList<>();
+			boolean on = true;
+			float ph = .2f + .25f * ((i * 7) % 10) / 10f;
+			boolean split = i == 12 || i == 30 || (i == 39 && last == FlickClassifier.Kind.SPLIT);
+			boolean carry = i == 13 || i == 31;
+			boolean skip = i == 18 || i == 26 || (i == 39 && last == FlickClassifier.Kind.SKIP);
+			boolean drain = (i >= 34 && i <= 37) || (i == 39 && last == FlickClassifier.Kind.DRAIN);
+			if (split)
+			{
+				clicks.add(i == 12 ? .86f : .93f);
+			}
+			else if (carry)
+			{
+				clicks.add(.05f);
+			}
+			else if (skip)
+			{
+				on = false;
+			}
+			else if (!drain)
+			{
+				clicks.add(ph);
+				clicks.add(ph + .04f);
+			}
+			TickRecord r = t.at(first + i);
+			r.prayerClicks.addAll(clicks);
+			r.flick = fc.classify(r.prayerClicks, on);
+			r.flickPhase = fc.phase();
+			if (i % 5 == 2)
+			{
+				boolean safe = r.flick == FlickClassifier.Kind.OK || r.flick == FlickClassifier.Kind.DRAIN;
+				r.hits.add(safe ? new Hit(0, true) : new Hit(18 + i % 13, false));
+			}
+			if (i % 4 == 0)
+			{
+				r.clicks.add(.4f);
+			}
+		}
+		pray(t, "pray-magic", first, NOW_TICK - 14);
+		pray(t, "pray-ranged", NOW_TICK - 13, NOW_TICK - 1);
+		t.at(NOW_TICK);
+
+		SessionClock clock = new SessionClock();
+		clock.onLoggedIn(NOW_MS - (2 * 3600 + 14 * 60 + 7) * 1000L);
+		return BarState.builder()
+			.timeline(t).nowTick(NOW_TICK).xp(new XpTracker(t)).idle(new IdleTracker(60)).clock(clock)
+			.runEnergyPct(64).modeName("1-tick flick").modeSub("every tick").showRunEnergy(true)
+			.showLoginTime(true).mode(Mode.ONE_TICK).nowMs(NOW_MS)
+			.flicks(fc).actionsRow(ActionsRow.ATTACKS)
+			.build();
+	}
+
 	private static void pray(Timeline t, String kind, int from, int to)
 	{
 		t.openSpan(kind, from).endTick = to;
@@ -202,12 +267,24 @@ final class SampleStates
 			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
 			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
 			.showRunEnergy(s.showRunEnergy).showLoginTime(false).mode(s.mode).nowMs(s.nowMs)
-			.beat(s.beat).weaponSpeed(s.weaponSpeed).actionsRow(s.actionsRow).showEatCosts(s.showEatCosts)
+			.beat(s.beat).flicks(s.flicks).weaponSpeed(s.weaponSpeed).actionsRow(s.actionsRow)
+			.showEatCosts(s.showEatCosts)
 			.build();
 	}
 
 	/** The same state without a beat. */
 	static BarState withoutBeat(BarState s)
+	{
+		return BarState.builder()
+			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
+			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
+			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.weaponSpeed(s.weaponSpeed).actionsRow(s.actionsRow).showEatCosts(s.showEatCosts)
+			.build();
+	}
+
+	/** The same state without the flick classifier (the right readout paints nothing). */
+	static BarState withoutFlicks(BarState s)
 	{
 		return BarState.builder()
 			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)

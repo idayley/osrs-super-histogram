@@ -62,6 +62,35 @@ public class BarRenderSamples
 		ImageIO.write(sheet, "png", new File(file));
 	}
 
+	/** 1-tick contact sheet: 1026x62, 720x62 and 400x36 stacked, scaled 2x. Writes task13-contact.png. */
+	@Test
+	public void writeOneTickContactSheet() throws IOException
+	{
+		String dir = System.getProperty("superhistogram.renderDir");
+		assumeTrue(dir != null && !dir.isEmpty());
+		BarState s = SampleStates.oneTick(com.superhistogram.model.combat.FlickClassifier.Kind.OK);
+		int[][] sizes = {{1026, 62}, {720, 62}, {400, 36}};
+		int pad = 8, total = pad;
+		for (int[] wh : sizes)
+		{
+			total += (wh[1] + pad) * 2;
+		}
+		java.awt.image.BufferedImage sheet = new java.awt.image.BufferedImage(1026 * 2 + 2 * pad, total,
+			java.awt.image.BufferedImage.TYPE_INT_RGB);
+		java.awt.Graphics2D g = sheet.createGraphics();
+		g.setColor(new java.awt.Color(0x2b3521));
+		g.fillRect(0, 0, sheet.getWidth(), sheet.getHeight());
+		int y = pad;
+		for (int[] wh : sizes)
+		{
+			java.awt.image.BufferedImage img = BarRenderSmokeTest.render(wh[0], wh[1], s, null);
+			g.drawImage(img, pad, y, img.getWidth() * 2, img.getHeight() * 2, null);
+			y += (wh[1] + pad) * 2;
+		}
+		g.dispose();
+		ImageIO.write(sheet, "png", new File(dir, "task13-contact.png"));
+	}
+
 	private static void write(String dir, String name, int w, int h, BarState s) throws IOException
 	{
 		ImageIO.write(BarRenderSmokeTest.render(w, h, s, null), "png", new File(dir, name));
