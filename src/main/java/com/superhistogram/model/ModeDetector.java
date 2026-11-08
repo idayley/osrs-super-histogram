@@ -11,4 +11,10 @@ public final class ModeDetector
 		}
 		return baseline == BaselineSetting.MINIMAL ? Mode.MINIMAL : Mode.GENERAL;
 	}
+
+	/** In combat: interacting with an NPC, or a hit on you or your own attack within the last 10 ticks. */
+	public static boolean inCombat(boolean interactingNpc, int tick, int lastHitTick, int lastAttackTick)
+	{
+		return interactingNpc || tick - lastHitTick <= 10 || tick - lastAttackTick <= 10;
+	}
 }

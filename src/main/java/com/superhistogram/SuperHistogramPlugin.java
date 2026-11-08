@@ -13,6 +13,8 @@ import com.superhistogram.model.TickRecord;
 import com.superhistogram.model.Timeline;
 import com.superhistogram.model.XpTracker;
 import com.superhistogram.collect.EatCollector;
+import com.superhistogram.collect.PrayerCollector;
+import com.superhistogram.model.combat.Beat;
 import com.superhistogram.model.combat.AttackTimer;
 import com.superhistogram.ui.BarOverlay;
 import com.superhistogram.ui.Pulse;
@@ -29,6 +31,7 @@ import net.runelite.api.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
+import net.runelite.api.VarClientStr;
 import net.runelite.api.Player;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.AnimationChanged;
@@ -43,6 +46,9 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemEquipmentStats;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStats;
+import net.runelite.client.input.KeyManager;
+import net.runelite.client.callback.ClientThread;
+import net.runelite.client.util.HotkeyListener;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -69,6 +75,12 @@ public class SuperHistogramPlugin extends Plugin
 	@Inject
 	ItemManager itemManager;
 
+	@Inject
+	KeyManager keyManager;
+
+	@Inject
+	ClientThread clientThread;
+
 	private final ModeDetector modeDetector = new ModeDetector();
 
 	// Replaced wholesale on start/stop, read by the render thread.
@@ -81,7 +93,18 @@ public class SuperHistogramPlugin extends Plugin
 	volatile AttackTimer attack;
 	private EatCollector eats;
 	volatile int weaponSpeed = AttackTimer.DEFAULT_SPEED;
+	volatile Beat beat;
+	private PrayerCollector prayers;
+	private int lastHitTick = AttackTimer.NEVER;
 	Pulse pulse;
+	private final HotkeyListener beatHotkey = new HotkeyListener(() -> config.beatKey())
+	{
+		@Override
+		public void hotkeyPressed()
+		{
+			clientThread.invoke(SuperHistogramPlugin.this::handleBeatKey);
+		}
+	};
 	private BarOverlay overlay;
 
 	/** Own tick counter: unlike the client's, it never goes backwards across logins. */
@@ -99,11 +122,13 @@ public class SuperHistogramPlugin extends Plugin
 		pulse = new Pulse();
 		overlay = new BarOverlay(this::buildState, pulse);
 		overlayManager.add(overlay);
+		keyManager.registerKeyListener(beatHotkey);
 	}
 
 	@Override
 	protected void shutDown() throws Exception
 	{
+		keyManager.unregisterKeyListener(beatHotkey);
 		if (overlay != null)
 		{
 			overlayManager.remove(overlay);
@@ -120,6 +145,9 @@ public class SuperHistogramPlugin extends Plugin
 		movement = new MovementTracker(timeline);
 		clicks = new ClickCollector(timeline);
 		resetCombat();
+		beat = new Beat();
+		prayers = new PrayerCollector(timeline);
+		lastHitTick = AttackTimer.NEVER;
 		idleThreshold = config.afkAfterSeconds();
 		idle = new IdleTracker(idleThreshold);
 		if (pulse == null)
@@ -223,6 +251,9 @@ public class SuperHistogramPlugin extends Plugin
 		tick++;
 		timeline.at(tick);
 		clicks.onTick(nowMs);
+		String overhead = PrayerCollector.overheadKind(client);
+		prayers.onTick(tick, overhead);
+		beat.onTick(tick, overhead != null);
 
 		Player me = client.getLocalPlayer();
 		if (me != null)
@@ -246,10 +277,14 @@ public class SuperHistogramPlugin extends Plugin
 		}
 		int idleSeconds = Math.min(client.getMouseIdleTicks(), client.getKeyboardIdleTicks()) / 50;
 		idle.update(idleSeconds, nowMs);
-		// CUE_TICK behaves like OFF until Phase 2.
-		if (config.metronome() == SuperHistogramConfig.Metronome.EVERY_TICK)
+		SuperHistogramConfig.Metronome metronome = config.metronome();
+		if (metronome == SuperHistogramConfig.Metronome.EVERY_TICK)
 		{
-			pulse.tick(nowMs, false);
+			pulse.tick(nowMs, beat.isBeat(tick));
+		}
+		else if (metronome == SuperHistogramConfig.Metronome.CUE_TICK && beat.isBeat(tick))
+		{
+			pulse.tick(nowMs, true);
 		}
 		if (idle.warningFired() && config.afkWarning() && config.blinkWhenDone())
 		{
@@ -281,6 +316,7 @@ public class SuperHistogramPlugin extends Plugin
 		{
 			return;
 		}
+		lastHitTick = tick;
 		TickRecord r = timeline.at(tick);
 		if (r != null)
 		{
@@ -305,6 +341,7 @@ public class SuperHistogramPlugin extends Plugin
 		{
 			r.attackLate = attack.onAttack(tick, weaponSpeed);
 		}
+		beat.onAttack(tick);
 	}
 
 	void handleEatClick(int itemId)
@@ -326,7 +363,29 @@ public class SuperHistogramPlugin extends Plugin
 	/** itemId is the equipped weapon, or -1 for none. */
 	void handleWeapon(int itemId)
 	{
+		int old = weaponSpeed;
 		weaponSpeed = itemId < 0 ? AttackTimer.DEFAULT_SPEED : weaponSpeed(itemId);
+		if (weaponSpeed != old && beat != null)
+		{
+			beat.onWeaponSpeed(tick, weaponSpeed);
+		}
+	}
+
+	/** The beat starts only from this player-pressed hotkey. */
+	void handleBeatKey()
+	{
+		Player me = client.getLocalPlayer();
+		if (beat == null || me == null || tick < 0)
+		{
+			return;
+		}
+		String typed = client.getVarcStrValue(VarClientStr.CHATBOX_TYPED_TEXT);
+		if (typed != null && !typed.isEmpty())
+		{
+			return;
+		}
+		beat.press(tick, weaponSpeed,
+			ModeDetector.inCombat(me.getInteracting() instanceof NPC, tick, lastHitTick, attack.lastAttackTick()));
 	}
 
 	private int weaponSpeed(int itemId)
@@ -373,6 +432,9 @@ public class SuperHistogramPlugin extends Plugin
 				movement = new MovementTracker(timeline);
 				clicks = new ClickCollector(timeline);
 				resetCombat();
+				beat.reset();
+				prayers = new PrayerCollector(timeline);
+				lastHitTick = AttackTimer.NEVER;
 				tick = -1;
 				idle = new IdleTracker(idleThreshold);
 				lastLocation = null;

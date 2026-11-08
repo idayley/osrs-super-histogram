@@ -1,6 +1,7 @@
 package com.superhistogram;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -343,5 +344,97 @@ public class SuperHistogramPluginHandlersTest
 		Graphics2D g = img.createGraphics();
 		new BarPainter(null).paint(g, l, s, System.currentTimeMillis());
 		g.dispose();
+	}
+
+	// ---- Task 11: beat, prayer spans, metronome ----
+
+	private void fight()
+	{
+		when(me.getInteracting()).thenReturn(npc);
+		when(client.getVarcStrValue(net.runelite.api.VarClientStr.CHATBOX_TYPED_TEXT)).thenReturn("");
+	}
+
+	private float alphaAtTick3;
+
+	private void pressAfterTick0()
+	{
+		fight();
+		plugin.handleTick(0);
+		plugin.handleBeatKey();
+		plugin.handleTick(600);
+		plugin.handleTick(1200);
+		plugin.handleTick(1800);
+		// Pulse holds only the latest tick, so sample 1800 before tick 4 arrives.
+		alphaAtTick3 = plugin.pulse.outlineAlpha(1800);
+		plugin.handleTick(2400);
+	}
+
+	@Test
+	public void cueTickPulsesOnlyOnBeat()
+	{
+		when(config.metronome()).thenReturn(SuperHistogramConfig.Metronome.CUE_TICK);
+		pressAfterTick0();
+		assertEquals(0f, alphaAtTick3, 0f);
+		assertTrue(plugin.pulse.outlineAlpha(2400) > 0.9f);
+	}
+
+	@Test
+	public void everyTickMetronomeBrightOnBeat()
+	{
+		when(config.metronome()).thenReturn(SuperHistogramConfig.Metronome.EVERY_TICK);
+		pressAfterTick0();
+		assertTrue(alphaAtTick3 > 0f && alphaAtTick3 < 0.5f);
+		assertTrue(plugin.pulse.outlineAlpha(2400) > 0.9f);
+	}
+
+	@Test
+	public void hotkeyIgnoredWhileTypingInChat()
+	{
+		when(me.getInteracting()).thenReturn(npc);
+		when(client.getVarcStrValue(net.runelite.api.VarClientStr.CHATBOX_TYPED_TEXT)).thenReturn("f");
+		plugin.handleTick(0);
+		plugin.handleBeatKey();
+		assertFalse(plugin.beat.active());
+	}
+
+	@Test
+	public void hotkeyIgnoredOutOfCombatInPlugin()
+	{
+		when(me.getInteracting()).thenReturn(null);
+		when(client.getVarcStrValue(net.runelite.api.VarClientStr.CHATBOX_TYPED_TEXT)).thenReturn("");
+		plugin.handleTick(0);
+		plugin.handleBeatKey();
+		assertFalse(plugin.beat.active());
+	}
+
+	@Test
+	public void logoutMidBeatClearsBeat()
+	{
+		fight();
+		plugin.handleTick(0);
+		plugin.handleBeatKey();
+		assertTrue(plugin.beat.active());
+		plugin.handleGameState(GameState.LOGIN_SCREEN, 1000);
+		assertFalse(plugin.beat.active());
+		assertNull(plugin.buildState());
+		plugin.handleGameState(GameState.LOGGED_IN, 2000);
+		for (int i = 0; i < 10; i++)
+		{
+			plugin.handleTick(3000 + i * 600L);
+			assertFalse(plugin.beat.isBeat(i));
+		}
+	}
+
+	@Test
+	public void prayerObservedEachTick()
+	{
+		plugin.handleTick(0);
+		when(client.isPrayerActive(net.runelite.api.Prayer.PROTECT_FROM_MAGIC)).thenReturn(true);
+		plugin.handleTick(600);
+		plugin.handleTick(1200);
+		List<Span> spans = plugin.buildState().timeline.spansBetween(0, 10);
+		assertEquals(1, spans.size());
+		assertEquals("pray-magic", spans.get(0).kind);
+		assertEquals(0, spans.get(0).startTick);
 	}
 }

@@ -1,9 +1,11 @@
 package com.superhistogram;
 
 import com.superhistogram.model.BaselineSetting;
+import java.awt.event.KeyEvent;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
+import net.runelite.client.config.Keybind;
 import net.runelite.client.config.Range;
 
 @ConfigGroup("superhistogram")
@@ -13,7 +15,7 @@ public interface SuperHistogramConfig extends Config
 	{
 		OFF,
 		EVERY_TICK,
-		/** Behaves like OFF until Phase 2. */
+		/** Bright pulse on beat ticks only. */
 		CUE_TICK
 	}
 
@@ -94,5 +96,16 @@ public interface SuperHistogramConfig extends Config
 	default boolean blinkWhenDone()
 	{
 		return true;
+	}
+
+	@ConfigItem(
+		position = 10,
+		keyName = "beatKey",
+		name = "Beat hotkey",
+		description = "Press during combat to start the beat metronome from your own attack rhythm"
+	)
+	default Keybind beatKey()
+	{
+		return new Keybind(KeyEvent.VK_F, 0);
 	}
 }
