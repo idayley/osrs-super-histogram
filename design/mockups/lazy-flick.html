@@ -1,0 +1,157 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#2b3521;font-family:Outfit,system-ui,sans-serif;color:#e9ecef}
+.ground{width:1280px;height:300px;position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 0%,#4c5a37 0%,#36422a 60%,#232b1b 100%)}
+.chat{position:absolute;left:0;bottom:0;width:518px;height:150px;background:#b8a988;border:2px solid #4a3f2c}
+.inv{position:absolute;right:0;bottom:0;width:240px;height:260px;background:#3e3529;border:2px solid #1b1712}
+.seg{position:absolute;left:12px;top:14px;display:flex;gap:4px;align-items:center;background:rgba(20,23,27,.86);padding:5px 6px 5px 12px;border-radius:18px;font:600 12px Outfit;color:#aab1b9}.seg span{margin-right:6px}.seg button{font:600 12px Outfit;color:#c9ced4;background:transparent;border:0;padding:5px 11px;border-radius:13px;cursor:pointer}.seg button.on{background:#e9ecef;color:#14171b}
+.bar::after{content:'';position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0);pointer-events:none}
+.bar.p1::after{animation:p1 .5s ease-out}.bar.p2::after{animation:p2 .55s ease-out}
+@keyframes p1{0%{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.32)}100%{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0)}}
+@keyframes p2{0%{box-shadow:inset 0 0 0 2.5px rgba(255,255,255,.95)}100%{box-shadow:inset 0 0 0 2.5px rgba(255,255,255,0)}}
+.bar{position:absolute;left:6px;bottom:156px;width:1026px;height:62px;border-radius:31px;background:rgba(20,23,27,.86);overflow:hidden}
+.lbl{font:600 11px Outfit;fill:#7d8590}.cap{font:700 11px Outfit;fill:#e9ecef}
+.num{font:700 11px Outfit;fill:#ffd23f;font-variant-numeric:tabular-nums}
+.lost{font:700 9px Outfit;fill:#c9ced4;font-variant-numeric:tabular-nums}
+.verdict{font:700 22px Outfit}
+.rowlab{font:600 9px Outfit;fill:#5b636c;letter-spacing:.06em}
+.note{padding:14px 18px;font-size:13px;color:#c8cdd3;max-width:1180px;line-height:1.55}
+.note b{color:#fff}
+h3{margin:16px 18px 8px;font:600 12px Outfit;letter-spacing:.08em;text-transform:uppercase;color:#aab1b9}
+.zoomwrap{padding:0 18px 18px}
+.zoom{transform:scale(2);transform-origin:0 0;width:640px;height:62px;position:relative;border-radius:31px;background:rgba(20,23,27,.92);overflow:hidden;margin-bottom:70px}
+</style></head><body>
+<div class="ground"><div class="chat"></div><div class="inv"></div><div class="seg"><span>Your actions row</span><button data-r="off">Off</button><button data-r="atk">Attacks</button><button data-r="all" class="on">Attacks + eats</button></div>
+  <div class="seg" id="met" style="left:360px"><span>Metronome</span><button data-m="off">Off</button><button data-m="tick" class="on">Every tick</button><button data-m="beat">Click cue only</button></div>
+  <div class="bar" id="live"></div></div>
+<div class="note"><b>Metronome.</b> Every tick, the bar's outline gives a faint blink. On the tick before your beat (your moment to click prayer on) it gives a bright one. "Click cue only" keeps just the bright one. <b>Three rows, one job each.</b>
+<b>Top: what hit you.</b> Enemy icon, damage number, and a line down at the tick it landed: yellow = it hit you, faint = blocked.
+<b>Middle: your prayer.</b> One pill per stretch of prayer, coloured by which prayer.
+<b>Bottom: what you did.</b> Sword = you attacked (+1 = a tick later than your weapon allowed). Fish = you ate, with what it cost your attacks: +3, +5 for a combo, or free if your weapon was already ready. Potions are gone: they never delay you. ▲ = your every-4 beat.</div>
+<h3>How to read it · 2×, frozen</h3>
+<div class="zoomwrap" style="position:relative;margin-top:150px"><div class="zoom" id="z"></div><svg id="ov" width="1300" height="420" style="position:absolute;left:0;top:-170px;pointer-events:none;overflow:visible"></svg><div style="height:150px"></div></div>
+<script>
+const TW=32,X0=128,N=21;let H=62,ROW='all';
+const COL={m:'#d0313a',r:'#64ab31',g:'#1499dc',o:'#9150d0'};
+const NS='http://www.w3.org/2000/svg';
+const DEMON='M-6 -1 L-7 -7 L-3 -4 L0 -5 L3 -4 L7 -7 L6 -1 Q6 5 0 6 Q-6 5 -6 -1Z';
+const GARG='M0 -2 L-3 -5 L-8 -6 L-6 -1 L-8 2 L-3 1 L0 5 L3 1 L8 2 L6 -1 L8 -6 L3 -5Z';
+// rows
+const IY=10, LY1=18, PY=22, PH=12, LY2=36, AY=44;let RY=55;   // icon centre, attack-line span, pill, action row, ruler
+// ---- simulation ----
+const P=4, PHS=2, WS=4;                     // beat every 4 (from F), weapon speed 4
+const T={};const get=k=>T[k]||(T[k]={});
+const plan=k=>{const n=(k-PHS)/P;const s=['ok','ok','late','ok','ok','early','ok'][((n%7)+7)%7];
+  const style=(n%10<6)?'m':(n%10<9?'g':'o');return{s,style}};
+for(let k=-40;k<220;k++){
+  if((k-PHS)%P===0){const b=get(k);b.beat=1;const{s,style}=plan(k);
+    if(s==='ok')get(k-1).pill={on:.72,offK:k,off:.45,style};
+    if(s==='late')get(k).pill={on:.32,offK:k+1,off:.5,style};
+    if(s==='early')get(k-2).pill={on:.7,offK:k-1,off:.6,style};
+    b.verdict=s;b.hit={e:'d',d:s!=='ok',v:s!=='ok'?[14,9,17][k%3]:0}}
+  if(k%7===5&&k%3!==0)get(k).hit={e:'g',d:true,v:[3,5,1][k%3]};
+}
+// player's own attacks: weapon speed 4; eats push the next attack by 3; sometimes attacks late
+let ready=0,pend=null;   // ready = tick weapon is ready; eating adds to the timer (which keeps counting below zero while idle)
+for(let k=0;k<220;k++){const c=k%40,idle=c>=3&&c<=10;
+  const ev=c===9?'food':c===12?'food':c===20?'combo':null;
+  if(ev){const add=ev==='combo'?5:3,rem=ready-k,nw=rem+add;ready=k+nw;get(k).eat={kind:ev,cost:Math.max(0,nw)-Math.max(0,rem)}}
+  if(idle){pend=null;continue}
+  if(k>=ready){if(pend===null)pend=(ready%13===7)?1:0;
+    if(k-ready>=pend){get(k).atk={ready,lost:pend};ready=k+WS;pend=null}}
+}
+// ---- drawing ----
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e}
+function food(s,x,y,c){el('ellipse',{cx:x-1,cy:y,rx:4.5,ry:2.8,fill:c},s);el('path',{d:`M${x+2.5} ${y}L${x+6.5} ${y-3.2}L${x+6.5} ${y+3.2}Z`,fill:c},s)}
+function pot(s,x,y,c){el('path',{d:`M${x-1.5} ${y-5}h3v2.5l3 3.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-3l3-3.5z`,fill:c},s)}
+let ZOOM=false;const anchors={};const A=(k,x,y)=>{if(ZOOM&&(x>140||k==='readout'))anchors[k]=[x,y]};
+function sword(s,x,y){el('path',{d:`M${x-1} ${y-6.5}h2v7h2.6v1.6h-2.6v2.6h-2v-2.6h-2.6v-1.6h2.6z`,fill:'#fff'},s)}
+function draw(host,t,w){
+  const row=ZOOM?'all':ROW;H=row==='off'?52:62;RY=row==='off'?44:55;host.style.height=H+'px';host.style.borderRadius=H/2+'px';
+  host.innerHTML='';const W=w||1026;const s=el('svg',{width:W,height:H},host);
+  const fd=el('linearGradient',{id:'f'+host.id},el('defs',{},s));
+  el('stop',{offset:0,'stop-color':'#14171b','stop-opacity':1},fd);el('stop',{offset:1,'stop-color':'#14171b','stop-opacity':0},fd);
+  // readout
+  el('text',{x:22,y:27,class:'cap'},s).textContent='Lazy flick';
+  el('text',{x:22,y:43,class:'lbl'},s).textContent='4t ·';
+  el('rect',{x:48,y:32,width:14,height:14,rx:3,fill:'none',stroke:'#7d8590'},s);
+  el('text',{x:55,y:43,class:'lbl','text-anchor':'middle'},s).textContent='F';
+  const NN=W<800?Math.floor((W-X0-10)/TW):N;const start=t-NN+(ZOOM?2:6);const PX=k=>X0+(k-start)*TW;
+  const cp=el('clipPath',{id:'c'+host.id},s.querySelector('defs'));el('rect',{x:X0-14,y:0,width:NN*TW+14,height:H},cp);
+  const L=el('g',{'clip-path':`url(#c${host.id})`},s);
+  // ruler
+  for(let i=0;i<=NN;i++)el('rect',{x:X0+i*TW-.5,y:RY-2,width:1,height:3,fill:'rgba(255,255,255,.14)'},L);
+  for(let i=0;i<NN;i++){const k=start+i,x=PX(k),b=T[k]||{},fut=k>t;
+    // beat caret
+    if(b.beat){const c=fut?'rgba(255,255,255,.35)':'#fff';el('path',{d:`M${x-4} ${RY+5}L${x} ${RY}L${x+4} ${RY+5}Z`,fill:c},L);A(fut?'next':'beat',x,RY+3)}
+    // weapon-ready ghost (your own weapon, so safe to show ahead)
+    const a=(T[k]&&T[k].atk);
+    if(fut)continue;
+    // enemy attack line + icon
+    if(b.hit){const d=b.hit.d;A(d?'yline':'ghost',x,LY1+4);if(d)A('icon',x-6,IY);el('rect',{x:x-1,y:LY1,width:2,height:LY2-LY1,rx:1,fill:d?'#ffd23f':'rgba(255,255,255,.28)'},L);
+      const g=el('g',{transform:`translate(${x-(d?6:0)},${IY}) scale(.9)`},L);el('path',{d:b.hit.e==='d'?DEMON:GARG,fill:d?'#ffd23f':'rgba(255,255,255,.35)'},g);
+      if(d)el('text',{x:x+5,y:IY+4,class:'num'},L).textContent=b.hit.v}
+  }
+  // prayer pills
+  for(let k=start-3;k<=t;k++){const b=T[k];if(!b||!b.pill)continue;
+    const x1=Math.max(PX(k)+b.pill.on*TW,X0-12),x2=Math.min(PX(b.pill.offK)+b.pill.off*TW,PX(t+1));if(x2<=x1)continue;
+    el('rect',{x:x1,y:PY,width:Math.max(4,x2-x1),height:PH,rx:PH/2,fill:COL[b.pill.style]},L);A('pill',(x1+x2)/2,PY+PH/2)}
+  // action row: attacks, lost ticks, eats
+  if(row!=='off')for(let k=start-3;k<=t+5;k++){const b=T[k];if(!b)continue;const x=PX(k);
+    if(b.atk&&k<=t){const r=PX(b.atk.ready);
+      sword(L,x,AY);A(b.atk.lost?'swordLate':'sword',x,AY);
+      if(b.atk.lost)el('text',{x:x+6,y:AY+4,class:'lost'},L).textContent='+'+b.atk.lost}
+    if(row==='all'&&b.eat&&k<=t){const ex=x+TW/2,e=b.eat;
+      if(e.kind==='combo'){food(L,ex-1,AY-3,'#c9ced4');food(L,ex+1,AY+3,'#c9ced4')}else food(L,ex,AY,'#c9ced4');
+      A(e.cost===0?'free':e.kind,ex,AY);
+      const tt=el('text',{x:ex+9,y:AY+3.5,class:'lost'},L);tt.textContent=e.cost?'+'+e.cost:'free';if(!e.cost)tt.setAttribute('style','fill:#5ee0c8')}
+  }
+  // next weapon-ready ghost
+
+  // now line
+  const nx=PX(t+1);A('now',nx,48);A('readout',40,27);el('rect',{x:nx-1,y:16,width:2,height:H-26,rx:1,fill:'rgba(233,236,239,.5)'},s);
+  el('rect',{x:X0-12,y:0,width:44,height:H,fill:`url(#f${host.id})`},s);
+  if(W<800)return;
+  // trail + verdict
+  const beats=[];for(let k=t;k>t-60&&beats.length<10;k--)if(T[k]&&T[k].beat)beats.unshift(T[k]);
+  const tx=X0+N*TW+16;el('line',{x1:tx,x2:tx+110,y1:32,y2:32,stroke:'rgba(255,255,255,.12)'},s);
+  beats.forEach((b,i)=>{const x=tx+i*11+2,v=b.verdict;
+    if(v==='ok')el('rect',{x,y:30,width:7,height:4,rx:2,fill:'#5ee0c8','fill-opacity':.8},s);
+    else el('rect',{x,y:v==='late'?16:32,width:7,height:16,rx:2,fill:'#fff'},s)});
+  const last=beats[beats.length-1],vx=tx+124;
+  if(last&&last.verdict!=='ok')el('text',{x:vx,y:39,class:'verdict',fill:'#fff'},s).textContent=last.verdict==='late'?'Late':'Early';
+  else el('path',{d:`M${vx+4} 29l6 6 12-12`,stroke:'#5ee0c8','stroke-width':3,fill:'none','stroke-linecap':'round','stroke-linejoin':'round'},s);
+}
+let t=34;const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+draw(document.getElementById('live'),t);
+let MET='tick';
+function pulse(){const L=document.getElementById('live');if(MET==='off')return;
+  const cue=T[t+1]&&T[t+1].beat;            // next tick is your beat: click now
+  if(MET==='beat'&&!cue)return;
+  L.classList.remove('p1','p2');void L.offsetWidth;L.classList.add(cue?'p2':'p1')}
+if(!reduce)setInterval(()=>{t++;if(t>200)t=34;draw(document.getElementById('live'),t);pulse()},600);
+let zt=102;
+ZOOM=true;draw(document.getElementById('z'),zt,640);ZOOM=false;
+const LAB={readout:'Mode · beat length · started by your F key',icon:'Enemy that hit you, and the damage',yline:'Yellow line: a hit landed on you',ghost:'Faint line: a hit your prayer blocked',
+ pill:'Pill: your prayer was on (colour = which prayer)',sword:'Sword: you attacked',swordLate:'+1: you attacked 1 tick later than your weapon allowed',food:'Fish +3: this eat cost you 3 attack ticks',combo:'Two fish +5: combo eat, one 5-tick delay for both',free:'Fish free: ate while your weapon was ready, so no cost',
+ beat:'White ▲: your every-4 beat',next:'Faint ▲: your next beat',now:'Now'};
+const ov=document.getElementById('ov');const OY=170;
+const TOP=['readout','icon','yline','ghost','pill'];
+['top','bot'].forEach(band=>{
+  const ks=Object.keys(anchors).filter(k=>LAB[k]&&(band==='top')===TOP.includes(k)).sort((a,b)=>anchors[a][0]-anchors[b][0]);
+  const rows=[];
+  ks.forEach(k=>{const [ax,ay]=anchors[k];const X=18+ax*2,Y=OY+ay*2;const w=LAB[k].length*6.3+8;const R=X+w>1270,L0=R?X-w:X,L1=R?X:X+w;
+    let r=0;while(rows[r]&&rows[r].some(([p,q])=>L0<q+14&&L1>p))r++;(rows[r]=rows[r]||[]).push([L0,L1]);
+    const ly=band==='top'?OY-14-r*22:OY+142+r*22;
+    el('line',{x1:X,y1:Y,x2:X,y2:band==='top'?ly+4:ly-13,stroke:'rgba(255,255,255,.4)','stroke-width':1},ov);
+    el('circle',{cx:X,cy:Y,r:3,fill:'#fff',stroke:'#14171b','stroke-width':1.5},ov);
+    el('text',{x:R?X-5:X+5,'text-anchor':R?'end':'start',y:ly,fill:'#e9ecef','font-size':'12.5','font-family':'Outfit'},ov).textContent=LAB[k];});
+});
+document.querySelectorAll('.seg:not(#met) button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.seg:not(#met) button').forEach(x=>x.classList.toggle('on',x===b));ROW=b.dataset.r;draw(document.getElementById('live'),t)});
+document.querySelectorAll('#met button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#met button').forEach(x=>x.classList.toggle('on',x===b));MET=b.dataset.m});
+if(location.hash)document.querySelector(`.seg button[data-r="${location.hash.slice(1)}"]`).click();
+</script>
+</body></html>

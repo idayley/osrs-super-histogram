@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;padding:18px;background:#1d2416;font-family:Outfit;color:#e9ecef;width:1244px}
+h3{margin:18px 0 8px;font:600 12px Outfit;letter-spacing:.08em;text-transform:uppercase;color:#aab1b9}
+.note{font-size:13px;color:#c8cdd3;line-height:1.55;max-width:1180px}.note b{color:#fff}
+.row{display:flex;gap:14px}.fr{flex:1;border-radius:10px;overflow:hidden;background:radial-gradient(ellipse at 50% 30%,#4c5a37,#2a3320)}
+.cap{font:600 12px Outfit;color:#c8cdd3;padding:8px 12px;background:rgba(0,0,0,.25)}.cap b{color:#fff}
+.set{display:flex;gap:18px;margin-top:14px}.seg{display:flex;align-items:center;gap:4px;background:rgba(20,23,27,.9);border-radius:18px;padding:4px 6px 4px 12px;font:600 12px Outfit}
+.seg span{margin-right:6px;color:#aab1b9}.seg b{padding:5px 10px;border-radius:12px;color:#7d8590;font-weight:600}.seg b.on{background:#e9ecef;color:#14171b}
+.bar{width:1026px;height:62px;border-radius:31px;background:rgba(20,23,27,.92);overflow:hidden}</style></head><body>
+<div class="note"><b>Hull flash on hit (toggle).</b> When an enemy's hitsplat lands on you, that enemy's outline flashes yellow, the same yellow as hits on the bar, then fades over about half a second. It fires on the hitsplat, never on the swing, so it only makes visible what already happened. A miss (blue 0) flashes faint grey. Other enemies stay unmarked. There's an "off at bosses" switch, on by default, to stay clear of the boss-mechanic rule.</div>
+<h3>Three ticks, one enemy hitting you</h3>
+<div class="row" id="frames"></div>
+<h3>Same moment on the bar: the hit line and the flash land on the same tick</h3>
+<div class="bar" id="bar"></div>
+<div class="set"><div class="seg"><span>Flash enemy on hit</span><b>Off</b><b class="on">On</b></div><div class="seg"><span>At bosses</span><b class="on">Off</b><b>On</b></div><div class="seg"><span>Misses</span><b>Hide</b><b class="on">Faint</b></div></div>
+<script>
+const NS='http://www.w3.org/2000/svg';
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e}
+// simple goblin-ish blob enemy and player
+function enemy(s,x,y,o){const g=el('g',{transform:`translate(${x},${y})`},s);
+  const body='M-22 40 Q-26 0 -14 -12 Q-18 -30 0 -34 Q18 -30 14 -12 Q26 0 22 40 Z';
+  if(o.flash)el('path',{d:body,fill:'none',stroke:o.flash,'stroke-width':4,'stroke-opacity':o.op,'stroke-linejoin':'round'},g);
+  el('path',{d:body,fill:'#5b6b3a'},g);el('circle',{cx:-6,cy:-20,r:2.5,fill:'#e33'},g);el('circle',{cx:6,cy:-20,r:2.5,fill:'#e33'},g);
+  const arm=o.swing?'M14 -4 L44 -18':'M14 -4 L26 22';el('path',{d:arm,stroke:'#8b8f96','stroke-width':5,'stroke-linecap':'round'},g)}
+function player(s,x,y,hit){const g=el('g',{transform:`translate(${x},${y})`},s);
+  el('rect',{x:-12,y:-30,width:24,height:62,rx:9,fill:'#7c8796'},g);el('circle',{cx:0,cy:-40,r:11,fill:'#c9a27e'},g);
+  if(hit){el('circle',{cx:0,cy:0,r:13,fill:hit.miss?'#2a6fd6':'#c8231f'},g);el('text',{x:0,y:5,'text-anchor':'middle',fill:'#fff','font-size':15,'font-weight':700},g).textContent=hit.v}}
+const F=[{t:'Tick 0',d:'Enemy swings. <b>No flash</b>: nothing has hit you yet.',swing:1},
+ {t:'Tick 1',d:'Hitsplat lands. <b>Its hull flashes yellow.</b>',hit:{v:7},flash:'#ffd23f',op:1},
+ {t:'Tick 2',d:'Flash fades. The other enemy was never marked.',flash:'#ffd23f',op:.3,hit:{v:7}}];
+F.forEach(f=>{const d=document.createElement('div');d.className='fr';document.getElementById('frames').appendChild(d);
+  const s=el('svg',{width:404,height:230},d);el('ellipse',{cx:200,cy:200,rx:180,ry:22,fill:'rgba(0,0,0,.18)'},s);
+  enemy(s,110,140,{swing:f.swing,flash:f.flash,op:f.op});enemy(s,320,150,{});player(s,200,150,f.hit);
+  const c=document.createElement('div');c.className='cap';c.innerHTML=`<b>${f.t}</b> · ${f.d}`;d.appendChild(c)});
+// bar
+const TW=32,X0=128,N=21;const s=el('svg',{width:1026,height:62},document.getElementById('bar'));
+el('text',{x:22,y:27,fill:'#e9ecef','font-size':11,'font-weight':700},s).textContent='Combat';
+el('text',{x:22,y:43,fill:'#7d8590','font-size':11,'font-weight':600},s).textContent='auto';
+for(let i=0;i<=N;i++)el('rect',{x:X0+i*TW-.5,y:53,width:1,height:3,fill:'rgba(255,255,255,.14)'},s);
+[[2,7],[8,0],[14,7]].forEach(([k,v],i)=>{const x=X0+k*TW,c=v?'#ffd23f':'#5c636b';el('rect',{x:x-1,y:18,width:2,height:18,rx:1,fill:c},s);
+  el('text',{x:x+5,y:16,fill:c,'font-size':11,'font-weight':700},s).textContent=v;
+  if(i===2){el('rect',{x:x-14,y:6,width:28,height:46,rx:8,fill:'none',stroke:'#fff','stroke-width':1,'stroke-dasharray':'3 3','stroke-opacity':.6},s);
+    el('text',{x:x+18,y:48,fill:'#aab1b9','font-size':10,'font-weight':600},s).textContent='= tick 1 above: hull flashed here'}});
+el('rect',{x:X0+17*TW-1,y:16,width:2,height:36,rx:1,fill:'rgba(233,236,239,.5)'},s);
+</script></body></html>

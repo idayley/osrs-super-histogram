@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;padding:18px;background:#2b3521;font-family:Outfit;color:#e9ecef;width:1244px}
+h3{margin:18px 0 8px;font:600 12px Outfit;letter-spacing:.08em;text-transform:uppercase;color:#aab1b9}
+.bar{width:1026px;height:62px;border-radius:31px;background:rgba(20,23,27,.92);overflow:hidden}
+.z{transform:scale(2);transform-origin:0 0;width:620px;height:62px;border-radius:31px;background:rgba(20,23,27,.92);overflow:hidden;margin-bottom:76px}
+.note{font-size:13px;color:#c8cdd3;line-height:1.55;max-width:1180px}.note b{color:#fff}
+.key{display:flex;gap:14px;font:600 12px Outfit;margin:6px 0 0}</style></head><body>
+<div class="note"><b>Your idea: each skill's XP as its own coloured number, side by side on the tick it lands.</b> Three activities where several skills drop at once. In combat, XP moves down to your actions row on the tick your hit lands (just after your sword), so the top row stays "what hit you". Skills that drop every tick or two (Fletching here) show as a small coloured dot; their numbers live on the right. High-alch gold is just one more number in the row: a coin and the profit for that cast, yellow if you made money, white with a minus if you lost it.</div>
+<h3>Melee slayer · Strength + Hitpoints + Slayer</h3><div class="bar" id="a"></div><div class="key" id="ka"></div>
+<h3>Alch + fletch · gold + Magic + Fletching</h3><div class="bar" id="b"></div><div class="key" id="kb"></div>
+<h3>Tempoross · Fishing + Cooking (+ points)</h3><div class="bar" id="c"></div><div class="key" id="kc"></div>
+<h3>2× · melee: hit on you up top, your XP down by your sword</h3><div class="z" id="d"></div>
+<script>
+const NS='http://www.w3.org/2000/svg',TW=32,X0=128;
+const SK={Str:'#8fd694',HP:'#f2a7bd',Slay:'#c7a3ff',Mag:'#8fc3ff',Fle:'#7fd6c2',Fish:'#8fd0e8',Cook:'#f0b97a',Gold:'#ffd23f'};
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e}
+function sword(s,x,y){el('path',{d:`M${x-1} ${y-6.5}h2v7h2.6v1.6h-2.6v2.6h-2v-2.6h-2.6v-1.6h2.6z`,fill:'#fff'},s)}
+const DEMON='M-6 -1 L-7 -7 L-3 -4 L0 -5 L3 -4 L7 -7 L6 -1 Q6 5 0 6 Q-6 5 -6 -1Z';
+function bar(id,W,n,name,sub,drops,pills,swords,hits,right,o){o=o||{};const host=document.getElementById(id);const s=el('svg',{width:W,height:62},host);
+  el('text',{x:22,y:27,fill:'#e9ecef','font-size':11,'font-weight':700},s).textContent=name;
+  el('text',{x:22,y:43,fill:'#7d8590','font-size':11,'font-weight':600},s).textContent=sub;
+  for(let i=0;i<=n;i++)el('rect',{x:X0+i*TW-.5,y:53,width:1,height:3,fill:'rgba(255,255,255,.14)'},s);
+  pills.forEach(([a,b,c])=>el('rect',{x:X0+a*TW,y:22,width:(b-a)*TW,height:12,rx:6,fill:c},s));
+  swords.forEach(k=>sword(s,X0+k*TW,44));
+  hits.forEach(([k,v])=>{const x=X0+k*TW;el('rect',{x:x-1,y:18,width:2,height:18,rx:1,fill:'#ffd23f'},s);
+    const g=el('g',{transform:`translate(${x-6},12) scale(.9)`},s);el('path',{d:DEMON,fill:'#ffd23f'},g);el('text',{x:x+5,y:16,fill:'#ffd23f','font-size':11,'font-weight':700},s).textContent=v});
+  let busyTo=-1;drops.forEach(([k,list])=>{let x=X0+k*TW-4;const y=o.low?48:15;
+    list.forEach(([sk,v])=>{if((o.dots||[]).includes(sk)){if(x<busyTo)return;el('circle',{cx:x+2.6,cy:o.low?44:12,r:2.6,fill:SK[sk]},s);x+=9;return}
+      if(sk==='Gold'){el('circle',{cx:x+3,cy:y-3.5,r:3.4,fill:'#ffd23f'},s);el('circle',{cx:x+3,cy:y-3.5,r:1.8,fill:'none',stroke:'#b8901d','stroke-width':.9},s);x+=9;v=(v<0?'−':'+')+Math.abs(v)}
+      const t=el('text',{x,y,fill:sk==='Gold'&&v[0]==='−'?'#e9ecef':SK[sk],'font-size':10,'font-weight':700,'font-variant-numeric':'tabular-nums'},s);t.textContent=v;x+=String(v).length*5.6+6;busyTo=x+2})});
+  el('rect',{x:X0+(n-4)*TW-1,y:16,width:2,height:36,rx:1,fill:'rgba(233,236,239,.5)'},s);
+  if(right){let y=24;right.forEach(([sk,v])=>{el('text',{x:X0+21*TW+18,y,fill:SK[sk]||'#e9ecef','font-size':11,'font-weight':700},s).textContent=v;y+=13})}}
+function key(id,list){document.getElementById(id).innerHTML=list.map(k=>`<span style="color:${SK[k]}">● ${k}</span>`).join('')}
+// melee: 4t weapon, hit lands 1 tick after
+const mk=[1,5,9,13,17],md=mk.map((k,i)=>[k+1,[['Str',[120,96,0,144,108][i]],['HP',[40,32,0,48,36][i]],['Slay',[16,16,16,16,16][i]]]]).map(([k,l])=>[k,l.filter(x=>x[1])]);
+bar('a',1026,21,'Melee','auto',md,[[0,3,'#d0313a'],[8,11,'#d0313a'],[16,17,'#d0313a']],mk,[[6,14]],[['Str','Str 92k/hr'],['HP','HP 31k/hr'],['Slay','Slay 12k/hr']],{low:1});key('ka',['Str','HP','Slay']);
+// alch+fletch: casts every 5 ticks, fletch xp each tick-ish
+const ad=[];for(let k=0;k<17;k++){const l=[];if(k%2===0)l.push(['Fle',15]);if(k%5===1){l.push(['Gold',[236,212,-40,236][(k-1)/5%4]]);l.push(['Mag',65])}if(l.length)ad.push([k,l])}
+bar('b',1026,21,'Alch + fletch','auto',ad,[[1,6,'#1499dc'],[6,11,'#1499dc'],[11,16,'#1499dc']],[],[],[['Gold','Gold +238k/hr'],['Mag','Mag 78k/hr'],['Fle','Fle 54k/hr']],{dots:['Fle']});key('kb',['Gold','Mag','Fle']);
+// tempoross
+const td=[[1,[['Fish',62]]],[4,[['Fish',62]]],[7,[['Fish',62]]],[11,[['Cook',91]]],[13,[['Cook',91]]],[15,[['Fish',40],['Cook',30]]]];
+bar('c',1026,21,'Tempoross','auto',td,[[0,9,'#8fd0e8'],[10,16,'#d9a35b']],[],[],[['Fish','Fish 64k/hr'],['Cook','Cook 31k/hr']]);key('kc',['Fish','Cook']);
+// zoom
+bar('d',620,14,'Melee','auto',[[2,[['Str',120],['HP',40],['Slay',16]]],[6,[['Str',96],['HP',32],['Slay',16]]],[10,[['Str',144],['HP',48],['Slay',16]]]],[[0,3,'#d0313a'],[8,11,'#d0313a']],[1,5,9],[[6,14]],null,{low:1});
+</script></body></html>

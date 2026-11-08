@@ -1,0 +1,70 @@
+<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;padding:18px;background:#14171b;font-family:Outfit;color:#e9ecef;width:1244px;display:flex;gap:28px}
+.rl{width:340px;background:#1e1e1e;border:1px solid #111;font:13px Arial,Helvetica,sans-serif;color:#c6c6c6;flex:none}
+.top{display:flex;align-items:center;gap:8px;padding:10px 12px;background:#171717;border-bottom:1px solid #111;color:#fff;font-weight:700}
+.top .back{color:#888}.sec{border-top:1px solid #111}
+.sh{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#282828;color:#dc8a00;font-weight:700;font-size:12.5px}
+.sh::before{content:'▾';color:#888}.sec.closed .sh::before{content:'▸'}.sec.closed .it{display:none}
+.it{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;min-height:22px}
+.it.sub{padding-left:26px;color:#9a9a9a}.it.new label::after{content:'new';margin-left:6px;font-size:10px;color:#5ee0c8}
+.cb{width:14px;height:14px;border:1px solid #555;background:#2a2a2a;border-radius:2px;position:relative}
+.cb.on{background:#dc8a00;border-color:#dc8a00}.cb.on::after{content:'';position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #1e1e1e;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.dd{background:#2a2a2a;border:1px solid #444;padding:2px 22px 2px 7px;font-size:12px;color:#ddd;position:relative;border-radius:2px}
+.dd::after{content:'▾';position:absolute;right:6px;color:#888}
+.key{background:#2a2a2a;border:1px solid #444;padding:2px 10px;font-size:12px;color:#ddd;border-radius:2px}
+.sw{width:30px;height:14px;border-radius:2px;border:1px solid #444}
+.side{flex:1}.side h3{margin:4px 0 10px;font:600 12px Outfit;letter-spacing:.08em;text-transform:uppercase;color:#aab1b9}
+.note{font-size:13px;color:#c8cdd3;line-height:1.55}.note b{color:#fff}
+table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:12px}td{padding:6px 8px;border-bottom:1px solid #262b31;vertical-align:top;color:#c8cdd3}
+td:first-child{color:#fff;font-weight:600;width:190px}td.d{color:#5ee0c8;width:150px}</style></head><body>
+<div class="rl">
+<div class="top"><span class="back">‹</span> Super Histogram</div>
+<div class="sec"><div class="sh">Bar</div>
+<div class="it"><label>Position</label><span class="dd">Replace chat</span></div>
+<div class="it"><label>Size</label><span class="dd">Normal</span></div>
+<div class="it"><label>Mode</label><span class="dd">Auto-detect</span></div>
+<div class="it"><label>Baseline when idle</label><span class="dd">General</span></div>
+<div class="it"><label>Switch to AFK after</label><span class="dd">60 s</span></div>
+<div class="it"><label>AFK logout warning</label><span class="cb on"></span></div>
+<div class="it"><label>Show run energy</label><span class="cb on"></span></div>
+<div class="it"><label>Show login time</label><span class="cb on"></span></div></div>
+<div class="sec"><div class="sh">Feedback</div>
+<div class="it"><label>Metronome</label><span class="dd">Off</span></div>
+<div class="it"><label>Blink when done</label><span class="cb on"></span></div></div>
+<div class="sec"><div class="sh">Combat</div>
+<div class="it"><label>Prayer mode</label><span class="dd">Lazy flick</span></div>
+<div class="it"><label>Beat hotkey</label><span class="key">F</span></div>
+<div class="it"><label>Actions row</label><span class="dd">Attacks</span></div>
+<div class="it sub"><label>Show eat costs</label><span class="cb on"></span></div>
+<div class="it"><label>Flash enemy on hit</label><span class="cb on"></span></div>
+<div class="it sub"><label>Also at bosses</label><span class="cb"></span></div>
+<div class="it sub"><label>Misses</label><span class="dd">Faint</span></div></div>
+<div class="sec"><div class="sh">XP &amp; gold</div>
+<div class="it"><label>XP drops</label><span class="dd">Numbers</span></div>
+<div class="it sub"><label>Frequent skills as dots</label><span class="cb on"></span></div>
+<div class="it"><label>Alch top row</label><span class="dd">Gold</span></div>
+<div class="it"><label>Right side shows</label><span class="dd">Per hour</span></div></div>
+<div class="sec"><div class="sh">Skilling</div>
+<div class="it"><label>Time to finish</label><span class="cb on"></span></div>
+<div class="it"><label>Wasted ticks (+N)</label><span class="cb on"></span></div>
+<div class="it"><label>Agility: compare lap to</label><span class="dd">Best</span></div></div>
+<div class="sec closed"><div class="sh">Colours</div><div class="it"><label>Damage</label><span class="sw" style="background:#ffd23f"></span></div></div>
+</div>
+<div class="side"><h3>Settings panel · RuneLite sidebar, defaults shown</h3>
+<div class="note"><b>One plugin, six sections, about 25 settings.</b> It looks like every other RuneLite plugin's settings. Defaults are picked so a new install is useful without touching anything: auto-detect on, quiet extras off. Indented rows only matter when the row above is on.</div>
+<table>
+<tr><td>Setting</td><td class="d">Default</td><td>Why that default</td></tr>
+<tr><td>Position</td><td class="d">Replace chat</td><td>Your setup. Also: above chat, or floating anywhere.</td></tr>
+<tr><td>Mode</td><td class="d">Auto-detect</td><td>Or pin one mode (e.g. always Cooking) if detection guesses wrong.</td></tr>
+<tr><td>Baseline when idle</td><td class="d">General</td><td>Minimal for people who only want XP.</td></tr>
+<tr><td>Switch to AFK after</td><td class="d">60 s</td><td>A minute without a click; the 4:30 mint flash warns before logout.</td></tr>
+<tr><td>Metronome</td><td class="d">Off</td><td>Off / Every tick / Cue tick only. Off by default since it's busy.</td></tr>
+<tr><td>Blink when done</td><td class="d">On</td><td>Inventory finished, obstacle landed. The one alert most people want.</td></tr>
+<tr><td>Prayer mode</td><td class="d">Lazy flick</td><td>Or 1-tick flick.</td></tr>
+<tr><td>Actions row</td><td class="d">Attacks</td><td>Off / Attacks / Attacks + eats.</td></tr>
+<tr><td>Flash enemy on hit</td><td class="d">On, not at bosses</td><td>Bosses off by default to stay clear of the boss-mechanic rule.</td></tr>
+<tr><td>XP drops</td><td class="d">Numbers</td><td>Numbers / Dots only / Off.</td></tr>
+<tr><td>Alch top row</td><td class="d">Gold</td><td>Gold / XP / Both.</td></tr>
+<tr><td>Right side shows</td><td class="d">Per hour</td><td>Or session totals.</td></tr>
+</table></div>
+</body></html>

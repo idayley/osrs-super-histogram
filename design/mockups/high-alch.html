@@ -1,0 +1,105 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#2b3521;font-family:Outfit,system-ui,sans-serif;color:#e9ecef}
+.ground{width:1280px;height:300px;position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 0%,#4c5a37 0%,#36422a 60%,#232b1b 100%)}
+.chat{position:absolute;left:0;bottom:0;width:518px;height:150px;background:#b8a988;border:2px solid #4a3f2c}
+.inv{position:absolute;right:0;bottom:0;width:240px;height:260px;background:#3e3529;border:2px solid #1b1712}
+.seg{position:absolute;left:12px;top:14px;display:flex;gap:4px;align-items:center;background:rgba(20,23,27,.86);padding:5px 6px 5px 12px;border-radius:18px;font:600 12px Outfit;color:#aab1b9}.seg span{margin-right:6px}.seg button{font:600 12px Outfit;color:#c9ced4;background:transparent;border:0;padding:5px 11px;border-radius:13px;cursor:pointer}.seg button.on{background:#e9ecef;color:#14171b}
+.bar::after{content:'';position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0);pointer-events:none}
+.bar.p1::after{animation:p1 .5s ease-out}.bar.p2::after{animation:p2 .55s ease-out}
+@keyframes p1{0%{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.32)}100%{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0)}}
+@keyframes p2{0%{box-shadow:inset 0 0 0 2.5px rgba(255,255,255,.95)}100%{box-shadow:inset 0 0 0 2.5px rgba(255,255,255,0)}}
+.bar{position:absolute;left:6px;bottom:156px;width:1026px;height:62px;border-radius:31px;background:rgba(20,23,27,.86);overflow:hidden}
+.lbl{font:600 11px Outfit;fill:#7d8590}.cap{font:700 11px Outfit;fill:#e9ecef}
+.num{font:700 11px Outfit;fill:#ffd23f;font-variant-numeric:tabular-nums}
+.lost{font:700 9px Outfit;fill:#c9ced4;font-variant-numeric:tabular-nums}
+.verdict{font:700 22px Outfit}
+.rowlab{font:600 9px Outfit;fill:#5b636c;letter-spacing:.06em}
+.note{padding:14px 18px;font-size:13px;color:#c8cdd3;max-width:1180px;line-height:1.55}
+.note b{color:#fff}
+h3{margin:16px 18px 8px;font:600 12px Outfit;letter-spacing:.08em;text-transform:uppercase;color:#aab1b9}
+.zoomwrap{padding:0 18px 18px}
+.zoom{transform:scale(2);transform-origin:0 0;width:640px;height:62px;position:relative;border-radius:31px;background:rgba(20,23,27,.92);overflow:hidden;margin-bottom:70px}
+.gp{font:700 10px Outfit;fill:#ffd23f;font-variant-numeric:tabular-nums}.gn{font:700 10px Outfit;fill:#e9ecef;font-variant-numeric:tabular-nums}
+.xp{font:600 9.5px Outfit;fill:#9fb3c8;font-variant-numeric:tabular-nums}
+.hl{font:700 10px Outfit;fill:#7d8590;letter-spacing:.04em}.big{font:700 22px Outfit;font-variant-numeric:tabular-nums}
+</style></head><body>
+<div class="ground"><div class="chat"></div><div class="inv"></div>
+  <div class="seg" id="top"><span>Top row shows</span><button data-v="gold" class="on">Gold</button><button data-v="xp">XP</button><button data-v="both">Both</button></div>
+  <div class="bar" id="live"></div></div>
+<div class="note"><b>High alching.</b> Each cast is a short pill 5 ticks long (one cast takes 3 seconds). Casting on time makes the pills touch end to end; a white gap with "+2" shows ticks you lost between casts. The faint ▲ marks the tick your next cast is ready, and the outline blinks bright on it.
+<b>Top row:</b> what each cast made you. <b>Gold</b> = profit for that cast (alch price minus what the item and the nature rune cost on the GE), yellow if you made money, white with a minus sign if you lost it. <b>XP</b> = the Magic XP drop. <b>Both</b> shows the two side by side.
+<b>Right side:</b> totals this session and the hourly rate. In XP view: XP gained, XP per hour, and time to your next level.</div>
+<h3>How to read it · 2×, frozen · Both</h3>
+<div class="zoomwrap" style="position:relative;margin-top:150px"><div class="zoom" id="z"></div><svg id="ov" width="1300" height="420" style="position:absolute;left:0;top:-170px;pointer-events:none;overflow:visible"></svg><div style="height:110px"></div></div>
+<script>
+const NS='http://www.w3.org/2000/svg',TW=32,X0=128,N=21,H=62;
+const IY=12,PY=22,PH=14,AY=46,RY=55,MAG='#1499dc',CAST=5,XP=65;
+const PROFIT=[236,212,236,198,-40,236,212,251,236,198];
+// sim: casts every 5 ticks; sometimes late
+const casts=[];let ready=0,i=0;for(let k=0;k<400;k++){if(k<ready)continue;const late=(i%9===4)?2:(i%13===7?1:0);
+  const c=k+late;casts.push({k:c,lost:late,p:PROFIT[i%PROFIT.length]});ready=c+CAST;k=c;i++}
+const BASEG=96600,BASEX=29900,ELAPSED=2400; // ticks into session (24 min)
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e}
+function coin(s,x,y){el('circle',{cx:x,cy:y,r:3.6,fill:'#ffd23f'},s);el('circle',{cx:x,cy:y,r:2,fill:'none',stroke:'#b8901d','stroke-width':.9},s)}
+const fmt=n=>Math.abs(n)>=1000?(n/1000).toFixed(1)+'k':String(n);
+let VIEW='gold',ZOOM=false;const anchors={};const A=(k,x,y)=>{if(ZOOM&&(x>150||k==='readout'))anchors[k]=[x,y]};
+function draw(host,t,w,view){view=view||VIEW;
+  host.innerHTML='';const W=w||1026;const s=el('svg',{width:W,height:H},host);
+  const defs=el('defs',{},s);const fd=el('linearGradient',{id:'f'+host.id},defs);
+  el('stop',{offset:0,'stop-color':'#14171b','stop-opacity':1},fd);el('stop',{offset:1,'stop-color':'#14171b','stop-opacity':0},fd);
+  el('text',{x:22,y:27,class:'cap'},s).textContent='High alch';
+  el('text',{x:22,y:43,class:'lbl'},s).textContent='auto · 5t';
+  const NN=W<800?Math.floor((W-X0-10)/TW):N;const start=t-NN+(ZOOM?3:6);const PX=k=>X0+(k-start)*TW;
+  const cp=el('clipPath',{id:'c'+host.id},defs);el('rect',{x:X0-4,y:0,width:NN*TW+4,height:H},cp);
+  const L=el('g',{'clip-path':`url(#c${host.id})`},s);
+  for(let j=0;j<=NN;j++)el('rect',{x:X0+j*TW-.5,y:RY-2,width:1,height:3,fill:'rgba(255,255,255,.14)'},L);
+  let prev=null,next=null;
+  for(const c of casts){if(c.k>t){if(!next)next=c;continue}
+    const x1=PX(c.k),x2=PX(Math.min(c.k+CAST,t+1));
+    if(c.k+CAST>start-2&&c.k<start+NN){
+      el('rect',{x:x1+1,y:PY,width:Math.max(PH,x2-x1-2),height:PH,rx:PH/2,fill:MAG},L);A('cast',(x1+x2)/2,PY+PH/2);
+      // top row drop
+      const gx=x1+6;
+      if(view!=='xp'){coin(L,gx,IY);el('text',{x:gx+6,y:IY+3.5,class:c.p>=0?'gp':'gn'},L).textContent=(c.p>=0?'+':'−')+Math.abs(c.p);A(c.p>=0?'gold':'loss',gx,IY)}
+      if(view==='xp'){el('text',{x:gx-3,y:IY+3.5,class:'xp'},L).textContent='+'+XP+' xp';A('xp',gx,IY)}
+      if(view==='both'){el('text',{x:gx+36,y:IY+3.5,class:'xp'},L).textContent=XP+' xp';A('xp',gx+44,IY)}
+      if(c.lost){const xa=PX(c.k-c.lost);el('rect',{x:xa+1,y:AY-.75,width:x1-xa-2,height:1.5,fill:'rgba(255,255,255,.55)'},L);
+        el('text',{x:(xa+x1)/2,y:AY-4,class:'lost','text-anchor':'middle'},L).textContent='+'+c.lost;A('lost',(xa+x1)/2,AY)}}
+    prev=c}
+  if(prev){const nr=prev.k+CAST;if(nr>t){const x=PX(nr);el('path',{d:`M${x-4} ${RY+5}L${x} ${RY}L${x+4} ${RY+5}Z`,fill:'rgba(255,255,255,.4)'},L);A('next',x,RY+3)}}
+  const nx=PX(t+1);A('now',nx,50);A('readout',40,27);
+  el('rect',{x:nx-1,y:16,width:2,height:H-26,rx:1,fill:'rgba(233,236,239,.5)'},s);
+  el('rect',{x:X0-12,y:0,width:44,height:H,fill:`url(#f${host.id})`},s);
+  if(W<800)return;
+  const done=casts.filter(c=>c.k<=t),g=BASEG+done.reduce((a,c)=>a+c.p,0),x=BASEX+done.length*XP,el2=(ELAPSED+t)*.6/3600;
+  const tx=X0+N*TW+18;
+  if(view==='xp'){el('text',{x:tx,y:33,class:'big',fill:'#fff'},s).textContent=x.toLocaleString()+' xp';
+    const rate=Math.round(x/el2),left=4385776-(4300000+x),mins=Math.round(left/rate*60);
+    el('text',{x:tx,y:48,class:'hl'},s).textContent=`${fmt(rate)}/hr · level 87 in ${mins>=60?Math.floor(mins/60)+'h ':''}${mins%60}m`}
+  else{el('text',{x:tx,y:33,class:'big',fill:'#ffd23f'},s).textContent='+'+fmt(g);
+    el('text',{x:tx,y:48,class:'hl'},s).textContent=`${fmt(Math.round(g/el2))}/hr`+(view==='both'?` · ${fmt(Math.round(x/el2))} xp/hr`:' this session')}
+}
+let t=60;const live=document.getElementById('live');draw(live,t);
+function pulse(){const nr=casts.find(c=>c.k>t);const cue=casts.some(c=>c.k<=t&&c.k+CAST===t+1);live.classList.remove('p1','p2');void live.offsetWidth;live.classList.add(cue?'p2':'p1')}
+if(!matchMedia('(prefers-reduced-motion: reduce)').matches)setInterval(()=>{t++;if(t>380)t=60;draw(live,t);pulse()},600);
+document.querySelectorAll('#top button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#top button').forEach(x=>x.classList.toggle('on',x===b));VIEW=b.dataset.v;draw(live,t)});
+if(location.hash)document.querySelector(`#top button[data-v="${location.hash.slice(1)}"]`).click();
+// zoom: freeze just after a late cast that follows a money-losing cast
+let zt=casts[4].k+3;
+ZOOM=true;draw(document.getElementById('z'),zt,640,'both');ZOOM=false;
+const LAB={readout:'Activity, picked up automatically',cast:'Pill: one cast (5 ticks)',gold:'Profit from that cast',loss:'White −40: that cast lost money',xp:'Magic XP from that cast',
+ lost:'+2: ticks lost before you cast again',next:'Faint ▲: your next cast is ready',now:'Now'};
+const ov=document.getElementById('ov'),OY=170,TOP=['readout','gold','loss','xp','cast'];
+['top','bot'].forEach(band=>{
+  const ks=Object.keys(anchors).filter(k=>LAB[k]&&(band==='top')===TOP.includes(k)).sort((a,b)=>anchors[a][0]-anchors[b][0]);const rows=[];
+  ks.forEach(k=>{const [ax,ay]=anchors[k];const X=18+ax*2,Y=OY+ay*2;const w=LAB[k].length*6.3+8;const R=X+w>1270,L0=R?X-w:X,L1=R?X:X+w;
+    let r=0;while(rows[r]&&rows[r].some(([p,q])=>L0<q+14&&L1>p))r++;(rows[r]=rows[r]||[]).push([L0,L1]);
+    const ly=band==='top'?OY-14-r*22:OY+142+r*22;
+    el('line',{x1:X,y1:Y,x2:X,y2:band==='top'?ly+4:ly-13,stroke:'rgba(255,255,255,.4)','stroke-width':1},ov);
+    el('circle',{cx:X,cy:Y,r:3,fill:'#fff',stroke:'#14171b','stroke-width':1.5},ov);
+    el('text',{x:R?X-5:X+5,'text-anchor':R?'end':'start',y:ly,fill:'#e9ecef','font-size':'12.5','font-family':'Outfit'},ov).textContent=LAB[k];})});
+</script></body></html>

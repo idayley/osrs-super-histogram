@@ -1,0 +1,111 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#2b3521;font-family:Outfit,system-ui,sans-serif;color:#e9ecef}
+.ground{width:1280px;height:300px;position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 0%,#4c5a37 0%,#36422a 60%,#232b1b 100%)}
+.chat{position:absolute;left:0;bottom:0;width:518px;height:150px;background:#b8a988;border:2px solid #4a3f2c}
+.inv{position:absolute;right:0;bottom:0;width:240px;height:260px;background:#3e3529;border:2px solid #1b1712}
+.seg{position:absolute;left:12px;top:14px;display:flex;gap:4px;align-items:center;background:rgba(20,23,27,.86);padding:5px 6px 5px 12px;border-radius:18px;font:600 12px Outfit;color:#aab1b9}.seg span{margin-right:6px}.seg button{font:600 12px Outfit;color:#c9ced4;background:transparent;border:0;padding:5px 11px;border-radius:13px;cursor:pointer}.seg button.on{background:#e9ecef;color:#14171b}
+.bar::after{content:'';position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0);pointer-events:none}
+.bar.p1::after{animation:p1 .5s ease-out}.bar.p2::after{animation:p2 .55s ease-out}
+@keyframes p1{0%{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.32)}100%{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0)}}
+@keyframes p2{0%{box-shadow:inset 0 0 0 2.5px rgba(255,255,255,.95)}100%{box-shadow:inset 0 0 0 2.5px rgba(255,255,255,0)}}
+.bar{position:absolute;left:6px;bottom:156px;width:1026px;height:62px;border-radius:31px;background:rgba(20,23,27,.86);overflow:hidden}
+.lbl{font:600 11px Outfit;fill:#7d8590}.cap{font:700 11px Outfit;fill:#e9ecef}
+.num{font:700 11px Outfit;fill:#ffd23f;font-variant-numeric:tabular-nums}
+.lost{font:700 9px Outfit;fill:#c9ced4;font-variant-numeric:tabular-nums}
+.verdict{font:700 22px Outfit}
+.rowlab{font:600 9px Outfit;fill:#5b636c;letter-spacing:.06em}
+.note{padding:14px 18px;font-size:13px;color:#c8cdd3;max-width:1180px;line-height:1.55}
+.note b{color:#fff}
+h3{margin:16px 18px 8px;font:600 12px Outfit;letter-spacing:.08em;text-transform:uppercase;color:#aab1b9}
+.zoomwrap{padding:0 18px 18px}
+.zoom{transform:scale(2);transform-origin:0 0;width:640px;height:62px;position:relative;border-radius:31px;background:rgba(20,23,27,.92);overflow:hidden;margin-bottom:70px}
+.hl{font:700 10px Outfit;fill:#7d8590;letter-spacing:.06em}
+</style></head><body>
+<div class="ground"><div class="chat"></div><div class="inv"></div>
+  <div class="seg" id="met"><span>Metronome</span><button data-m="off">Off</button><button data-m="tick" class="on">Every tick</button></div>
+  <div class="bar" id="live" style="height:52px;border-radius:26px"></div></div>
+<div class="note"><b>1-tick flicking.</b> Every tick is a beat, so the ▲ carets are gone. You double-click prayer once per tick (off, then straight back on) and it never drains.
+<b>Middle row:</b> a small dot in the prayer's colour = a clean flick, sitting where in the tick you clicked. Hollow = your two clicks landed in different ticks. Empty slot with × = you skipped the tick. A long pill = you left prayer on, so it drained.
+<b>Right side:</b> where in the tick your clicks land over the last 40 ticks (left edge = tick start, right edge = next tick). A tight hump in the middle is good; clicks near the right edge are the ones that split. Then your clean-flick streak.</div>
+<h3>How to read it · 2×, frozen</h3>
+<div class="zoomwrap" style="position:relative;margin-top:150px"><div class="zoom" id="z" style="height:52px;border-radius:26px"></div><svg id="ov" width="1300" height="420" style="position:absolute;left:0;top:-170px;pointer-events:none;overflow:visible"></svg><div style="height:130px"></div></div>
+<script>
+const NS='http://www.w3.org/2000/svg',TW=32,X0=128,N=21,H=52;
+const IY=10,LY1=18,PY=22,PH=10,LY2=34,RY=44;
+const COL={m:'#d0313a',r:'#64ab31',g:'#1499dc',o:'#9150d0'};
+const DEMON='M-6 -1 L-7 -7 L-3 -4 L0 -5 L3 -4 L7 -7 L6 -1 Q6 5 0 6 Q-6 5 -6 -1Z';
+const T={};const get=k=>T[k]||(T[k]={});
+// sim: style alternates magic/ranged; mostly clean flicks; some splits, a skip, a drain stretch
+let seed=7;const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;
+for(let k=0;k<240;k++){const b=get(k);b.style=(Math.floor(k/7)%2)?'r':'g';
+  const c=k%37;let ph=.32+(rnd()-.5)*.3;
+  if(c>=20&&c<=23){b.f='drain'}
+  else if(c===8||c===30){b.f='split';ph=.9+rnd()*.08}
+  else if(c===14){b.f='skip'}
+  else b.f='ok';
+  b.ph=ph;
+  if(k%5===2){const safe=b.f==='ok'||b.f==='drain';b.hit={d:!safe,v:safe?0:[22,31,18][k%3]}}}
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e}
+let ZOOM=false;const anchors={};const A=(k,x,y)=>{if(ZOOM&&(x>140||k==='readout'))anchors[k]=[x,y]};
+function draw(host,t,w){
+  host.innerHTML='';const W=w||1026;const s=el('svg',{width:W,height:H},host);
+  const defs=el('defs',{},s);const fd=el('linearGradient',{id:'f'+host.id},defs);
+  el('stop',{offset:0,'stop-color':'#14171b','stop-opacity':1},fd);el('stop',{offset:1,'stop-color':'#14171b','stop-opacity':0},fd);
+  el('text',{x:22,y:24,class:'cap'},s).textContent='1-tick flick';
+  el('text',{x:22,y:39,class:'lbl'},s).textContent='every tick';
+  const NN=W<800?Math.floor((W-X0-10)/TW):N;const start=t-NN+2;const PX=k=>X0+(k-start)*TW;
+  const cp=el('clipPath',{id:'c'+host.id},defs);el('rect',{x:X0-14,y:0,width:NN*TW+14,height:H},cp);
+  const L=el('g',{'clip-path':`url(#c${host.id})`},s);
+  for(let i=0;i<=NN;i++)el('rect',{x:X0+i*TW-.5,y:RY-2,width:1,height:3,fill:'rgba(255,255,255,.14)'},L);
+  // drain pills first
+  for(let k=start-6;k<=t;k++){const b=T[k];if(b&&b.f==='drain'&&!(T[k-1]&&T[k-1].f==='drain')){let e=k;while(T[e+1]&&T[e+1].f==='drain'&&e+1<=t)e++;
+    const x1=PX(k),x2=PX(e+1);el('rect',{x:x1,y:PY,width:x2-x1,height:PH,rx:PH/2,fill:COL[b.style]},L);A('drain',(x1+x2)/2,PY+PH/2)}}
+  for(let k=start;k<=t;k++){const b=T[k],x=PX(k),cx=x+b.ph*TW,cy=PY+PH/2;
+    if(b.f==='ok'){el('rect',{x:cx-5,y:PY,width:10,height:PH,rx:PH/2,fill:COL[b.style]},L);A('ok',cx,cy)}
+    if(b.f==='split'){el('rect',{x:cx-5,y:PY+.75,width:14,height:PH-1.5,rx:(PH-1.5)/2,fill:'none',stroke:'#fff','stroke-width':1.5},L);A('split',cx+2,cy)}
+    if(b.f==='skip'){const mx=x+TW/2;el('path',{d:`M${mx-3} ${cy-3}l6 6M${mx+3} ${cy-3}l-6 6`,stroke:'#fff','stroke-width':1.6,'stroke-linecap':'round'},L);A('skip',mx,cy)}
+    if(b.hit){const d=b.hit.d,hx=x+TW;A(d?'yline':'ghost',hx,LY1+4);if(d)A('icon',hx-6,IY);
+      el('rect',{x:hx-1,y:LY1,width:2,height:LY2-LY1,rx:1,fill:d?'#ffd23f':'rgba(255,255,255,.28)'},L);
+      const g=el('g',{transform:`translate(${hx-(d?6:0)},${IY}) scale(.9)`},L);el('path',{d:DEMON,fill:d?'#ffd23f':'rgba(255,255,255,.35)'},g);
+      if(d)el('text',{x:hx+5,y:IY+4,class:'num'},L).textContent=b.hit.v}}
+  const nx=PX(t+1);A('now',nx,40);A('readout',40,24);
+  el('rect',{x:nx-1,y:14,width:2,height:H-24,rx:1,fill:'rgba(233,236,239,.5)'},s);
+  el('rect',{x:X0-12,y:0,width:44,height:H,fill:`url(#f${host.id})`},s);
+  if(W<800)return;
+  // in-tick histogram of the last 40 flicks
+  const hx=X0+N*TW+16,hw=96,bins=Array(12).fill(0);
+  for(let k=t-39;k<=t;k++){const b=T[k];if(b&&(b.f==='ok'||b.f==='split'))bins[Math.min(11,Math.floor(b.ph*12))]++}
+  const mx=Math.max(...bins,1);
+  el('rect',{x:hx,y:9,width:hw,height:26,rx:4,fill:'rgba(255,255,255,.04)'},s);
+  el('rect',{x:hx+hw*10/12,y:9,width:hw*2/12,height:26,fill:'rgba(255,255,255,.07)'},s);
+  bins.forEach((n,i)=>{if(!n)return;const h=22*n/mx;el('rect',{x:hx+i*8+1,y:33-h,width:6,height:h,rx:1.5,fill:i>=10?'#fff':'#5ee0c8'},s)});
+  el('text',{x:hx,y:46,class:'hl'},s).textContent='tick start';
+  el('text',{x:hx+hw,y:46,class:'hl','text-anchor':'end'},s).textContent='next tick';
+  let st=0;for(let k=t;k>t-200&&T[k]&&T[k].f==='ok';k--)st++;
+  const vx=hx+hw+16;const lb=T[t].f;
+  if(lb==='ok'){el('text',{x:vx,y:33,class:'verdict',fill:'#5ee0c8'},s).textContent=st;el('text',{x:vx,y:46,class:'hl'},s).textContent='clean in a row'}
+  else el('text',{x:vx,y:36,class:'verdict',fill:'#fff'},s).textContent={split:'Split',skip:'Skipped',drain:'Draining'}[lb];
+}
+let t=40,MET='tick';const live=document.getElementById('live');
+draw(live,t);
+function pulse(){if(MET==='off')return;live.classList.remove('p1');void live.offsetWidth;live.classList.add('p1')}
+if(!matchMedia('(prefers-reduced-motion: reduce)').matches)setInterval(()=>{t++;if(t>220)t=40;draw(live,t);pulse()},600);
+document.querySelectorAll('#met button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#met button').forEach(x=>x.classList.toggle('on',x===b));MET=b.dataset.m});
+// zoom
+let zt=69;ZOOM=true;draw(document.getElementById('z'),zt,640);ZOOM=false;
+const LAB={readout:'Mode',icon:'Enemy hit you, and the damage',yline:'Yellow line: a hit got through',ghost:'Faint line: blocked',
+ ok:'Dot: clean flick (its spot = when in the tick you clicked)',split:'Hollow: clicks split across two ticks, so no protection',skip:'×: you skipped this tick',drain:'Long pill: prayer left on, draining',now:'Now'};
+const ov=document.getElementById('ov'),OY=170,TOP=['readout','icon','yline','ghost'];
+['top','bot'].forEach(band=>{
+  const ks=Object.keys(anchors).filter(k=>LAB[k]&&(band==='top')===TOP.includes(k)).sort((a,b)=>anchors[a][0]-anchors[b][0]);const rows=[];
+  ks.forEach(k=>{const [ax,ay]=anchors[k];const X=18+ax*2,Y=OY+ay*2;const w=LAB[k].length*6.3+8;const R=X+w>1270,L0=R?X-w:X,L1=R?X:X+w;
+    let r=0;while(rows[r]&&rows[r].some(([p,q])=>L0<q+14&&L1>p))r++;(rows[r]=rows[r]||[]).push([L0,L1]);
+    const ly=band==='top'?OY-14-r*22:OY+122+r*22;
+    el('line',{x1:X,y1:Y,x2:X,y2:band==='top'?ly+4:ly-13,stroke:'rgba(255,255,255,.4)','stroke-width':1},ov);
+    el('circle',{cx:X,cy:Y,r:3,fill:'#fff',stroke:'#14171b','stroke-width':1.5},ov);
+    el('text',{x:R?X-5:X+5,'text-anchor':R?'end':'start',y:ly,fill:'#e9ecef','font-size':'12.5','font-family':'Outfit'},ov).textContent=LAB[k];})});
+</script></body></html>

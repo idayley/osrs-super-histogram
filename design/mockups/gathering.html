@@ -1,0 +1,110 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#2b3521;font-family:Outfit,system-ui,sans-serif;color:#e9ecef}
+.ground{width:1280px;height:300px;position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 0%,#4c5a37 0%,#36422a 60%,#232b1b 100%)}
+.chat{position:absolute;left:0;bottom:0;width:518px;height:150px;background:#b8a988;border:2px solid #4a3f2c}
+.inv{position:absolute;right:0;bottom:0;width:240px;height:260px;background:#3e3529;border:2px solid #1b1712}
+.seg{position:absolute;left:12px;top:14px;display:flex;gap:4px;align-items:center;background:rgba(20,23,27,.86);padding:5px 6px 5px 12px;border-radius:18px;font:600 12px Outfit;color:#aab1b9}.seg span{margin-right:6px}.seg button{font:600 12px Outfit;color:#c9ced4;background:transparent;border:0;padding:5px 11px;border-radius:13px;cursor:pointer}.seg button.on{background:#e9ecef;color:#14171b}
+.bar::after{content:'';position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0);pointer-events:none}
+.bar.p1::after{animation:p1 .5s ease-out}.bar.p2::after{animation:p2 .55s ease-out}
+@keyframes p1{0%{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.32)}100%{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0)}}
+@keyframes p2{0%{box-shadow:inset 0 0 0 2.5px rgba(255,255,255,.95)}100%{box-shadow:inset 0 0 0 2.5px rgba(255,255,255,0)}}
+.bar{position:absolute;left:6px;bottom:156px;width:1026px;height:62px;border-radius:31px;background:rgba(20,23,27,.86);overflow:hidden}
+.lbl{font:600 11px Outfit;fill:#7d8590}.cap{font:700 11px Outfit;fill:#e9ecef}
+.num{font:700 11px Outfit;fill:#ffd23f;font-variant-numeric:tabular-nums}
+.lost{font:700 9px Outfit;fill:#c9ced4;font-variant-numeric:tabular-nums}
+.verdict{font:700 22px Outfit}
+.rowlab{font:600 9px Outfit;fill:#5b636c;letter-spacing:.06em}
+.note{padding:14px 18px;font-size:13px;color:#c8cdd3;max-width:1180px;line-height:1.55}
+.note b{color:#fff}
+h3{margin:16px 18px 8px;font:600 12px Outfit;letter-spacing:.08em;text-transform:uppercase;color:#aab1b9}
+.zoomwrap{padding:0 18px 18px}
+.zoom{transform:scale(2);transform-origin:0 0;width:640px;height:62px;position:relative;border-radius:31px;background:rgba(20,23,27,.92);overflow:hidden;margin-bottom:70px}
+.xp{font:600 9.5px Outfit;fill:#c9ced4;font-variant-numeric:tabular-nums}.burnt{font:600 9.5px Outfit;fill:#6b737c}
+.hl{font:700 10px Outfit;fill:#7d8590;letter-spacing:.04em}.eta{font:700 22px Outfit;fill:#fff;font-variant-numeric:tabular-nums}
+.bar.done{animation:done 1s ease-out}
+@keyframes done{0%{background:rgba(94,224,200,.55)}18%{background:rgba(20,23,27,.86)}32%{background:rgba(94,224,200,.55)}100%{background:rgba(20,23,27,.86)}}
+.seg .pv{color:#7d8590;font-weight:600}
+</style></head><body>
+<div class="ground"><div class="chat"></div><div class="inv"></div>
+  <div class="seg" id="met"><span>Metronome</span><button data-m="off">Off</button><button data-m="tick" class="on">Every tick</button><button class="pv" data-pv="p1">▶ preview</button></div>
+  <div class="seg" id="dn" style="left:340px"><span>Blink when done</span><button data-d="off">Off</button><button data-d="on" class="on">On</button><button class="pv" data-pv="done">▶ preview</button></div>
+  <div class="bar" id="live"></div></div>
+<div class="note"><b>Woodcutting (yews), auto-detected.</b> One pill per tree, from your click until the tree falls. The faint notches inside are your chop attempts (one every 4 ticks).
+<b>Top:</b> a log and its XP each time you get one.
+<b>Tree falls:</b> the pill ends in a small stump. If you were slow to click the next tree, a white "+2" shows the ticks you lost.
+<b>Blink when done:</b> when a tree falls, the whole bar flashes mint twice. The metronome is different on every count: a single thin white outline, every tick. Use the ▶ preview buttons to compare. <b>Right:</b> logs in your inventory and roughly when it'll be full. That one is an estimate from your recent catch rate (gathering is random), hence the "~". So there's no finish flag here, unlike cooking.</div>
+<h3>How to read it · 2×, frozen just after a tree fell</h3>
+<div class="zoomwrap" style="position:relative;margin-top:150px"><div class="zoom" id="z1"></div><svg id="ov1" width="1300" height="420" style="position:absolute;left:0;top:-170px;pointer-events:none;overflow:visible"></svg><div style="height:110px"></div></div>
+<script>
+const NS='http://www.w3.org/2000/svg',TW=32,X0=128,N=21,H=62;
+const IY=12,PY=22,PH=14,AY=46,RY=55,WC='#b5a06a',ROLL=4,XP=175;
+let seed=11;const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;
+// sim: trees; roll every 4 ticks from click+2 (walk/swing); success 10%; each log 1/6 chance tree falls
+const trees=[];let k=0,inv=0;const R=[2,0,1,3,0,2];
+for(let i=0;i<40&&k<2000;i++){const t0=k;const logs=[];let r=t0+2,end=null;
+  while(end===null){r+=ROLL;if(rnd()<.1){inv++;logs.push({k:r,inv});if(rnd()<1/6||inv===28)end=r}}
+  const full=inv===28;trees.push({t0,end,logs,full,react:R[i%6]});k=end+R[i%6];if(full){trees[trees.length-1].bank=k;k+=14;inv=0}}
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e}
+function log(s,x,y){el('rect',{x:x-5,y:y-2.6,width:10,height:5.2,rx:2.6,fill:'#c89a5a'},s);el('circle',{cx:x+4,cy:y,r:2.6,fill:'#e8c58f'},s)}
+function stump(s,x,y){el('path',{d:`M${x-4} ${y+4}h8l-1.2-6h-5.6z`,fill:'#e9ecef'},s);el('ellipse',{cx:x,cy:y-2,rx:2.8,ry:1.1,fill:'#7d8590'},s)}
+function axe(s,x,y,c){el('rect',{x:x-.8,y:y-5,width:1.6,height:10,rx:.8,fill:c},s);el('path',{d:`M${x+.8} ${y-5}h3.2a2 2 0 0 1 0 5h-3.2z`,fill:c},s)}
+let ZOOM=null;const anchors={};const A=(k,x,y)=>{if(ZOOM&&(x>150||k==='readout'))anchors[k]=[x,y]};
+function draw(host,t,w,future){
+  host.innerHTML='';const W=w||1026;const s=el('svg',{width:W,height:H},host);
+  const defs=el('defs',{},s);const fd=el('linearGradient',{id:'f'+host.id},defs);
+  el('stop',{offset:0,'stop-color':'#14171b','stop-opacity':1},fd);el('stop',{offset:1,'stop-color':'#14171b','stop-opacity':0},fd);
+  el('text',{x:22,y:27,class:'cap'},s).textContent='Woodcutting';
+  el('text',{x:22,y:43,class:'lbl'},s).textContent='auto · yews';
+  const NN=W<800?Math.floor((W-X0-10)/TW):N;const start=t-NN+(future||6);const PX=k=>X0+(k-start)*TW;
+  const cp=el('clipPath',{id:'c'+host.id},defs);el('rect',{x:X0-4,y:0,width:NN*TW+4,height:H},cp);
+  const L=el('g',{'clip-path':`url(#c${host.id})`},s);
+  for(let j=0;j<=NN;j++)el('rect',{x:X0+j*TW-.5,y:RY-2,width:1,height:3,fill:'rgba(255,255,255,.14)'},L);
+  let cur=null;
+  for(const v of trees){if(v.t0>t)break;cur=v;const e=Math.min(v.end,t+1);if(e<start-2)continue;
+    const x1=PX(v.t0),x2=PX(e);el('rect',{x:x1,y:PY,width:Math.max(PH,x2-x1),height:PH,rx:PH/2,fill:WC},L);A('pill',(Math.max(x1,X0)+x2)/2,PY+PH/2);
+    const ix=Math.max(x1+10,X0+10);if(ix<x2-8)axe(L,ix,PY+PH/2,'#14171b');
+    for(let r=v.t0+2+ROLL;r<e;r+=ROLL){const x=PX(r);if(x>ix+6)el('rect',{x:x-.6,y:PY+3,width:1.2,height:PH-6,rx:.6,fill:'rgba(20,23,27,.45)'},L);A('roll',x,PY+PH/2)}
+    v.logs.forEach(l=>{if(l.k>t)return;const x=PX(l.k);log(L,x-6,IY);el('text',{x:x+2,y:IY+3.5,class:'xp',style:`fill:${WC}`},L).textContent='+'+XP;A('log',x-6,IY)});
+    if(v.end<=t){const xs=PX(v.end);stump(L,xs+6,AY-1);A('stump',xs+6,AY);
+      const xc=PX(v.end+v.react);
+      if(v.bank&&v.bank<=t){bank(L,PX(v.bank),AY,'#e9ecef');A('bank',PX(v.bank),AY)}
+      if(v.react&&v.end+v.react<=t){el('rect',{x:xs+13,y:AY-.75,width:Math.max(0,xc-xs-13),height:1.5,fill:'rgba(255,255,255,.55)'},L);
+        el('text',{x:(xs+xc)/2+6,y:AY-4,class:'lost','text-anchor':'middle'},L).textContent='+'+v.react;A('wasted',(xs+xc)/2+6,AY)}}}
+  const nx=PX(t+1);A('now',nx,50);A('readout',40,27);
+  el('rect',{x:nx-1,y:16,width:2,height:H-26,rx:1,fill:'rgba(233,236,239,.5)'},s);
+  el('rect',{x:X0-12,y:0,width:44,height:H,fill:`url(#f${host.id})`},s);
+  if(W<800)return;
+  const tx=X0+N*TW+18;let n=0;for(const v of trees)for(const l of v.logs)if(l.k<=t)n=l.inv;
+  if(cur&&cur.bank&&cur.end<=t){el('text',{x:tx,y:36,class:'verdict',fill:'#fff'},s).textContent='Full · bank';return}
+  const rate=.1/ROLL,left=(28-n)/rate*.6,m=Math.floor(left/60),sec=Math.round(left%60/10)*10;
+  el('text',{x:tx,y:33,class:'eta'},s).textContent=`${n}/28`;
+  el('text',{x:tx,y:48,class:'hl'},s).textContent=`full in ~${m}:${String(sec%60).padStart(2,'0')} · ${Math.round(rate*6000)} logs/hr`;
+}
+function bank(s,x,y,c){el('path',{d:`M${x-6} ${y-2}L${x} ${y-6}L${x+6} ${y-2}Z`,fill:c},s);el('rect',{x:x-5,y:y-1,width:2,height:5,fill:c},s);el('rect',{x:x-1,y:y-1,width:2,height:5,fill:c},s);el('rect',{x:x+3,y:y-1,width:2,height:5,fill:c},s);el('rect',{x:x-6,y:y+4.5,width:12,height:1.6,fill:c},s)}
+let t=40;const live=document.getElementById('live');draw(live,t);
+let MET='tick',DONE='on';
+function fx(c){live.classList.remove('p1','p2','done');void live.offsetWidth;live.classList.add(c)}
+if(location.hash!=='#done'&&!matchMedia('(prefers-reduced-motion: reduce)').matches)setInterval(()=>{t++;if(t>1500)t=40;draw(live,t);
+  const fell=trees.some(v=>v.end===t);if(fell&&DONE==='on')fx('done');else if(MET==='tick')fx('p1')},600);
+document.querySelectorAll('#met button[data-m]').forEach(b=>b.onclick=()=>{document.querySelectorAll('#met button[data-m]').forEach(x=>x.classList.toggle('on',x===b));MET=b.dataset.m});
+document.querySelectorAll('#dn button[data-d]').forEach(b=>b.onclick=()=>{document.querySelectorAll('#dn button[data-d]').forEach(x=>x.classList.toggle('on',x===b));DONE=b.dataset.d});
+document.querySelectorAll('.pv').forEach(b=>b.onclick=()=>fx(b.dataset.pv));
+if(location.hash==='#done'){live.style.animationPlayState='paused';live.classList.add('done');live.style.animationDelay='-0.36s'}
+const LAB={readout:'Activity, picked up automatically',pill:'Pill: chopping one tree',roll:'Notch: a chop attempt (every 4 ticks)',log:'A log, and its XP',
+ stump:'Stump: the tree fell',wasted:'+2: ticks before you clicked the next tree',bank:'Bank',now:'Now'};
+function callouts(zid,oid,tt,fut){Object.keys(anchors).forEach(k=>delete anchors[k]);ZOOM=zid;draw(document.getElementById(zid),tt,640,fut);ZOOM=null;
+  const ov=document.getElementById(oid),OY=170,TOP=['readout','pill','roll','log'];
+  ['top','bot'].forEach(band=>{
+    const ks=Object.keys(anchors).filter(k=>LAB[k]&&(band==='top')===TOP.includes(k)).sort((a,b)=>anchors[a][0]-anchors[b][0]);const rows=[];
+    ks.forEach(k=>{const [ax,ay]=anchors[k];const X=18+ax*2,Y=OY+ay*2;const w=LAB[k].length*6.3+8;const R=X+w>1270,L0=R?X-w:X,L1=R?X:X+w;
+      let r=0;while(rows[r]&&rows[r].some(([p,q])=>L0<q+14&&L1>p))r++;(rows[r]=rows[r]||[]).push([L0,L1]);
+      const ly=band==='top'?OY-14-r*22:OY+142+r*22;
+      el('line',{x1:X,y1:Y,x2:X,y2:band==='top'?ly+4:ly-13,stroke:'rgba(255,255,255,.4)','stroke-width':1},ov);
+      el('circle',{cx:X,cy:Y,r:3,fill:'#fff',stroke:'#14171b','stroke-width':1.5},ov);
+      el('text',{x:R?X-5:X+5,'text-anchor':R?'end':'start',y:ly,fill:'#e9ecef','font-size':'12.5','font-family':'Outfit'},ov).textContent=LAB[k];})})}
+const zv=trees.find(v=>v.react===2&&v.end>60&&v.logs.length>=2&&!v.bank);callouts('z1','ov1',zv.end+zv.react+4,2);
+</script></body></html>

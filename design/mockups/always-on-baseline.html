@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;padding:18px;background:#2b3521;font-family:Outfit;color:#e9ecef;width:1244px}
+h3{margin:22px 0 8px;font:600 12px Outfit;letter-spacing:.08em;text-transform:uppercase;color:#aab1b9}
+.bar{width:1026px;height:62px;border-radius:31px;background:rgba(20,23,27,.92);overflow:hidden;position:relative}
+.note{font-size:13px;color:#c8cdd3;line-height:1.55;max-width:1180px}.note b{color:#fff}
+.sub{font-size:12.5px;color:#aab1b9;margin-top:6px;max-width:1026px;line-height:1.5}
+@keyframes done{0%{background:rgba(94,224,200,.55)}18%{background:rgba(20,23,27,.92)}32%{background:rgba(94,224,200,.55)}100%{background:rgba(20,23,27,.92)}}
+.bar.done{animation:done 1s ease-out}</style></head><body>
+<div class="note"><b>The always-on baseline: what the bar shows when no special mode is detected.</b> Same three rows. Top: what came to you (XP in each skill's colour, a hit on you in yellow). Middle: what your character is doing right now (a pill while an action or animation runs, a faint one while you walk or run). Bottom: your clicks on the tick ruler. Right side: one thing worth knowing at a glance. AFK swaps the right side for a logout countdown and flashes the bar mint before you'd be logged out.<br><b>New:</b> run energy as a thin gauge under the activity name, always there (turns white under 20%), and a running pill shows how much the run cost. Login time sits faint in the far right corner of every mode.</div>
+<h3>Questing / general play</h3><div class="bar" id="a"></div>
+<div class="sub">Walking is a faint pill, actions (talk, use item, teleport) are solid. XP from anything shows up as you'd expect. Right: XP this session and the last thing you got.</div>
+<h3>AFK (NMZ, splashing, fishing at Barbarian)</h3><div class="bar" id="b"></div>
+<div class="sub">One long pill counts up since your last click. The right side counts down to the 5-minute idle logout, and the bar flashes mint at 4:30 so you click before you're kicked. Hits on you still show.</div>
+<h3>Minimal (all off but XP)</h3><div class="bar" id="c"></div>
+<div class="sub">For people who want almost nothing: the tick ruler, the metronome if on, and XP drops.</div>
+<script>
+const NS='http://www.w3.org/2000/svg',TW=32,X0=128,N=21;
+const SK={Ag:'#7fa7c9',Mag:'#8fc3ff',Thv:'#c58fd6',Att:'#e08a7a',HP:'#f2a7bd',Def:'#9fb4d9',Fish:'#8fd0e8'};
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e}
+const DEMON='M-6 -1 L-7 -7 L-3 -4 L0 -5 L3 -4 L7 -7 L6 -1 Q6 5 0 6 Q-6 5 -6 -1Z';
+function flag(s,x,y,c){el('rect',{x:x-.75,y:y-9,width:1.5,height:12,fill:c},s);el('path',{d:`M${x} ${y-9}h7l-2 2.5 2 2.5h-7z`,fill:c},s)}
+function bar(id,o){const s=el('svg',{width:1026,height:62},document.getElementById(id));
+  el('text',{x:22,y:27,fill:'#e9ecef','font-size':11,'font-weight':700},s).textContent=o.name;
+  el('text',{x:22,y:43,fill:'#7d8590','font-size':11,'font-weight':600},s).textContent=o.sub;
+  const en=o.run;if(en!=null){el('rect',{x:22,y:49,width:64,height:3,rx:1.5,fill:'rgba(255,255,255,.12)'},s);
+    el('rect',{x:22,y:49,width:64*en/100,height:3,rx:1.5,fill:en<20?'#fff':'#e8c86a'},s);
+    el('text',{x:90,y:52.5,fill:'#7d8590','font-size':8.5,'font-weight':700},s).textContent=en+'%'}
+  if(o.login){el('text',{x:1000,y:28,fill:'#7d8590','font-size':11,'font-weight':600,'text-anchor':'end','font-variant-numeric':'tabular-nums'},s).textContent=o.login;
+    el('text',{x:1000,y:40,fill:'#545b63','font-size':8.5,'font-weight':700,'text-anchor':'end','letter-spacing':'.06em'},s).textContent='ONLINE'}
+  for(let i=0;i<=N;i++)el('rect',{x:X0+i*TW-.5,y:53,width:1,height:3,fill:'rgba(255,255,255,.14)'},s);
+  (o.pills||[]).forEach(([a,b,c,faint,label])=>{el('rect',{x:X0+a*TW+1,y:22,width:(b-a)*TW-2,height:14,rx:7,fill:c,'fill-opacity':faint?.22:1},s);
+    if(label)el('text',{x:X0+a*TW+9,y:32.5,fill:faint?'#aab1b9':'#14171b','font-size':10,'font-weight':700},s).textContent=label});
+  (o.clicks||[]).forEach(k=>el('rect',{x:X0+k*TW-1,y:42,width:2,height:8,rx:1,fill:'#fff'},s));
+  (o.xp||[]).forEach(([k,list])=>{let x=X0+k*TW-4;list.forEach(([sk,v])=>{const t=el('text',{x,y:15,fill:SK[sk],'font-size':10,'font-weight':700},s);t.textContent='+'+v;x+=String(v).length*5.6+12})});
+  (o.hits||[]).forEach(([k,v])=>{const x=X0+k*TW;el('rect',{x:x-1,y:18,width:2,height:18,rx:1,fill:'#ffd23f'},s);
+    const g=el('g',{transform:`translate(${x-6},12) scale(.9)`},s);el('path',{d:DEMON,fill:'#ffd23f'},g);el('text',{x:x+5,y:16,fill:'#ffd23f','font-size':11,'font-weight':700},s).textContent=v});
+  if(o.flag)flag(s,X0+o.flag*TW,34,'#5ee0c8');
+  const nx=X0+(N-4)*TW;el('rect',{x:nx-1,y:16,width:2,height:36,rx:1,fill:'rgba(233,236,239,.5)'},s);
+  const tx=X0+N*TW+10;el('text',{x:tx,y:33,fill:o.bigc||'#fff','font-size':20,'font-weight':700},s).textContent=o.big;
+  el('text',{x:tx,y:48,fill:'#7d8590','font-size':10.5,'font-weight':600},s).textContent=o.small}
+bar('a',{name:'General',sub:'auto · questing',run:64,login:'2:14:07',
+  pills:[[0,5,'#e9ecef',1,'walking'],[5,7,'#9fb4d9',0,'talk'],[8,13,'#e8c86a',1,'running 71→64%'],[13,17,'#8fc3ff',0,'tele']],
+  clicks:[0,5,8,13],xp:[[6,[['Thv',35]]],[15,[['Mag',61]]]],hits:[[12,3]],big:'12.4k xp',small:'this session · last: Magic +61'});
+bar('b',{name:'AFK',sub:'auto · NMZ',run:100,login:'2:14:07',pills:[[0,17,'#e9ecef',1,'idle 4:21 since last click']],clicks:[],
+  xp:[[2,[['Att',96],['HP',32]]],[6,[['Att',112],['HP',37]]],[10,[['Att',88],['HP',29]]],[14,[['Att',104],['HP',35]]]],hits:[[4,2],[12,5]],
+  big:'0:39',bigc:'#5ee0c8',small:'until idle logout'});
+bar('c',{name:'XP',sub:'minimal',run:88,login:'2:14:07',xp:[[3,[['Fish',50]]],[9,[['Fish',50]]],[14,[['Fish',50]]]],big:'38k/hr',small:'Fishing · level 78 in 2h 10m'});
+</script></body></html>

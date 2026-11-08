@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;padding:18px;background:#2b3521;font-family:Outfit;color:#e9ecef;width:1244px}
+h3{margin:20px 0 8px;font:600 12px Outfit;letter-spacing:.08em;text-transform:uppercase;color:#aab1b9}
+.note{font-size:13px;color:#c8cdd3;line-height:1.55;max-width:1180px}.note b{color:#fff}
+.bar{position:relative;background:rgba(20,23,27,.92);overflow:hidden}
+#live{outline:1px dashed rgba(255,255,255,.35);outline-offset:3px}
+.h{position:absolute;right:-9px;bottom:-9px;width:18px;height:18px;border-radius:50%;background:#e9ecef;cursor:nwse-resize;box-shadow:0 0 0 3px rgba(20,23,27,.6)}
+.hx{position:absolute;right:-6px;top:50%;margin-top:-10px;width:5px;height:20px;border-radius:3px;background:#e9ecef;cursor:ew-resize}
+.wrap{position:relative;display:inline-block}.dim{font:600 11px Outfit;color:#aab1b9;margin-top:10px}
+.tbl{display:grid;grid-template-columns:150px 1fr;gap:4px 14px;font-size:12.5px;color:#c8cdd3;margin-top:8px;max-width:900px}.tbl b{color:#fff}</style></head><body>
+<div class="note"><b>Fully resizable: drag to any width and any height.</b> Everything scales together, and the bar drops detail in a fixed order as it gets smaller so it never gets cramped. Try the live one: drag the white dot.</div>
+<h3>Live · drag the corner</h3>
+<div class="wrap" id="wrap"><div class="bar" id="live"></div><div class="h" id="h"></div></div>
+<div class="dim" id="dim"></div>
+<h3>What changes with size</h3>
+<div class="tbl">
+<b>Taller</b><span>Everything scales up: pills, numbers, icons, the readouts. Tick width follows height, so the shape stays the same.</span>
+<b>Wider</b><span>More ticks of history. Nothing gets stretched.</span>
+<b>Below ~56 px tall</b><span>Your actions row hides first (swords, eats, +N). Hits and XP stay.</span>
+<b>Below ~40 px tall</b><span>One row: pills only, hits become small yellow notches on top of them.</span>
+<b>Narrower than ~720 px</b><span>The right-side readout (verdict, ETA, totals) hides.</span>
+<b>Narrower than ~480 px</b><span>The activity name on the left hides too, leaving just the timeline.</span>
+</div>
+<h3>Fixed examples</h3>
+<div id="ex"></div>
+<script>
+const NS='http://www.w3.org/2000/svg';
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e}
+const DEMON='M-6 -1 L-7 -7 L-3 -4 L0 -5 L3 -4 L7 -7 L6 -1 Q6 5 0 6 Q-6 5 -6 -1Z';
+// data: 4t weapon, flicks on beat every 4, hit every 4 (some blocked)
+const D=[];for(let k=0;k<400;k++){D.push({pray:(k%4===2)?'#d0313a':null,hit:k%4===2?(k%12===2?11:0):null,atk:k%4===0,beat:k%4===2})}
+function draw(host,W,H){host.innerHTML='';host.style.width=W+'px';host.style.height=H+'px';host.style.borderRadius=H/2+'px';
+  const s=el('svg',{width:W,height:H},host);const u=H/62;               // scale unit
+  const rows=H>=56?3:H>=40?2:1, showL=W>=480, showR=W>=720;
+  const TW=Math.max(18,32*u), L=showL?Math.max(H*.7,128*u):H*.5, R=showR?Math.min(210*u,W*.25):H*.5;
+  if(showL){el('text',{x:22*u,y:H/2-(rows>1?2*u:-4*u),fill:'#e9ecef','font-size':Math.max(10,11*u),'font-weight':700},s).textContent='Lazy flick';
+    if(rows>1)el('text',{x:22*u,y:H/2+14*u,fill:'#7d8590','font-size':11*u,'font-weight':600},s).textContent='4t · F'}
+  const n=Math.floor((W-L-R)/TW), t=200, start=t-n+3, X=k=>L+(k-start)*TW;
+  const pY=rows===3?22*u:rows===2?H*.48:H*.32, pH=rows===1?Math.max(8,H*.3):14*u;
+  for(let i=0;i<=n;i++)el('rect',{x:L+i*TW-.5,y:H-9*u,width:1,height:3*u,fill:'rgba(255,255,255,.14)'},s);
+  for(let k=start;k<=t;k++){const d=D[k];if(!d)continue;const x=X(k);
+    if(d.pray)el('rect',{x:x+1,y:pY,width:TW-2,height:pH,rx:pH/2,fill:d.pray},s);
+    if(d.hit!=null){const c=d.hit?'#ffd23f':'#5c636b';
+      if(rows===1)el('rect',{x:x+TW/2-1.5,y:pY-4*u,width:3,height:4*u+1,fill:c},s);
+      else{el('rect',{x:x-1,y:pY-4*u,width:2,height:pH+8*u,rx:1,fill:c},s);
+        const g=el('g',{transform:`translate(${x-6*u},${pY-10*u}) scale(${.9*u})`},s);el('path',{d:DEMON,fill:c},g);
+        if(d.hit)el('text',{x:x+5*u,y:pY-6*u,fill:c,'font-size':11*u,'font-weight':700},s).textContent=d.hit}}
+    if(rows===3&&d.atk){const sx=x,sy=46*u;el('path',{d:`M${sx-u} ${sy-6.5*u}h${2*u}v${7*u}h${2.6*u}v${1.6*u}h${-2.6*u}v${2.6*u}h${-2*u}v${-2.6*u}h${-2.6*u}v${-1.6*u}h${2.6*u}z`,fill:'#fff'},s)}
+    if(d.beat&&rows>1)el('path',{d:`M${x+TW/2-3*u} ${H-5*u}l${3*u} ${-4*u}l${3*u} ${4*u}z`,fill:k>t-1?'rgba(255,255,255,.4)':'#fff'},s)}
+  const nx=X(t+1);el('rect',{x:nx-1,y:H*.22,width:2,height:H*.6,rx:1,fill:'rgba(233,236,239,.5)'},s);
+  if(showR){const tx=W-R+14*u;el('path',{d:`M${tx} ${H/2}l${6*u} ${6*u} ${12*u} ${-12*u}`,stroke:'#5ee0c8','stroke-width':3*u,fill:'none','stroke-linecap':'round','stroke-linejoin':'round'},s);
+    el('text',{x:tx+30*u,y:H/2+5*u,fill:'#e9ecef','font-size':14*u,'font-weight':700},s).textContent='38 in a row'}}
+const live=document.getElementById('live'),dim=document.getElementById('dim');let LW=1026,LH=62;
+function rl(){draw(live,LW,LH);dim.textContent=`${LW} × ${LH} px`}rl();
+document.getElementById('h').onpointerdown=e=>{const sx=e.clientX,sy=e.clientY,w0=LW,h0=LH;
+  const mv=ev=>{LW=Math.max(220,Math.min(1240,w0+ev.clientX-sx));LH=Math.max(22,Math.min(110,h0+ev.clientY-sy));rl()};
+  const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up)};addEventListener('pointermove',mv);addEventListener('pointerup',up)};
+[[1240,92,'Big · 1240 × 92'],[1026,62,'Default · 1026 × 62'],[760,46,'Compact · 760 × 46 (actions row gone)'],[620,32,'Strip · 620 × 32 (one row, no readout)'],[360,28,'Tiny · 360 × 28 (timeline only)']].forEach(([w,h,l])=>{
+  const c=document.getElementById('ex');const d=document.createElement('div');d.className='dim';d.textContent=l;c.appendChild(d);
+  const b=document.createElement('div');b.className='bar';b.style.marginTop='6px';c.appendChild(b);draw(b,w,h)});
+</script></body></html>

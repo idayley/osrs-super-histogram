@@ -1,0 +1,107 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#2b3521;font-family:Outfit,system-ui,sans-serif;color:#e9ecef}
+.ground{width:1280px;height:300px;position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 0%,#4c5a37 0%,#36422a 60%,#232b1b 100%)}
+.chat{position:absolute;left:0;bottom:0;width:518px;height:150px;background:#b8a988;border:2px solid #4a3f2c}
+.inv{position:absolute;right:0;bottom:0;width:240px;height:260px;background:#3e3529;border:2px solid #1b1712}
+.seg{position:absolute;left:12px;top:14px;display:flex;gap:4px;align-items:center;background:rgba(20,23,27,.86);padding:5px 6px 5px 12px;border-radius:18px;font:600 12px Outfit;color:#aab1b9}.seg span{margin-right:6px}.seg button{font:600 12px Outfit;color:#c9ced4;background:transparent;border:0;padding:5px 11px;border-radius:13px;cursor:pointer}.seg button.on{background:#e9ecef;color:#14171b}
+.bar::after{content:'';position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0);pointer-events:none}
+.bar.p1::after{animation:p1 .5s ease-out}.bar.p2::after{animation:p2 .55s ease-out}
+@keyframes p1{0%{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.32)}100%{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,0)}}
+@keyframes p2{0%{box-shadow:inset 0 0 0 2.5px rgba(255,255,255,.95)}100%{box-shadow:inset 0 0 0 2.5px rgba(255,255,255,0)}}
+.bar{position:absolute;left:6px;bottom:156px;width:1026px;height:62px;border-radius:31px;background:rgba(20,23,27,.86);overflow:hidden}
+.lbl{font:600 11px Outfit;fill:#7d8590}.cap{font:700 11px Outfit;fill:#e9ecef}
+.num{font:700 11px Outfit;fill:#ffd23f;font-variant-numeric:tabular-nums}
+.lost{font:700 9px Outfit;fill:#c9ced4;font-variant-numeric:tabular-nums}
+.verdict{font:700 22px Outfit}
+.rowlab{font:600 9px Outfit;fill:#5b636c;letter-spacing:.06em}
+.note{padding:14px 18px;font-size:13px;color:#c8cdd3;max-width:1180px;line-height:1.55}
+.note b{color:#fff}
+h3{margin:16px 18px 8px;font:600 12px Outfit;letter-spacing:.08em;text-transform:uppercase;color:#aab1b9}
+.zoomwrap{padding:0 18px 18px}
+.zoom{transform:scale(2);transform-origin:0 0;width:640px;height:62px;position:relative;border-radius:31px;background:rgba(20,23,27,.92);overflow:hidden;margin-bottom:70px}
+.xp{font:600 9.5px Outfit;fill:#c9ced4;font-variant-numeric:tabular-nums}.burnt{font:600 9.5px Outfit;fill:#6b737c}
+.hl{font:700 10px Outfit;fill:#7d8590;letter-spacing:.04em}.eta{font:700 22px Outfit;fill:#fff;font-variant-numeric:tabular-nums}
+.bar.done{animation:done 1s ease-out}
+@keyframes done{0%{background:rgba(94,224,200,.55)}18%{background:rgba(20,23,27,.86)}32%{background:rgba(94,224,200,.55)}100%{background:rgba(20,23,27,.86)}}
+.seg .pv{color:#7d8590;font-weight:600}
+</style></head><body>
+<div class="ground"><div class="chat"></div><div class="inv"></div>
+  <div class="seg" id="met"><span>Metronome</span><button data-m="off">Off</button><button data-m="tick" class="on">Every tick</button><button class="pv" data-pv="p1">▶ preview</button></div>
+  <div class="seg" id="dn" style="left:340px"><span>Blink on landing</span><button data-d="off">Off</button><button data-d="on" class="on">On</button><button class="pv" data-pv="done">▶ preview</button></div>
+  <div class="bar" id="live"></div></div>
+<div class="note"><b>Agility (Seers' rooftop), auto-detected.</b> One pill per obstacle, numbered in course order, from your click until you land. A thin line marks the start of each lap.
+<b>Gaps:</b> a white "+2" between pills is ticks you stood still after landing before clicking the next obstacle. That's the whole game in agility. The mint double flash fires the tick you land, if "blink when done" is on.
+<b>Top:</b> XP per obstacle, and a mark of grace when one drops.
+<b>Right:</b> this lap's time against your best lap, ticks lost this lap, and which obstacle you're usually slowest after.</div>
+<h3>How to read it · 2×, frozen mid-lap</h3>
+<div class="zoomwrap" style="position:relative;margin-top:150px"><div class="zoom" id="z1"></div><svg id="ov1" width="1300" height="420" style="position:absolute;left:0;top:-170px;pointer-events:none;overflow:visible"></svg><div style="height:110px"></div></div>
+<script>
+const NS='http://www.w3.org/2000/svg',TW=14,X0=128,N=48,H=62;
+const IY=12,PY=22,PH=14,AY=46,RY=55,AG='#7fa7c9';
+const DUR=[7,9,6,8,11,7],OXP=[30,40,25,35,60,30],LAPXP=435;
+let seed=5;const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;
+// sim: laps of 6 obstacles; react ticks between; obstacle 4 is the slow spot; walk to start between laps 3 ticks
+const obs=[],laps=[];let k=0;
+for(let L=0;L<40;L++){const ls=k;let lost=0;
+  for(let i=0;i<6;i++){const d=DUR[i];const o={k,end:k+d,i,lap:L,mark:(L*7+i*3)%17===0};obs.push(o);k+=d;
+    const r=i===3?2+(rnd()<.5?1:0):(rnd()<.35?1:0);o.react=r;lost+=r;k+=r}
+  k+=3;laps.push({s:ls,e:k,lost})}
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e}
+function mark(s,x,y){el('path',{d:`M${x} ${y-4.5}l4 4.5-4 4.5-4-4.5z`,fill:'#5ee0c8'},s)}
+let ZOOM=null;const anchors={};const A=(k,x,y)=>{if(ZOOM&&(x>150||k==='readout'))anchors[k]=[x,y]};
+function draw(host,t,w,future){
+  host.innerHTML='';const W=w||1026;const s=el('svg',{width:W,height:H},host);
+  const defs=el('defs',{},s);const fd=el('linearGradient',{id:'f'+host.id},defs);
+  el('stop',{offset:0,'stop-color':'#14171b','stop-opacity':1},fd);el('stop',{offset:1,'stop-color':'#14171b','stop-opacity':0},fd);
+  el('text',{x:22,y:27,class:'cap'},s).textContent='Agility';
+  el('text',{x:22,y:43,class:'lbl'},s).textContent="auto · Seers'";
+  const NN=W<800?Math.floor((W-X0-10)/TW):N;const start=t-NN+(future||6);const PX=k=>X0+(k-start)*TW;
+  const cp=el('clipPath',{id:'c'+host.id},defs);el('rect',{x:X0-4,y:0,width:NN*TW+4,height:H},cp);
+  const L=el('g',{'clip-path':`url(#c${host.id})`},s);
+  for(let j=0;j<=NN;j++)el('rect',{x:X0+j*TW-.5,y:RY-2,width:1,height:3,fill:'rgba(255,255,255,.14)'},L);
+  laps.forEach((l,i)=>{if(l.s>t||l.s<start)return;const x=PX(l.s)-2;el('rect',{x:x-.5,y:8,width:1,height:48,fill:'rgba(255,255,255,.3)'},L);
+    el('text',{x:x+4,y:RY+4,class:'hl'},L).textContent='lap '+(i+1);A('lap',x,30)});
+  for(const o of obs){if(o.k>t)break;const e=Math.min(o.end,t+1);if(e<start-2)continue;
+    const x1=PX(o.k),x2=PX(e);el('rect',{x:x1+1,y:PY,width:Math.max(PH,x2-x1-2),height:PH,rx:PH/2,fill:AG},L);A('pill',(Math.max(x1,X0)+x2)/2,PY+PH/2);
+    const nx=x1+10;if(nx<x2-6&&nx>X0)el('text',{x:nx,y:PY+PH/2+4,style:'font:700 10px Outfit;fill:#14171b','text-anchor':'middle'},L).textContent=o.i+1;
+    if(o.end<=t){const xe=PX(o.end);el('text',{x:xe-6,y:IY+3.5,class:'xp',style:`fill:${AG}`,'text-anchor':'end'},L).textContent='+'+OXP[o.i];A('xp',xe-14,IY-5);
+      if(o.mark){mark(L,xe+4,IY);A('mark',xe+4,IY)}
+      if(o.react&&o.end+o.react<=t){const xc=PX(o.end+o.react);el('rect',{x:xe+1,y:AY-.75,width:xc-xe-2,height:1.5,fill:'rgba(255,255,255,.55)'},L);
+        el('text',{x:(xe+xc)/2,y:AY-4,class:'lost','text-anchor':'middle'},L).textContent='+'+o.react;A('wasted',(xe+xc)/2,AY)}}}
+  const nx=PX(t+1);A('now',nx,50);A('readout',40,27);
+  el('rect',{x:nx-1,y:16,width:2,height:H-26,rx:1,fill:'rgba(233,236,239,.5)'},s);
+  el('rect',{x:X0-12,y:0,width:44,height:H,fill:`url(#f${host.id})`},s);
+  if(W<800)return;
+  const tx=X0+N*TW+18;const li=laps.findIndex(l=>l.s<=t&&t<l.e);const l=laps[li]||laps[0];
+  const el2=(t-l.s)*.6,best=Math.min(...laps.slice(0,Math.max(1,li)).map(l=>l.e-l.s))*.6;
+  const f=x=>`${Math.floor(x/60)}:${(x%60).toFixed(1).padStart(4,'0')}`;
+  el('text',{x:tx,y:33,class:'eta'},s).textContent=f(el2);
+  let lost=0;for(const o of obs)if(o.lap===li&&o.end+o.react<=t)lost+=o.react;
+  el('text',{x:tx,y:48,class:'hl'},s).textContent=`best ${f(best)} · lost ${lost}t · slowest after #4`;
+}
+let t=60;const live=document.getElementById('live');draw(live,t);
+let MET='tick',DONE='on';
+function fx(c){live.classList.remove('p1','p2','done');void live.offsetWidth;live.classList.add(c)}
+if(!matchMedia('(prefers-reduced-motion: reduce)').matches)setInterval(()=>{t++;if(t>laps[30].e)t=60;draw(live,t);
+  const landed=obs.some(o=>o.end===t);if(landed&&DONE==='on')fx('done');else if(MET==='tick')fx('p1')},600);
+document.querySelectorAll('#met button[data-m]').forEach(b=>b.onclick=()=>{document.querySelectorAll('#met button[data-m]').forEach(x=>x.classList.toggle('on',x===b));MET=b.dataset.m});
+document.querySelectorAll('#dn button[data-d]').forEach(b=>b.onclick=()=>{document.querySelectorAll('#dn button[data-d]').forEach(x=>x.classList.toggle('on',x===b));DONE=b.dataset.d});
+document.querySelectorAll('.pv').forEach(b=>b.onclick=()=>fx(b.dataset.pv));
+const LAB={readout:'Activity, picked up automatically',pill:'Pill: one obstacle (number = course order)',xp:'XP for that obstacle',mark:'Mark of grace dropped',
+ lap:'Lap start',wasted:'+3: ticks you stood still before the next click',now:'Now'};
+function callouts(zid,oid,tt,fut){Object.keys(anchors).forEach(k=>delete anchors[k]);ZOOM=zid;draw(document.getElementById(zid),tt,640,fut);ZOOM=null;
+  const ov=document.getElementById(oid),OY=170,TOP=['readout','pill','xp','mark','lap'];
+  ['top','bot'].forEach(band=>{
+    const ks=Object.keys(anchors).filter(k=>LAB[k]&&(band==='top')===TOP.includes(k)).sort((a,b)=>anchors[a][0]-anchors[b][0]);const rows=[];
+    ks.forEach(k=>{const [ax,ay]=anchors[k];const X=18+ax*2,Y=OY+ay*2;const w=LAB[k].length*6.3+8;const R=X+w>1270,L0=R?X-w:X,L1=R?X:X+w;
+      let r=0;while(rows[r]&&rows[r].some(([p,q])=>L0<q+14&&L1>p))r++;(rows[r]=rows[r]||[]).push([L0,L1]);
+      const ly=band==='top'?OY-14-r*22:OY+142+r*22;
+      el('line',{x1:X,y1:Y,x2:X,y2:band==='top'?ly+4:ly-13,stroke:'rgba(255,255,255,.4)','stroke-width':1},ov);
+      el('circle',{cx:X,cy:Y,r:3,fill:'#fff',stroke:'#14171b','stroke-width':1.5},ov);
+      el('text',{x:R?X-5:X+5,'text-anchor':R?'end':'start',y:ly,fill:'#e9ecef','font-size':'12.5','font-family':'Outfit'},ov).textContent=LAB[k];})})}
+const zo=obs.find(o=>o.i===3&&o.react===3&&o.lap>0);obs[obs.indexOf(zo)-1].mark=true;callouts('z1','ov1',zo.end+zo.react+6,2);
+</script></body></html>
