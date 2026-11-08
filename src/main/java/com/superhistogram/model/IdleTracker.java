@@ -6,13 +6,19 @@ public final class IdleTracker
 	private static final int LOGOUT_SECONDS = 300;
 	private static final int WARNING_SECONDS = 270;
 
-	private final int afkAfterSeconds;
+	private int afkAfterSeconds;
 	private int idle;
 	private boolean warning;
 
 	public IdleTracker(int afkAfterSeconds)
 	{
 		this.afkAfterSeconds = afkAfterSeconds;
+	}
+
+	/** Changes the AFK threshold without touching idle/warning state. */
+	public void setAfkAfterSeconds(int seconds)
+	{
+		afkAfterSeconds = seconds;
 	}
 
 	public void update(int idleSeconds, long nowMs)

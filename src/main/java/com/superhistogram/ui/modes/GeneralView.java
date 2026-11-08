@@ -27,6 +27,6 @@ public final class GeneralView implements ModeView
 		long session = s.xp == null ? 0 : s.xp.sessionXp();
 		XpDrop last = s.xp == null ? null : s.xp.lastDrop();
 		String small = "this session" + (last == null ? "" : " · last: " + last.skill + " +" + last.amount);
-		ReadoutPainter.right(g, l, ReadoutPainter.compact(session) + " xp", Palette.WHITE, small);
+		ReadoutPainter.right(g, l, s, ReadoutPainter.compact(session) + " xp", Palette.WHITE, small);
 	}
 }

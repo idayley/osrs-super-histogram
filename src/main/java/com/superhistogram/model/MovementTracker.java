@@ -32,6 +32,17 @@ public final class MovementTracker
 		lastTick = tick;
 	}
 
+	/** Closes any open span at the last tick seen and forgets state (logout, world hop). */
+	public void reset()
+	{
+		close();
+		kind = null;
+		span = null;
+		lastTick = 0;
+		lastPct = 0;
+		startPct = 0;
+	}
+
 	private void close()
 	{
 		if (kind == null)

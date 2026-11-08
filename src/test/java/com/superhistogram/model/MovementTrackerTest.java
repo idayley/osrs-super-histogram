@@ -70,4 +70,23 @@ public class MovementTrackerTest
 		assertEquals(3, s.get(1).startTick);
 		assertEquals(4, s.get(1).endTick);
 	}
+
+	@Test
+	public void resetClosesOpenSpan()
+	{
+		Timeline t = new Timeline(512);
+		MovementTracker m = new MovementTracker(t);
+		m.onTick(1, 1, false, 90);
+		m.onTick(2, 1, false, 90);
+		m.reset();
+		Span s = t.spansBetween(0, 100).get(0);
+		assertEquals(2, s.endTick);
+		// Forgotten state: a later walk opens a fresh span instead of extending the old one.
+		m.onTick(50, 1, false, 90);
+		m.onTick(51, 0, false, 90);
+		List<Span> all = t.spansBetween(0, 100);
+		assertEquals(2, all.size());
+		assertEquals(50, all.get(1).startTick);
+		assertEquals(50, all.get(1).endTick);
+	}
 }

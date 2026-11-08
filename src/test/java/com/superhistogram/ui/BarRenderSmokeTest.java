@@ -7,6 +7,8 @@ import static org.junit.Assert.assertTrue;
 
 import com.superhistogram.model.BarState;
 import com.superhistogram.model.Mode;
+import com.superhistogram.model.Timeline;
+import com.superhistogram.model.XpTracker;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import org.junit.Test;
@@ -118,5 +120,50 @@ public class BarRenderSmokeTest
 			}
 		}
 		return false;
+	}
+
+	@Test
+	public void longRightTextDoesNotOverlapLoginTime()
+	{
+		BarState base = SampleStates.general();
+		base.xp.onStat("Construction", 1_000_000, 190);
+		base.xp.onStat("Construction", 2_234_567, 195);
+		BarLayout l = BarLayout.of(720, 62);
+		BufferedImage img = render(720, 62, base, null);
+
+		// Same bar with an empty timeline and no XP: only the login time paints in the box.
+		Timeline t = new Timeline(512);
+		BarState loginOnly = BarState.builder()
+			.timeline(t).nowTick(-1).xp(new XpTracker(t)).idle(base.idle).clock(base.clock)
+			.runEnergyPct(64).modeName("General").modeSub("auto").mode(Mode.GENERAL).nowMs(base.nowMs)
+			.build();
+		BufferedImage ref = render(720, 62, loginOnly, null);
+
+		Graphics2D g = img.createGraphics();
+		int tw = g.getFontMetrics(Fonts.semiBold(11f * l.u)).stringWidth(base.clock.format(base.nowMs));
+		g.dispose();
+		int x1 = (int) (l.width - 26f * l.u), x0 = x1 - tw - 2;
+		int y0 = (int) (14f * l.u), y1 = (int) (31f * l.u);
+		int differing = 0;
+		for (int y = y0; y < y1; y++)
+		{
+			for (int x = x0; x < x1; x++)
+			{
+				if (img.getRGB(x, y) != ref.getRGB(x, y))
+				{
+					differing++;
+				}
+			}
+		}
+		assertEquals("right readout text leaks into the login-time box", 0, differing);
+
+		// And nothing paints past the rounded right end's inner edge on the readout rows.
+		for (int y = (int) (14f * l.u); y < (int) (50f * l.u); y++)
+		{
+			for (int x = x1 + 1; x < l.width; x++)
+			{
+				assertEquals("text past the right limit at " + x + "," + y, ref.getRGB(x, y), img.getRGB(x, y));
+			}
+		}
 	}
 }

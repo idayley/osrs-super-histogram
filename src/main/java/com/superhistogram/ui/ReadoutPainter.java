@@ -44,28 +44,87 @@ public final class ReadoutPainter
 		text(g, pct + "%", Fonts.bold(8.5f * u), Palette.DIM, x + 68f * u, gy + 3.5f * u);
 	}
 
-	/** One headline number and one small line, just right of the timeline. */
-	public static void right(Graphics2D g, BarLayout l, String big, Color bigColor, String small)
+	/** Marker that separates the optional "last:" part of the small line. */
+	private static final String LAST_PART = " · last:";
+
+	/**
+	 * One headline number and one small line, just right of the timeline. Text is clamped so it
+	 * never reaches the login time or the rounded right end: the small line first drops its
+	 * " · last: ..." part, then both lines are ellipsized.
+	 */
+	public static void right(Graphics2D g, BarLayout l, BarState s, String big, Color bigColor, String small)
 	{
 		if (!l.showRight)
 		{
 			return;
 		}
 		float u = l.u, x = l.timelineX + l.timelineW + 10f * u;
+		float room = rightLimit(g, l, s) - x;
 		if (l.rows == 1)
 		{
 			float size = Math.max(10f, 20f * u);
-			text(g, big, Fonts.bold(size), bigColor, x, l.height / 2f + size * 0.35f);
+			Font f = Fonts.bold(size);
+			text(g, fit(g, big, f, room), f, bigColor, x, l.height / 2f + size * 0.35f);
 			return;
 		}
-		text(g, big, Fonts.bold(20f * u), bigColor, x, 33f * u);
-		text(g, small, Fonts.semiBold(10.5f * u), Palette.DIM, x, 48f * u);
+		Font bf = Fonts.bold(20f * u), sf = Fonts.semiBold(10.5f * u);
+		text(g, fit(g, big, bf, room), bf, bigColor, x, 33f * u);
+		String line = small;
+		if (line != null && width(g, line, sf) > room)
+		{
+			int i = line.indexOf(LAST_PART);
+			if (i >= 0)
+			{
+				line = line.substring(0, i);
+			}
+		}
+		text(g, fit(g, line, sf, room), sf, Palette.DIM, x, 48f * u);
+	}
+
+	/** Right edge available to the right readout: left of the login time, or the rounded end. */
+	private static float rightLimit(Graphics2D g, BarLayout l, BarState s)
+	{
+		float u = l.u, edge = l.width - 26f * u;
+		if (loginVisible(l, s, s == null ? 0 : s.nowMs))
+		{
+			Font f = l.rows == 1 ? Fonts.semiBold(Math.max(9f, 11f * u)) : Fonts.semiBold(11f * u);
+			edge -= width(g, s.clock.format(s.nowMs), f) + 8f * u;
+		}
+		return edge;
+	}
+
+	private static boolean loginVisible(BarLayout l, BarState s, long nowMs)
+	{
+		return l.showRight && s != null && s.showLoginTime && s.clock != null && s.clock.onlineMs(nowMs) > 0;
+	}
+
+	private static float width(Graphics2D g, String s, Font f)
+	{
+		return (float) f.getStringBounds(s, g.getFontRenderContext()).getWidth();
+	}
+
+	/** The text, or the longest prefix plus an ellipsis that fits in {@code room} pixels. */
+	static String fit(Graphics2D g, String s, Font f, float room)
+	{
+		if (s == null || s.isEmpty() || width(g, s, f) <= room)
+		{
+			return s;
+		}
+		for (int n = s.length() - 1; n > 0; n--)
+		{
+			String t = s.substring(0, n).trim() + "…";
+			if (width(g, t, f) <= room)
+			{
+				return t;
+			}
+		}
+		return "";
 	}
 
 	/** Online time, right-aligned at w - 26u, with "ONLINE" under it. */
 	public static void login(Graphics2D g, BarLayout l, BarState s, long nowMs)
 	{
-		if (!l.showRight || s == null || !s.showLoginTime || s.clock == null || s.clock.onlineMs(nowMs) <= 0)
+		if (!loginVisible(l, s, nowMs))
 		{
 			return;
 		}

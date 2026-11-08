@@ -24,7 +24,7 @@ public final class MinimalView implements ModeView
 		String skill = s.xp == null ? null : s.xp.topSkill();
 		long sessionMs = s.clock == null ? 0 : s.clock.onlineMs(s.nowMs);
 		long perHour = skill == null ? 0 : s.xp.xpPerHour(skill, sessionMs);
-		ReadoutPainter.right(g, l, ReadoutPainter.compact(perHour) + "/hr", Palette.WHITE, smallLine(s, skill, perHour));
+		ReadoutPainter.right(g, l, s, ReadoutPainter.compact(perHour) + "/hr", Palette.WHITE, smallLine(s, skill, perHour));
 	}
 
 	static String smallLine(BarState s, String skill, long perHour)

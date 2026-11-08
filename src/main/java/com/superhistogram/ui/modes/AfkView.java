@@ -38,6 +38,6 @@ public final class AfkView implements ModeView
 		{
 			return;
 		}
-		ReadoutPainter.right(g, l, ReadoutPainter.minSec(s.idle.secondsToLogout()), Palette.MINT, "until idle logout");
+		ReadoutPainter.right(g, l, s, ReadoutPainter.minSec(s.idle.secondsToLogout()), Palette.MINT, "until idle logout");
 	}
 }

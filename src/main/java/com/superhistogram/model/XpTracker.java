@@ -6,7 +6,7 @@ import java.util.Map;
 /** Turns total-XP stat reports into per-tick XP drops, ignoring login/hop baselines. */
 public final class XpTracker
 {
-	private final Timeline timeline;
+	private Timeline timeline;
 	private final Map<String, Integer> lastTotal = new HashMap<>();
 	private final Map<String, Long> gained = new HashMap<>();
 	private long sessionXp;
@@ -34,6 +34,12 @@ public final class XpTracker
 		lastDrop = drop;
 		sessionXp += delta;
 		gained.merge(skill, (long) delta, Long::sum);
+	}
+
+	/** Points drops at a fresh timeline (after logout); session totals are kept. */
+	public void rebind(Timeline newTimeline)
+	{
+		timeline = newTimeline;
 	}
 
 	/** Next stat per skill becomes a baseline again; session totals are kept. */
