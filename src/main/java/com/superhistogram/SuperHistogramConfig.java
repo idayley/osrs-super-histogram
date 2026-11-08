@@ -234,7 +234,7 @@ public interface SuperHistogramConfig extends Config
 		position = 22,
 		keyName = "alchTopRow",
 		name = "Alch top row",
-		description = "What the top row shows for each high-alch cast: its profit, its Magic XP, or both"
+		description = "What the top row shows for each high-alch cast: its coins, its Magic XP, or both"
 	)
 	default AlchTopRow alchTopRow()
 	{

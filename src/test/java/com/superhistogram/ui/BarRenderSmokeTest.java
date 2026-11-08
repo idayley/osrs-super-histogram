@@ -728,7 +728,7 @@ public class BarRenderSmokeTest
 		BarState s = alchGold();
 		BarLayout l = BarLayout.of(1026, 62);
 		BufferedImage img = render(1026, 62, s, null);
-		int x = (int) (tickX(l, s, SampleStates.CAST_LOSS) + 16 * l.u), y = (int) (29 * l.u);
+		int x = (int) (tickX(l, s, SampleStates.CAST_MID) + 16 * l.u), y = (int) (29 * l.u);
 		assertTrue(opaque(img, x, y, Palette.PRAYER_MAGIC));
 	}
 
@@ -760,13 +760,24 @@ public class BarRenderSmokeTest
 	}
 
 	@Test
-	public void profitNegativeShowsMinus()
+	public void castShowsHaCoins()
 	{
 		BarState s = alchGold();
 		BarLayout l = BarLayout.of(1026, 62);
 		BufferedImage img = render(1026, 62, s, null);
-		float u = l.u, x = tickX(l, s, SampleStates.CAST_LOSS);
-		assertTrue(hasPixel(img, x + 5 * u, x + 25 * u, 7 * u, 16 * u, TEXT));
+		float u = l.u, x = tickX(l, s, SampleStates.CAST_MID);
+		assertTrue(hasPixel(img, x + 5 * u, x + 25 * u, 7 * u, 16 * u, DMG));
+		assertFalse(hasPixel(img, x + 5 * u, x + 25 * u, 7 * u, 16 * u, TEXT));
+	}
+
+	@Test
+	public void unknownHaShowsQuestionMark()
+	{
+		BarState s = alchGold();
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		float u = l.u, x = tickX(l, s, SampleStates.CAST_LAST);
+		assertTrue(hasPixel(img, x + 5 * u, x + 25 * u, 7 * u, 16 * u, Palette.DIM));
 		assertFalse(hasPixel(img, x + 5 * u, x + 25 * u, 7 * u, 16 * u, DMG));
 	}
 

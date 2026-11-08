@@ -20,9 +20,9 @@ public class AlchTrackerTest
 	private final AlchTracker a = new AlchTracker(t);
 
 	/** Click on {@code clickTick}, Magic 65 on {@code castTick}. */
-	private void cast(int clickTick, int castTick, Long profit)
+	private void cast(int clickTick, int castTick, Long coins)
 	{
-		a.onCastClick(clickTick, profit);
+		a.onCastClick(clickTick, coins);
 		for (int k = clickTick; k < castTick; k++)
 		{
 			a.onTick(k, NONE);
@@ -36,7 +36,7 @@ public class AlchTrackerTest
 		a.onCastClick(100, 200L);
 		a.onTick(101, MAGIC_65);
 		assertTrue(t.peek(101).cast);
-		assertEquals(Long.valueOf(200), t.peek(101).castProfit);
+		assertEquals(Long.valueOf(200), t.peek(101).castCoins);
 		assertEquals(1, a.casts());
 		assertEquals(101, a.lastCastTick());
 		assertEquals(106, a.nextReadyTick());
@@ -131,7 +131,7 @@ public class AlchTrackerTest
 		assertEquals(200, a.sessionGold());
 		assertEquals(1, a.unpricedCasts());
 		assertEquals(2, a.casts());
-		assertNull(t.peek(106).castProfit);
+		assertNull(t.peek(106).castCoins);
 		assertTrue(t.peek(106).cast);
 	}
 
@@ -172,6 +172,6 @@ public class AlchTrackerTest
 		a.onCastClick(100, 1L);
 		a.onCastClick(101, 2L);
 		a.onTick(101, MAGIC_65);
-		assertEquals(Long.valueOf(1), t.peek(101).castProfit);
+		assertEquals(Long.valueOf(1), t.peek(101).castCoins);
 	}
 }

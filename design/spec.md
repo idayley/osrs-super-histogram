@@ -21,7 +21,7 @@ Three rows on the timeline, tick ruler along the bottom, a "now" line, and histo
 
 ## Colours
 
-Bar ground `rgba(20,23,27,.92)`, text `#e9ecef`, dim `#7d8590`. Prayer melee `#d0313a`, ranged `#64ab31`, magic `#1499dc`, other `#9150d0`. Damage `#ffd23f`. Gold is also yellow but always carries a coin icon; a loss is white with a minus. Mint `#5ee0c8` = good / on time / done. White = attention (+N, Late). Run energy `#e8c86a` (white under 20%). Skill text colours: Str `#8fd694`, HP `#f2a7bd`, Slay `#c7a3ff`, Mag `#8fc3ff`, Fle `#7fd6c2`, Fish `#8fd0e8`, Cook `#f0b97a`, Agility `#7fa7c9`, Thieving `#c58fd6`, Attack `#e08a7a`, Defence `#9fb4d9` (other skills: pick distinct pastels). Font: Outfit.
+Bar ground `rgba(20,23,27,.92)`, text `#e9ecef`, dim `#7d8590`. Prayer melee `#d0313a`, ranged `#64ab31`, magic `#1499dc`, other `#9150d0`. Damage `#ffd23f`. Gold is also yellow but always carries a coin icon; high alch shows the coins received per cast (its High Alchemy value, always positive). Mint `#5ee0c8` = good / on time / done. White = attention (+N, Late). Run energy `#e8c86a` (white under 20%). Skill text colours: Str `#8fd694`, HP `#f2a7bd`, Slay `#c7a3ff`, Mag `#8fc3ff`, Fle `#7fd6c2`, Fish `#8fd0e8`, Cook `#f0b97a`, Agility `#7fa7c9`, Thieving `#c58fd6`, Attack `#e08a7a`, Defence `#9fb4d9` (other skills: pick distinct pastels). Font: Outfit.
 
 ## Feedback
 
@@ -45,7 +45,7 @@ Any width and height. Scale `u = height / 62`; tick width `max(18, 32·u)`. Wide
 - **Combat — 1-tick flick:** dot per tick placed by in-tick click time; hollow = split, × = skipped, long pill = draining; right: in-tick timing histogram + streak.
 - **Hull flash on hit:** when an enemy's hitsplat lands on you, its outline flashes yellow and fades over ~0.5 s; misses faint grey; off at bosses by default.
 - **Production (cooking, fletching, herblore, crafting, smithing, bones on altar):** inventory pill fills, XP drops, finish flag ahead, exact countdown (ticks × 0.6 s), white "+N" wasted before the bank click.
-- **High alch:** 5-tick cast pills, gold profit per cast (coin icon), top row Gold / XP / Both; right: session gold and /hr, or XP and time to level.
+- **High alch:** 5-tick cast pills, coins received per cast (High Alchemy value, coin icon; "?" if unknown), top row Gold / XP / Both; right: session coins and /hr, or XP and time to level.
 - **Multi-XP:** each skill's XP as its own coloured number side by side; frequent skills (every 1–2 ticks) shown as coloured dots, hidden when a number group occupies the space.
 - **Gathering (woodcutting, mining, fishing, firemaking):** pill per resource with roll notches, item + XP drops, depletion mark + "+N" re-click delay, "~" estimated time to full.
 - **Agility:** pill per obstacle numbered in course order, lap-start line, white "+N" ticks stood still before the next click, XP + mark-of-grace on top; right: lap time, best lap, ticks lost, slowest obstacle. Whole lap fits (narrower ticks in this mode).

@@ -11,7 +11,7 @@ import java.util.List;
  * Tracks high-alchemy casts. A click on the spell-on-item menu entry is only a candidate; a Magic XP
  * drop of exactly 65 within {@link #PENDING_TICKS} ticks confirms it (a cast needs a fire staff and
  * the item, and the click alone does not prove either). Each confirmed cast is marked on its tick,
- * carrying the profit known when the item was clicked.
+ * carrying the coins known when the item was clicked.
  */
 public final class AlchTracker
 {
@@ -22,12 +22,12 @@ public final class AlchTracker
 	private static final class Click
 	{
 		final int tick;
-		final Long profit;
+		final Long coins;
 
-		Click(int tick, Long profit)
+		Click(int tick, Long coins)
 		{
 			this.tick = tick;
-			this.profit = profit;
+			this.coins = coins;
 		}
 	}
 
@@ -42,10 +42,10 @@ public final class AlchTracker
 		this.timeline = timeline;
 	}
 
-	/** The player cast High Level Alchemy on an item on this tick; {@code profit} is null when unpriced. */
-	public void onCastClick(int tick, Long profit)
+	/** The player cast High Level Alchemy on an item on this tick; {@code coins} is null when unpriced. */
+	public void onCastClick(int tick, Long coins)
 	{
-		pending.add(new Click(tick, profit));
+		pending.add(new Click(tick, coins));
 	}
 
 	/** Call once per tick, in order, with that tick's XP drops. */
@@ -68,7 +68,7 @@ public final class AlchTracker
 			if (c.tick <= tick && tick <= c.tick + PENDING_TICKS)
 			{
 				it.remove();
-				record(tick, c.profit);
+				record(tick, c.coins);
 				return;
 			}
 		}
@@ -86,7 +86,7 @@ public final class AlchTracker
 		return false;
 	}
 
-	private void record(int tick, Long profit)
+	private void record(int tick, Long coins)
 	{
 		int lost = lastCast < 0 ? 0 : tick - (lastCast + CAST_TICKS);
 		if (lost < 1 || lost > LOST_MAX)
@@ -97,19 +97,19 @@ public final class AlchTracker
 		if (r != null)
 		{
 			r.cast = true;
-			r.castProfit = profit;
+			r.castCoins = coins;
 			r.castLost = lost;
 		}
 		prevCast = lastCast;
 		lastCast = tick;
 		casts++;
-		if (profit == null)
+		if (coins == null)
 		{
 			unpriced++;
 		}
 		else
 		{
-			gold += profit;
+			gold += coins;
 		}
 	}
 
@@ -136,13 +136,13 @@ public final class AlchTracker
 		return lastCast < 0 ? -1 : lastCast + CAST_TICKS;
 	}
 
-	/** Sum of the known profits of this session's casts. */
+	/** Sum of the known coins of this session's casts. */
 	public long sessionGold()
 	{
 		return gold;
 	}
 
-	/** Casts whose profit was unknown (not counted in the gold). */
+	/** Casts whose coins was unknown (not counted in the gold). */
 	public int unpricedCasts()
 	{
 		return unpriced;

@@ -91,7 +91,7 @@ final class XpRow
 		{
 			return;
 		}
-		// High alch puts each cast's profit in the top row; that stays even when XP drops are off.
+		// High alch puts each cast's coins in the top row; that stays even when XP drops are off.
 		boolean alch = row == Row.TOP && s.mode == Mode.ALCH && s.alch != null;
 		boolean xpOff = s.xpDrops == XpDrops.OFF;
 		if (xpOff && !alch)
@@ -122,12 +122,12 @@ final class XpRow
 			boolean dropNumbers = false;
 			if (gold)
 			{
-				String text = AlchView.formatProfit(r.castProfit);
+				String text = AlchView.formatCastCoins(r.castCoins);
 				int w = g.getFontMetrics().stringWidth(text);
 				if (draw)
 				{
 					SkillPainter.coin(g, x + 3f * u, baseline - 3.5f * u, 3.4f * u);
-					g.setColor(r.castProfit == null ? Palette.DIM : r.castProfit >= 0 ? Palette.DAMAGE : Palette.TEXT);
+					g.setColor(r.castCoins == null ? Palette.DIM : Palette.DAMAGE);
 					g.drawString(text, x + 9f * u, baseline);
 				}
 				x += 9f * u + w + 6f * u;

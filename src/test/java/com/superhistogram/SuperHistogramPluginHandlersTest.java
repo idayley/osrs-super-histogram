@@ -4,7 +4,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.superhistogram.model.BarState;
@@ -708,44 +711,40 @@ public class SuperHistogramPluginHandlersTest
 	// ---- high alch ----
 
 	private static final int RUNE_PLATEBODY = 1127, RUNE_PLATEBODY_NOTED = 1128;
-	private static final int NATURE_RUNE = net.runelite.api.gameval.ItemID.NATURERUNE;
 
-	private void priceAlchItems(int haPrice, long itemPrice, long natPrice)
+	private void setHaPrice(int haPrice)
 	{
 		ItemComposition comp = mock(ItemComposition.class);
 		when(comp.getHaPrice()).thenReturn(haPrice);
 		when(itemManager.canonicalize(RUNE_PLATEBODY)).thenReturn(RUNE_PLATEBODY);
 		when(itemManager.canonicalize(RUNE_PLATEBODY_NOTED)).thenReturn(RUNE_PLATEBODY);
 		when(itemManager.getItemComposition(RUNE_PLATEBODY)).thenReturn(comp);
-		when(itemManager.getItemPrice(RUNE_PLATEBODY)).thenReturn(itemPrice);
-		when(itemManager.getItemPrice(NATURE_RUNE)).thenReturn(natPrice);
 	}
 
 	@Test
-	public void alchProfitFromPrices()
+	public void alchCoinsIsHaValue()
 	{
-		priceAlchItems(39000, 38500, 100);
-		assertEquals(Long.valueOf(400), plugin.alchProfit(RUNE_PLATEBODY));
+		setHaPrice(39000);
+		assertEquals(Long.valueOf(39000), plugin.alchCoins(RUNE_PLATEBODY));
+		verify(itemManager, never()).getItemPrice(anyInt());
 	}
 
 	@Test
-	public void notedItemUsesBasePrice()
+	public void notedItemUsesBaseValue()
 	{
-		priceAlchItems(39000, 38500, 100);
-		assertEquals(Long.valueOf(400), plugin.alchProfit(RUNE_PLATEBODY_NOTED));
+		setHaPrice(39000);
+		assertEquals(Long.valueOf(39000), plugin.alchCoins(RUNE_PLATEBODY_NOTED));
 	}
 
 	@Test
-	public void alchProfitUnknownWhenNoPrice()
+	public void alchCoinsUnknownWhenNoValue()
 	{
-		priceAlchItems(39000, 0, 100);
-		assertNull(plugin.alchProfit(RUNE_PLATEBODY));
-		priceAlchItems(39000, 38500, 0);
-		assertNull(plugin.alchProfit(RUNE_PLATEBODY));
-		priceAlchItems(39000, 38500, 100);
-		assertNull(plugin.alchProfit(-1));
+		setHaPrice(0);
+		assertNull(plugin.alchCoins(RUNE_PLATEBODY));
+		setHaPrice(39000);
+		assertNull(plugin.alchCoins(-1));
 		when(itemManager.getItemComposition(RUNE_PLATEBODY)).thenReturn(null);
-		assertNull(plugin.alchProfit(RUNE_PLATEBODY));
+		assertNull(plugin.alchCoins(RUNE_PLATEBODY));
 	}
 
 	@Test
@@ -788,7 +787,7 @@ public class SuperHistogramPluginHandlersTest
 	@Test
 	public void alchModeAfterTwoCasts()
 	{
-		priceAlchItems(39000, 38500, 100);
+		setHaPrice(39000);
 		magicBaseline();
 		alchCast(1);
 		for (int i = 0; i < 4; i++)
@@ -802,13 +801,13 @@ public class SuperHistogramPluginHandlersTest
 		assertEquals(Mode.ALCH, s.mode);
 		assertEquals("High alch", s.modeName);
 		assertEquals("auto \u00b7 5t", s.modeSub);
-		assertEquals(800, s.alch.sessionGold());
+		assertEquals(78000, s.alch.sessionGold());
 	}
 
 	@Test
 	public void alchBeatsProductionInPlugin()
 	{
-		priceAlchItems(39000, 38500, 100);
+		setHaPrice(39000);
 		cookingBaseline();
 		plugin.handleStat("Magic", 1_000_000);
 		cookAction(1);
@@ -822,19 +821,19 @@ public class SuperHistogramPluginHandlersTest
 	@Test
 	public void logoutKeepsGoldClearsCasts()
 	{
-		priceAlchItems(39000, 38500, 100);
+		setHaPrice(39000);
 		magicBaseline();
 		twoCasts();
-		assertEquals(800, plugin.alch.sessionGold());
+		assertEquals(78000, plugin.alch.sessionGold());
 		plugin.handleGameState(GameState.LOGIN_SCREEN, 100_000);
-		assertEquals(800, plugin.alch.sessionGold());
+		assertEquals(78000, plugin.alch.sessionGold());
 		assertEquals(-1, plugin.alch.lastCastTick());
 	}
 
 	@Test
 	public void unpricedClickCountsAsUnpricedCast()
 	{
-		priceAlchItems(39000, 0, 100);
+		setHaPrice(0);
 		magicBaseline();
 		alchCast(1);
 		tickOnly();

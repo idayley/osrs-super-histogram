@@ -17,12 +17,12 @@ import java.awt.Graphics2D;
 
 /**
  * High-alch view (high-alch.html): one 5-tick pill per cast (touching when you cast on time), the
- * profit and/or XP of each cast on top, lost ticks and the next-cast caret below, and the session
+ * coins and/or XP of each cast on top, lost ticks and the next-cast caret below, and the session
  * gold or XP on the right.
  */
 public final class AlchView implements ModeView
 {
-	private static final String MINUS = "−", DOT = " · ";
+	private static final String DOT = " · ";
 
 	@Override
 	public void paintTimeline(Graphics2D g, BarLayout l, BarState s)
@@ -95,24 +95,34 @@ public final class AlchView implements ModeView
 		return s.alchTopRow != AlchTopRow.XP;
 	}
 
-	/** Headline colour: yellow for a gain, plain for a loss, white for XP. */
+	/** Headline colour: yellow for coins, white for XP. */
 	public static Color rightColor(BarState s)
 	{
 		if (s.alch == null || !showsGold(s))
 		{
 			return Palette.WHITE;
 		}
-		return s.alch.sessionGold() >= 0 ? Palette.DAMAGE : Palette.TEXT;
+		return Palette.DAMAGE;
 	}
 
-	/** "+236", "−40" (with a real minus sign), "+1.2k" or "?" when the price is unknown. */
-	public static String formatProfit(Long p)
+	/** "+236", "+1.2k" or "?" when the value is unknown. */
+	public static String formatCoins(Long p)
 	{
 		if (p == null)
 		{
 			return "?";
 		}
-		return (p < 0 ? MINUS : "+") + ReadoutPainter.compact(Math.abs(p));
+		return "+" + ReadoutPainter.compact(p);
+	}
+
+	/** One cast's coins, exact: "+2,360", or "?" when the value is unknown. */
+	public static String formatCastCoins(Long p)
+	{
+		if (p == null)
+		{
+			return "?";
+		}
+		return "+" + String.format(java.util.Locale.ROOT, "%,d", p);
 	}
 
 	/** Headline and small line of the right readout; both empty without a tracker. */
@@ -128,8 +138,8 @@ public final class AlchView implements ModeView
 		long gold = a.sessionGold(), goldRate = a.goldPerHour(ms);
 		long xp = s.xp == null ? 0 : s.xp.sessionXp("Magic");
 		long xpRate = s.xp == null ? 0 : s.xp.xpPerHour("Magic", ms);
-		String goldHead = perHour ? formatProfit(goldRate) + "/hr" : formatProfit(gold);
-		String goldRest = perHour ? formatProfit(gold) + " this session" : formatProfit(goldRate) + "/hr";
+		String goldHead = perHour ? formatCoins(goldRate) + "/hr" : formatCoins(gold);
+		String goldRest = perHour ? formatCoins(gold) + " this session" : formatCoins(goldRate) + "/hr";
 		String xpHead = perHour ? ReadoutPainter.compact(xpRate) + " xp/hr" : ReadoutPainter.compact(xp) + " xp";
 		String xpRest = perHour ? ReadoutPainter.compact(xp) + " xp" : ReadoutPainter.compact(xpRate) + "/hr";
 		String level = MinimalView.levelPart(s, "Magic", xpRate);

@@ -530,7 +530,7 @@ public class SuperHistogramPlugin extends Plugin
 		AlchTracker a = alch;
 		if (a != null)
 		{
-			a.onCastClick(tick, alchProfit(itemId));
+			a.onCastClick(tick, alchCoins(itemId));
 		}
 	}
 
@@ -542,28 +542,21 @@ public class SuperHistogramPlugin extends Plugin
 	}
 
 	/**
-	 * Alch value minus the item's GE price and a nature rune's, or null when any price is unknown
-	 * (untradeable item, no price data). Noted items use their base item.
+	 * Coins the cast gives: the item's High Alchemy value, or null when unknown (no composition, no value).
+	 * Noted items use their base item.
 	 */
-	Long alchProfit(int itemId)
+	Long alchCoins(int itemId)
 	{
 		if (itemManager == null || itemId <= 0)
 		{
 			return null;
 		}
-		int id = itemManager.canonicalize(itemId);
-		ItemComposition comp = itemManager.getItemComposition(id);
-		if (comp == null)
+		ItemComposition comp = itemManager.getItemComposition(itemManager.canonicalize(itemId));
+		if (comp == null || comp.getHaPrice() <= 0)
 		{
 			return null;
 		}
-		long ha = comp.getHaPrice(), item = itemManager.getItemPrice(id);
-		long nat = itemManager.getItemPrice(net.runelite.api.gameval.ItemID.NATURERUNE);
-		if (ha <= 0 || item <= 0 || nat <= 0)
-		{
-			return null;
-		}
-		return ha - item - nat;
+		return (long) comp.getHaPrice();
 	}
 
 	/** itemId is the equipped weapon, or -1 for none. */

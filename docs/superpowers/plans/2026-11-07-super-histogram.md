@@ -723,6 +723,8 @@ Paths, test and build commands, and the 62-px × `u` convention are as in Phase 
 
 ### Task 17b: High alch
 
+> Changed by operator: coins received (High Alchemy value), not profit.
+
 **Files:**
 - Create: `model/skill/AlchTracker.java`, `model/skill/AlchTopRow.java`, `model/RightSide.java`, `ui/modes/AlchView.java`
 - Modify: `model/TickRecord.java`, `model/XpTracker.java`, `model/Mode.java`, `model/ModeDetector.java`, `model/BarState.java`, `ui/XpRow.java`, `ui/SkillPainter.java`, `ui/ReadoutPainter.java`, `ui/modes/MinimalView.java`, `ui/BarPainter.java`, `SuperHistogramConfig.java`, `SuperHistogramPlugin.java`, `test/.../ui/BarRenderSamples.java`
@@ -831,19 +833,531 @@ Paths, test and build commands, and the 62-px × `u` convention are as in Phase 
 
 ---
 
-## Phase 4 — Gathering + agility (mockups: `gathering.html`, `agility.html`)
+## Phase 4 — Gathering + agility (mockups: `gathering.html`, `agility.html`, `settings-panel.html`)
 
-### Task 18: Gathering
-`model/skill/GatherRun.java` + `ui/modes/GatherView.java`:
-- pill per resource (from the click on a tree/rock/spot until depletion or the target changes);
-- roll notches every N ticks (4 for woodcutting);
-- item + XP drops;
-- depletion mark + "+N" re-click delay;
-- "~" estimated time to full from the observed success rate.
-Tests: `estimateUsesObservedRate`, `reclickDelayCounted`.
+Paths, test and build commands, and the 62-px × `u` convention are as in Phase 2. Pixel-test conventions are as in Phase 3 ("opaque white" = alpha ≥ 200 and every channel ≥ 240; colour matches allow ±8 per channel). `x(t)` means `TimelinePainter.x(tl, s, t)`, where `tl` is the timeline layout (`BarPainter.timelineLayout`, Task 19b). Outside agility, `tl` is the bar's layout.
 
-### Task 19: Agility
-`model/skill/AgilityCourse.java` (course obstacle-ID lists for rooftop courses, lap start/end, best lap, ticks lost per obstacle, slowest obstacle) + `ui/modes/AgilityView.java`. Narrower ticks in this mode so one lap fits (tick width 14u). `Pulse.done` on each landing. The mark-of-grace drop comes from `ItemSpawned` id 11849 near the player. Tests: `lapTimeAndBest`, `ticksLostSummed`, `slowestObstacle`.
+**RuneLite API used, confirmed with `javap` against client / runelite-api 1.13.6:**
+- `events.GameObjectDespawned.getGameObject()/getTile()`, `GameObject.getSceneMinLocation()` → `Point.getX()/getY()`
+- `events.NpcDespawned.getNpc()` + `NPC.getIndex()` (already used)
+- `events.ItemSpawned.getItem()/getTile()`, `TileItem.getId()`, `Tile.getWorldLocation()`
+- `events.MenuOptionClicked.getMenuAction()/getMenuOption()/getMenuTarget()/getId()/getParam0()/getParam1()`
+- `MenuAction.GAME_OBJECT_FIRST_OPTION … GAME_OBJECT_FIFTH_OPTION`, `NPC_FIRST_OPTION … NPC_FIFTH_OPTION`, `CC_OP`, `WIDGET_TARGET_ON_WIDGET`, `WALK`
+- `events.GameStateChanged.getGameState()` with `GameState.LOADING`
+- `events.StatChanged.getSkill()/getXp()` with `Skill.WOODCUTTING/MINING/FISHING/FIREMAKING/AGILITY.getName()`
+- `Actor.getAnimation()/getWorldLocation()`
+- `coords.WorldPoint(int x, int y, int plane)`, `WorldPoint.getX()/getY()/getPlane()/getRegionID()`
+- `ItemContainer.getItems()`
+- `gameval.ItemID.GRACE` (11849: the mark of grace; the gameval name is `GRACE`, not `MARK_OF_GRACE`), `gameval.ItemID.YEW_LOGS` (1515), `IRON_ORE` (440), `RAW_TROUT` (335), `TINDERBOX` (590)
+- `gameval.ObjectID.ROOFTOPS_SEERS_WALLCLIMB/JUMP/TIGHTROPE/JUMP_1/JUMP_2/LEAPDOWN` (14927, 14928, 14932, 14929, 14930, 14931). These are used only as test data.
+- `client.config.ConfigManager.getRSProfileConfiguration(String group, String key, java.lang.reflect.Type)` (generic `T`) and `setRSProfileConfiguration(String, String, T)`
+- `client.util.Text.removeTags(String)` (already used)
+
+`client.plugins.agility.Courses` and `Obstacles` exist but are package-private, so they cannot be referenced. Their course regions and lap-end tiles are copied into our own table (note 10).
+
+Runtime behaviour that `javap` cannot show is checked in the manual steps:
+- that a tree or rock depleting fires `GameObjectDespawned` at the same scene-min tile as the menu click's `param0/param1`;
+- that `getId()` on an NPC menu click is the NPC index;
+- that a moving fishing spot fires `NpcDespawned`;
+- that the lap-end Agility XP arrives while the player stands on the lap-end tile.
+
+**Expansion notes (changes from the task-level text):**
+1. Each task is split into a model task (**18a**, **19a**) and a view + plugin task (**18b**, **19b**), the same way Tasks 15 and 16 are split. Each **b** depends on its **a**. 19b also depends on 18b, because both edit `ModeDetector.skilling` and the plugin. A reviewer can reject a view without rejecting its model.
+2. (Ruling) A **roll** is a tick on which the player animates while a gathering pill is open. A **success** is an XP drop of the pill's skill. The item gained on the same or the next tick is optional: infernal tools and Forestry give XP without an item.
+   - The mockup draws a notch every 4 ticks. That is not adopted, because the real roll interval depends on the tool. The estimate only needs items per animating tick, so one notch per roll tick is both honest and enough.
+3. **Estimate:**
+   - `rate` = successes ÷ rolls over the last 100 rolls. A success on a tick with no roll counts as a roll. The rate needs at least 2 successes and is reset when the skill changes.
+   - ETA = `ceil(free / rate)` ticks (Firemaking: `ceil(logsLeft / rate)`).
+   - It is shown as `"~" + m:ss`, with the seconds rounded to the nearest 10 s (at least 10 s). Per hour = `round(rate × 6000)`.
+   - Walking and re-click time are not in the rate, which is one more reason for the "~".
+   - Capacity is `count + free slots`, where free slots = 28 − occupied slots, read from the container. So an axe kept in the inventory is handled.
+4. **Resource identity comes from the click:**
+   - `"Chop down"`/`"Chop"` → Woodcutting and `"Mine"` → Mining, on `GAME_OBJECT_*` options. The key comes from the scene tile `param0/param1`.
+   - Fishing options on `NPC_*` options: `"Net"`, `"Small Net"`, `"Big Net"`, `"Bait"`, `"Lure"`, `"Harpoon"`, `"Cage"`, `"Fish"`, `"Use-rod"`. The key is `npcKey(index)`.
+   - `"Light"` on a log, or `"Use"` with a tag-stripped target of `"Tinderbox -> <log>"` or `"<log> -> Tinderbox"`, is Firemaking, with key 0. The name is the log side.
+   - **Depletion** is a `GameObjectDespawned` at the key's tile, or an `NpcDespawned` of the spot. Despawns on the tick a `LOADING` state arrives are ignored, because a scene reload despawns everything.
+   - A success with no recognised click still opens a pill (key 0, no depletion tracking), so an unlisted option only loses the stump.
+5. **A pill ends** on:
+   - depletion (stump or marker), at the depletion tick;
+   - a click on another target;
+   - a bank click;
+   - the inventory filling up;
+   - 3 ticks without a roll (stopped or interrupted), at the last roll + 1.
+   - A pill with no roll within 15 ticks is dropped and never drawn (a misclick, or a level too low).
+   - **"+N"** is the number of ticks from the depletion to the next target click. It counts only for 1..10 ticks. More than that is a pause, which matches alch's `LOST_MAX`.
+6. **Firemaking:** one pill per log. A success ends the pill (with no depletion mark) and starts the "+N" count. The headline counts logs left ("24 left", "done in ~1:00"). Running out of logs is the "done" event.
+7. **Blink and cue (rulings):**
+   - Gathering blinks when the inventory fills (Firemaking: when the logs run out). `gathering.html` blinks on every tree fall; that is not adopted.
+   - Agility blinks when a lap is completed. `agility.html` blinks on every landing; that is not adopted. The `blinkWhenDone` description is updated to match.
+   - Metronome cue: for gathering, the first tick after the resource depletes (for Firemaking, after a fire is lit), which is the "click the next one" tick. For agility, the first tick after a landing (obstacle ready). Both come only from the player's own actions. No cue is given while the inventory is full.
+8. **Gathering right readout** follows `gathering.html`:
+   - The headline is the count, `"12/28"`. The small line is `"full in ~1:40 · 600 logs/hr"`, so the "~" estimate is in the small line.
+   - When full: `"Full · bank"` / `"28/28 logs"`.
+   - `timeToFinish` off drops the "full in" part.
+   - There is no finish flag, because the finish time is an estimate (the mockup says the same).
+   - The nouns are Woodcutting "logs", Mining "ore", Fishing "fish" and Firemaking "fires". Rates use `ReadoutPainter.compact`.
+9. **Top row:**
+   - XP goes through `XpRow` (Phase 3 note 7).
+   - The item icon is drawn just left of the XP group, centred at `x(t) − 11u`. This replaces the mockup's log-then-number layout.
+   - Woodcutting gets the mockup's log, axe and stump. Mining and Fishing get a generic item disc and a depleted-ring marker. Firemaking gets no item icon. Phase 5's icon set replaces these.
+10. **Course identification (decision): a bundled region table plus a learned obstacle order.**
+    - `AgilityCourses` holds 12 courses: Gnome, Draynor, Al Kharid, Varrock, Canifis, Falador, Seers', Pollnivneach, Rellekka, Ardougne, Barbarian, Wilderness. Each has a region ID and lap-end tiles, copied from RuneLite 1.13.6's `Courses.java` (BSD-2, credited in a comment).
+    - An **obstacle** is a `GAME_OBJECT_*` click made inside a course region (not a bank or gathering click) and confirmed by an Agility XP drop.
+    - A **lap ends** on Agility XP while the player stands on a lap-end tile. This is the rule RuneLite's agility plugin uses.
+    - Obstacle numbers come from the order learned on the first full lap. Why: RuneLite's obstacle IDs are package-private and unordered. The region table gives the course name and an exact lap end from lap 1. Learning the order copes with falls and alternate routes, without bundling about 100 ordered IDs that cannot be verified offline.
+11. **Is lap 1 full?**
+    - A lap that starts right after a lap end is full.
+    - The first lap on a course in a login is provisional: the player may have started mid-course. It is confirmed when the next lap starts with the same obstacle ID. If confirmed, its time counts for best and its order is learned. If not, its time, order and gap stats are discarded, and lap 2 is learned instead.
+    - Before an order is learned, numbers are positions in the lap.
+12. **Lap time, "+N" and slowest:**
+    - Lap time = the final landing − the lap's first obstacle click. It is shown as `m:ss.t` (ticks × 0.6 s, exact to 0.1 s).
+    - **"+N"** = ticks from a landing to the next obstacle click. It counts for 1..10 ticks: 0 if you clicked on or before the landing tick, a pause if more than 10. The gap after a lap-end landing is the walk back to the start, so it is neither drawn nor counted.
+    - **Lost** = the sum of "+N" within the lap.
+    - **Slowest after #k** = the obstacle number with the highest mean gap (0s included) over the session's laps on that course. Ties go to the lower number. If all means are 0, there is none.
+13. **Falls and misclicks:**
+    - A hit on the player while an obstacle is pending, on a tick with no Agility XP, fails the obstacle: the pill is faint and nothing lands. If Agility XP arrives within 2 ticks, it becomes a normal landing (a Wilderness monster hit you mid-obstacle).
+    - A failure clears the gap start, so the next click shows no "+N".
+    - A pending click with no XP and no hit for 30 ticks is dropped (a misclick). A click on a different object replaces the pending one. A repeated click on the same object is ignored.
+    - **Priority adjustment:** while agility is showing, hits alone do not switch to the combat view. Only an NPC target or an own attack does. Otherwise every fall would flip the bar to lazy flick for 10 ticks.
+14. **Marks of grace:** an `ItemSpawned` of `ItemID.GRACE` counts when:
+    - its tile's region is the current course's region;
+    - it did not spawn on the `LOADING` tick;
+    - it spawned 0–2 ticks after a landing. This filters scene-load spawns, marks off the course, and marks spawned long after the player passed.
+15. **Agility tick width:**
+    - `agility.html` uses 14-px ticks at 62 px, which is **14u**.
+    - A real rooftop lap is about 60–110 ticks, but 14u shows only 49 ticks at 1026 px, so "whole lap fits" would fail.
+    - The agility tick width is therefore `clamp(timelineW / (lapRef + 6), max(4, 6u), 14u)`, where `lapRef = max(bestTicks, lastLapTicks)` on the course. Before any lap it is 14u.
+    - It is applied through `BarLayout.withTickWidth` to the ruler, the timeline and the now line. The left and right readouts keep the bar's layout.
+16. **Best lap is saved per RuneLite account** with `ConfigManager` RS-profile config, under key `bestLap.<COURSE_ID>` in group `superhistogram` (ticks). It is loaded when the player enters a course region and written whenever it improves. This takes three calls, so it is included.
+    - Config `lapCompare` ("Agility: compare lap to", Best / Last lap, default Best, position 26), as in `settings-panel.html`.
+17. **Priority after this phase:** AFK > combat > alch > production > agility > gathering > baseline.
+    - Agility is placed above gathering because it needs a course region and confirmed landings, so it is the more specific signal.
+    - AFK still wins: a minute of AFK fishing shows the AFK view with its logout countdown, as the spec intends.
+18. `GatherRun` and `AgilityCourse` are read by the render thread. Their public methods are `synchronized`, and their lists are returned as copies of immutable snapshots, as `Beat` does.
+
+### Task 18a: Gathering tracker
+
+**Files:**
+- Create: `model/skill/GatherRun.java`
+- Modify: `model/TickRecord.java`
+- Test: `model/skill/GatherRunTest.java`
+
+**Interfaces:**
+- Consumes: `Timeline`, `TickRecord`, `XpDrop` (Task 2).
+- Produces:
+  - `TickRecord` gains `public boolean roll; public int gathered /* item id gained by a success, 0 none */; public boolean depleted; public int reclick /* +N ticks, 0 none */; public boolean gatherBank;`.
+  - `final class GatherRun { static final Set<String> SKILLS /* "Woodcutting","Mining","Fishing","Firemaking" */; static final int INVENTORY = 28, ROLL_WINDOW = 100, MIN_SUCCESSES = 2, IDLE_END = 3, STALE = 15, LOST_MAX = 10, LINGER = 20, HISTORY = 16; static final class Pill { final String skill; final int key; final String name; final int startTick; final int endTick /* -1 while open */; final boolean depleted; final int rolls; } GatherRun(Timeline t); void onTargetClick(int tick, String skill, int key /* 0 unknown */, String name); void onTargetGone(int tick, int key); void onBankClick(int tick); boolean onTick(int tick, boolean animating, List<XpDrop> drops, Map<Integer,Integer> inventory /* full counts, null = unchanged */, int freeSlots /* -1 = unchanged */); boolean showing(int tick); boolean active(); String skill(); String targetName(); int count(); int capacity() /* -1 unknown */; boolean full(); int successes(); double rate() /* 0 unknown */; int etaTicks() /* -1 unknown */; long perHour(); int cueTick() /* -1 none */; List<Pill> pills() /* oldest first, snapshots */; void reset(); }`
+    - The first non-null inventory only sets the baseline. A tick with no record (`timeline.at` is null) is skipped.
+    - `onTick(t)` order:
+      - (1) diff the inventory and update the free slots;
+      - (2) a roll, when a pill is open and `animating`: `peek(t).roll`, `rolls++`;
+      - (3) a success, for a drop whose skill is the pill's skill, or any `SKILLS` skill when no pill is open. With no pill open, a pill opens with key 0 at `t − 1`. Item matching: an increase on t or t − 1, or on t + 1 (deferred), sets `peek(t).gathered` and adds the ID to the gathered set. For Firemaking a decrease does the same.
+      - (4) a pending `onTargetGone` for this pill's key → end at t, `depleted`, `peek(t).depleted`;
+      - (5) Firemaking: a success ends the pill at t;
+      - (6) the full / out event;
+      - (7) the idle end and the stale drop (note 5).
+    - `onTick` returns true exactly once when a success makes `free == 0` (Firemaking: when the logs left reach 0). It stays false until `full()` has cleared (free > 0) and the inventory fills again.
+    - `count()` = the inventory total of the gathered item IDs. They are kept per skill; trout and salmon both count. `capacity()` = `count + free` when free slots are known (−1 for Firemaking).
+    - `onTargetClick` with the open pill's key (key ≠ 0, same skill) does nothing. Otherwise it closes the open pill at `tick` and opens a new one. If the last end tick `e` (a depletion or a Firemaking success) is known and `1 ≤ tick − e ≤ 10`, it sets `peek(tick).reclick`. The last end then clears.
+    - `onBankClick` closes the open pill at `tick` and clears the last end. When `full()`, it also sets `peek(tick).gatherBank`.
+    - `cueTick()` = last end + 1 while it is set and not `full()`.
+    - `showing(t)`: the open or latest pill has ≥ 2 rolls, and either a pill is open or `t − lastActivity ≤ 20`. `lastActivity` is the last roll, success, depletion or bank click.
+
+- [ ] **Step 1: Write failing tests** (`GatherRunTest`). Unless stated:
+  - Woodcutting, yew logs `YEW = 1515`, tree keys `A = 101`, `B = 102`;
+  - baseline `onTick(99, false, [], {}, 28)`;
+  - a roll tick is `onTick(t, true, [], null, -1)`;
+  - a success at t is `onTick(t, true, [XpDrop("Woodcutting", 175)], counts with one more 1515, free one fewer)`;
+  - the click is `onTargetClick(100, "Woodcutting", A, "Yew tree")`, with ticks 100–101 not animating (walking);
+  - `onTick` is called for every tick in order.
+
+  The tests:
+  - `clickThenRollsOpenPill` — rolls 102–110 → one pill, `startTick == 100`, `endTick == -1`; `peek(102..110).roll` is true, `peek(101).roll` is false; `showing(110)`; `skill() == "Woodcutting"`; `targetName() == "Yew tree"`.
+  - `clickWithoutAnimationIsDropped` — no animation for 20 ticks → `pills().isEmpty()`, `!showing(120)`.
+  - `itemWithoutXpIsNoSuccess` — +1 log with no drop (picked up) → `successes() == 0`, `peek(t).gathered == 0`.
+  - `xpWithoutItemIsSuccess` — a drop with no item (infernal axe) → `successes() == 1`, `peek(t).gathered == 0`, `count() == 0`.
+  - `itemOneTickAfterXpMatches` — XP at 106, log at 107 → `peek(106).gathered == 1515`, `count() == 1`.
+  - `estimateUsesObservedRate` — rolls 102–141, successes at 111, 121, 131, 141 → `count() == 4`, `capacity() == 28`, `rate() == 0.1` (±1e-9), `etaTicks() == 240`, `perHour() == 600`.
+  - `noEstimateBeforeTwoSuccesses` — one success → `rate() == 0`, `etaTicks() == -1`, `perHour() == 0`.
+  - `rateWindowIsLast100Rolls` — 100 rolls without a success, then 100 rolls with a success on every 10th → `rate() == 0.1`.
+  - `depletionEndsPillAndMarks` — `onTargetGone(130, A)` before `onTick(130)` → `endTick == 130`, `depleted`, `peek(130).depleted`, `cueTick() == 131`.
+  - `otherTargetGoneIgnored` — `onTargetGone(130, B)` → the pill stays open.
+  - `reclickDelayCounted` — depleted at 130, `onTargetClick(132, …, B, …)` → `peek(132).reclick == 2`, 2 pills, `cueTick() == -1`.
+  - `twoTreesInARowKeepCountAndRate` — tree A: 30 rolls, 3 successes, falls; click B 2 ticks later; tree B: 30 rolls, 3 successes → `count() == 6`, `rate() == 0.1`, the second pill has `rolls == 30`, and the first is `depleted`.
+  - `longPauseIsNotReclick` — click 12 ticks after a depletion → `reclick == 0`.
+  - `sameTargetClickContinuesPill` — click A again at 115 → still 1 pill.
+  - `animationStopEndsPill` — rolls to 120, none from 121 → after `onTick(123)` the `endTick == 121` and the pill is not `depleted`.
+  - `fullInventoryReturnsTrueOnce` — baseline `{1515: 26}`, free 2; two successes → only the second `onTick` returns true; `full()`; the pill ends there; `cueTick() == -1`.
+  - `fullAndDepletedSameTick` — the last log and `onTargetGone` on the same tick → `depleted` and `full()`, `cueTick() == -1`.
+  - `powerdropMidGather` — after 10 logs, the inventory drops to `{1515: 5}`, free 23, with no XP while animating → `successes()` unchanged, the pill is still open, `count() == 5`, `capacity() == 28`, `!full()`.
+  - `dropAfterFullClearsFull` — full, then all logs dropped → `!full()`. The next success returns false. Filling again returns true.
+  - `bankMidGatherEndsPill` — `onBankClick(140)` mid-pill → `endTick == 140`, not `depleted`, `!peek(140).gatherBank`. The deposit (`{}`, 28) → `count() == 0`. The next click has `reclick == 0`.
+  - `bankAfterFullMarksBank` — full, then `onBankClick` → `peek(t).gatherBank`.
+  - `fishingSpotMoves` — Fishing, keys −5 and −7, raw trout 335; `onTargetGone(t, -5)` → `depleted`; a click on −7 at t + 3 → `reclick == 3`.
+  - `unknownOptionStillGathers` — no click; Mining drop + `{440: 1}` at 150 → a pill with `key == 0` and `startTick == 149`; after rolls 150–152 → `showing(152)`, `skill() == "Mining"`.
+  - `firemakingSuccessEndsPill` — baseline `{1515: 27}`, free 1; `onTargetClick(100, "Firemaking", 0, "Yew logs")`, animating 100–103, `[Firemaking 202]` with `{1515: 26}` at 103 → `endTick == 103`, not `depleted`, `cueTick() == 104`, `count() == 26`, `capacity() == -1`; a click at 105 → `reclick == 2`.
+  - `firemakingOutOfLogsReturnsTrue` — the last log burnt → `onTick` returns true once.
+  - `skillChangeResetsRate` — a Woodcutting rate, then a Mining click → `rate() == 0`.
+  - `historyBounded` — 20 pills → `pills().size() == 16`.
+  - `lingersAfterPillEnds` — a pill ends at 150 (last activity 150) → `showing(170)`, `!showing(171)`.
+  - `resetClearsAll`.
+- [ ] **Step 2:** Run `--tests '*GatherRunTest'`. Expected: compile failure / FAIL.
+- [ ] **Step 3: Implement** to the contract and notes 2–6. Keep the roll window as two ring arrays of 100 (`rolled`, `succeeded`). Keep at most one unmatched increase (from the previous tick) and one success waiting for its item (for the next tick).
+- [ ] **Step 4:** Run the tests. Expected: PASS.
+- [ ] **Step 5: Commit.** `feat: gathering tracker with rolls, depletion and estimate`
+
+### Task 18b: Gathering view, detection and blink
+
+**Files:**
+- Create: `ui/modes/GatherView.java`
+- Modify: `model/Mode.java`, `model/ModeDetector.java`, `model/BarState.java`, `ui/Palette.java`, `ui/SkillPainter.java`, `ui/BarPainter.java`, `SuperHistogramConfig.java`, `SuperHistogramPlugin.java`, `test/.../ui/BarRenderSamples.java`
+- Test: `model/ModeDetectorTest.java`, `ui/modes/GatherViewTest.java`, `ui/BarRenderSmokeTest.java`, `ui/SampleStates.java`, `SuperHistogramPluginHandlersTest.java`
+
+**Interfaces:**
+- Consumes: `GatherRun` (18a), `XpRow` (17a), `SkillPainter.wasted/bank` (Task 16), `ReadoutPainter.right/compact/minSec`, `Pulse.tick/done`.
+- Produces:
+  - `Mode` gains `GATHERING`. `ModeDetector.skilling(boolean alching, boolean producing, boolean gathering)` gives ALCH, then PRODUCTION, then GATHERING, else null. The 2-argument form delegates with `false`.
+  - `BarState` + builder gain `GatherRun gather` (null).
+  - `Palette` adds `WC_PILL = #b5a06a`, `LOG = #c89a5a`, `LOG_END = #e8c58f`, `NOTCH = rgba(20,23,27,.45)` (all from gathering.html).
+  - `SkillPainter`:
+    - `axe(g, x, y, u, Color)`: a 1.6u × 10u handle at `x − 0.8u, y − 5u`, plus a head from `x + 0.8u, y − 5u`, 5.2u × 5u with 2u-radius rounded right corners;
+    - `log(g, x, y, u)`: a `LOG` 10u × 5.2u round rect centred at x, with a `LOG_END` circle r 2.6u at `x + 4u`;
+    - `stump(g, x, y, u)`: the mockup's trapezoid `M x−4,y+4 h8 l−1.2,−6 h−5.6 z` in `TEXT`, with a `DIM` ellipse rx 2.8u, ry 1.1u at `y − 2u`;
+    - `item(g, x, y, u, Color)`: a disc r 2.8u;
+    - `depleted(g, x, y, u)`: a `TEXT` ring r 3u, stroke 1.2u.
+  - `final class GatherView implements ModeView`; `static String[] rightLines(BarState s)`; `static String[] headlineFallbacks(BarState s)` (`"Full · bank"` → `"Full"`); `static String noun(String skill)`; `static String eta(int ticks)` (`"~1:40"`).
+  - Config: the `blinkWhenDone` description becomes "Flash the bar mint when an inventory finishes or fills, or the AFK logout warning fires".
+  - Plugin:
+    - fields `volatile GatherRun gather`, `volatile int latestFreeSlots = -1`, `int loadingTick = Integer.MIN_VALUE`;
+    - `void handleInventory(Map<Integer,Integer> counts, int freeSlots)`. The 1-argument form keeps `latestFreeSlots`.
+    - `void handleGatherClick(String skill, int key, String name)`, `void handleObjectDespawned(int sceneX, int sceneY)`;
+    - `static String gatherSkill(MenuAction a, String option, String target)`;
+    - `static int objectKey(int sceneX, int sceneY)` (`1 + sceneX * 512 + sceneY`), `static int npcKey(int index)` (`-(index + 1)`);
+    - `@Subscribe onGameObjectDespawned`.
+
+- [ ] **Step 1: Write failing tests.**
+  - `ModeDetectorTest.skillingOrder`:
+    - `skilling(true, true, true) == ALCH`;
+    - `skilling(false, true, true) == PRODUCTION`;
+    - `skilling(false, false, true) == GATHERING`;
+    - `skilling(false, false, false) == null`;
+    - the 2-argument results are unchanged;
+    - `detect(false, true, GATHERING, LAZY_FLICK, GENERAL) == LAZY_FLICK`, and `detect(true, false, GATHERING, …) == AFK`.
+  - `SampleStates.gathering(GatherPhase p, boolean timeToFinish, boolean wastedTicks)`, with `enum GatherPhase { CHOPPING, FELLED, FULL, EARLY }`. It drives a real `GatherRun` plus `XpTracker` (+175 Woodcutting per success, baseline at `NOW_TICK − 65`) as gathering.html:
+    - baseline inventory at `NOW_TICK − 65`: `{1515: 6}`, free 22;
+    - tree A: click `NOW_TICK − 64` (key 101, "Yew tree"); rolls `NOW_TICK − 62 … − 33`; successes on rolls 10, 20, 30 (`− 53, − 43, − 33`); falls at `NOW_TICK − 33`;
+    - tree B: click `NOW_TICK − 31` (+2); rolls `NOW_TICK − 29 … NOW_TICK`; successes at `− 20, − 10, NOW_TICK`;
+    - CHOPPING is the above: 12 logs, free 16, rate 0.1, ETA 160 ticks;
+    - FELLED is CHOPPING plus `onTargetGone(NOW_TICK, 102)`;
+    - FULL is CHOPPING with a baseline of `{1515: 22}`, free 6, so it is full at `NOW_TICK`;
+    - EARLY is tree B only, with a single success at `NOW_TICK − 20`.
+    - `gathering(GatherPhase p)` = `(p, true, true)`. `gatheringSkill(String skill, int itemId)` = CHOPPING with that skill and item. `firemaking()`: baseline `{1515: 27}`, free 1, at `NOW_TICK − 16`; clicks at `NOW_TICK − 15, − 10, − 5` (key 0, "Yew logs"); animating c..c+3; a success with −1 log at c+3.
+  - `GatherViewTest`:
+    - `rightLines`:
+      - CHOPPING → `{"12/28", "full in ~1:40 · 600 logs/hr"}`;
+      - CHOPPING with `timeToFinish` false → `{"12/28", "600 logs/hr"}`;
+      - FULL → `{"Full · bank", "28/28 logs"}`;
+      - EARLY → `{"7/28", "logs"}`;
+      - `gatheringSkill("Mining", 440)` → the small line ends `" ore/hr"`; `gatheringSkill("Fishing", 335)` ends `" fish/hr"`;
+      - `firemaking()` → `{"24 left", "done in ~1:00 · 1.5k fires/hr"}`;
+      - a null `gather` → `{"", ""}`.
+    - `eta`: 160 → `"~1:40"`, 96 → `"~1:00"`, 5 → `"~0:10"`.
+    - `fallbacks` — FULL → `{"Full"}`; CHOPPING → `{}`.
+  - `BarRenderSmokeTest`:
+    - `gatheringRendersAtThreeSizes` — each GatherPhase and `firemaking()` at 1026 × 62, 1026 × 46 and 600 × 30, with no exception (the `Mode.values()` loops cover a null `gather`).
+    - `pillHasWoodcuttingColour` — CHOPPING: `WC_PILL` at (x(NOW_TICK − 12) + 16u, 29u).
+    - `rollNotchesDarkenPill` — CHOPPING at 62 px: the pixel at (x(NOW_TICK − 12), 29u) has every channel at least 20 below `WC_PILL`. At 600 × 30 (one row) the pixel at the same x, at `pillY + pillH/2`, matches `WC_PILL`.
+    - `stumpMarksFall` — CHOPPING: `TEXT` pixels in x(NOW_TICK − 33) + 2u .. + 10u, y 40u–50u.
+    - `reclickLabelOnlyWhenEnabled` — CHOPPING: `LOST` pixels in x(NOW_TICK − 33) + 13u .. x(NOW_TICK − 31), y 34u–42u; none with `wastedTicks` false.
+    - `logBeforeXp` — CHOPPING: `LOG` pixels in x(NOW_TICK − 10) − 16u .. − 5u, y 6u–16u.
+    - `noFinishFlagForEstimate` — CHOPPING: no opaque white in x(NOW_TICK + 1) .. x(NOW_TICK + 4), y 42u–60u.
+    - `gatheringRightDoesNotOverlapLoginTime` — the same assertion as Phase 2, at 1026 × 62 and 720 × 62, for every phase.
+  - `SuperHistogramPluginHandlersTest`. "Detect" means: one `handleTick`, `handleGatherClick("Woodcutting", objectKey(50, 50), "Yew tree")`, `me.getAnimation()` → 867, then 3 × `handleTick`.
+    - `gatherSkillFromMenu`:
+      - `(GAME_OBJECT_FIRST_OPTION, "Chop down", "<col=ffff>Yew tree")` → `"Woodcutting"`; `"Mine"` → `"Mining"`;
+      - `(NPC_FIRST_OPTION, "Lure", …)` and `(NPC_SECOND_OPTION, "Bait", …)` → `"Fishing"`;
+      - `(CC_OP, "Light", "<col=ff9040>Logs")`, `(WIDGET_TARGET_ON_WIDGET, "Use", "Tinderbox -> <col=ff9040>Logs")` and `(WIDGET_TARGET_ON_WIDGET, "Use", "Logs -> Tinderbox")` → `"Firemaking"`;
+      - `(GAME_OBJECT_FIRST_OPTION, "Lure", …)`, `(WALK, "Walk here", null)` and a null option → null, without throwing.
+    - `keysDistinct` — `objectKey(0, 0) > 0`, `npcKey(0) < 0`, `objectKey(1, 2) != objectKey(2, 1)`.
+    - `gatheringDetectedAfterRolls` — after detect: `buildState().mode == GATHERING`, `modeName == "Woodcutting"`, `modeSub == "auto · Yew tree"`; with one `handleTick` instead of 3 → GENERAL.
+    - `treeFallCuesNextTick` — metronome CUE_TICK, after detect: `handleObjectDespawned(50, 50)`, then `handleTick(now)` → `pulse.outlineAlpha(now) > 0.9`.
+    - `despawnWhileLoadingIgnored` — after detect: `handleGameState(LOADING, …)`, `handleObjectDespawned(50, 50)`, `handleTick` → `gather.active()`.
+    - `inventoryFullBlinks` — `handleInventory({1515: 26}, 2)` and a Woodcutting baseline, detect, then two successes (`handleInventory({1515: 27}, 1)` + `handleStat` +175, `handleTick`; then `{1515: 28}`, 0, the same). The `handleTick(now)` after the second success → `pulse.mintAlpha(now) > 0`. With `blinkWhenDone` false → 0.
+    - `npcDespawnEndsFishing` — `handleGatherClick("Fishing", npcKey(7), "Rod Fishing spot")`, ticks with animation, `npc.getIndex()` → 7, `handleNpcDespawned(npc)`, `handleTick` → `gather.pills().get(0).depleted`.
+    - `bankClickEndsGatherPill` — after detect, `handleBankClick()` → `!gather.active()`.
+    - `logoutClearsGather` — `LOGIN_SCREEN` → `!gather.active()`, `latestFreeSlots == -1`.
+- [ ] **Step 2:** Run `--tests '*ModeDetectorTest' --tests '*GatherViewTest' --tests '*BarRenderSmokeTest' --tests '*PluginHandlersTest'`. Expected: FAIL.
+- [ ] **Step 3: Implement** to gathering.html (62-px values × u):
+  - **Pills** (from `s.gather.pills()`, those overlapping the visible ticks):
+    - `x0 = x(start)`, `x1 = x(endTick == -1 ? nowTick + 1 : min(endTick, nowTick + 1))`;
+    - fill a round rect from x0, `pillY(l)`, width `max(pillH, x1 − x0)`, height `pillH`, arc `pillH`. The colour is `WC_PILL` for Woodcutting, otherwise `Palette.skill(skill)`.
+    - Axe (Woodcutting, `rows > 1`): at `ix = max(x0 + 10u, timelineX + 10u)`, `pillY + pillH/2`, in `PILL_LABEL_SOLID`, when `ix < x1 − 8u`.
+    - Notches (`rows > 1`): for each `roll` tick t inside the pill, a 1.2u × (pillH − 6u) `NOTCH` round rect at `x(t) − 0.6u`, `pillY + 3u`, when `x(t) > ix + 6u` and `x(t) < x1`.
+  - **Top row** (`rows > 1`):
+    - for each `gathered > 0` tick (not Firemaking): `log` (Woodcutting) or `item(…, Palette.skill(skill))` at `(x(t) − 11u, xpY − 3.5u)`;
+    - then `TimelinePainter.xp` and `TimelinePainter.hits`.
+  - **Actions row** (`rows == 3`):
+    - `depleted` ticks: `stump` (Woodcutting) or `depleted` at `(x(t) + 6u, 45u)`;
+    - `reclick = n > 0` with `wastedTicks`: `SkillPainter.wasted(g, l, x(t − n) + 13u, x(t), n)`;
+    - `gatherBank` ticks: `SkillPainter.bank(g, x(t), 46u, u, TEXT)`.
+  - **Right:** `ReadoutPainter.right(g, l, s, lines[0], WHITE, lines[1], headlineFallbacks(s))`, with `rightLines` as in note 8:
+    - Firemaking: `count + " left"`, then `["done in " + eta]` and `[compact(perHour) + " fires/hr"]`. When out of logs: `"Out of logs"` / `successes + " fires"`.
+    - Otherwise: full → `"Full · bank"`; else `count + "/" + capacity` (or the count alone when the capacity is unknown). The small line is `["full in " + eta]` and `[compact(perHour) + " " + noun + "/hr"]`, joined by `" · "`; when both are missing, it is the noun.
+  - **Plugin:**
+    - `initModel` and LOGIN_SCREEN create `new GatherRun(timeline)` and set `latestFreeSlots = -1`. HOPPING keeps them. `handleGameState(LOADING)` sets `loadingTick = tick`.
+    - `onItemContainerChanged` (inventory): `free = 28 − (items with id > 0)`, then `handleInventory(counts, free)`.
+    - `onMenuOptionClicked`: `gs = gatherSkill(action, option, target)`. When non-null:
+      - the key is `objectKey(param0, param1)` for `GAME_OBJECT_*`, `npcKey(getId())` for `NPC_*`, otherwise 0;
+      - the name is the tag-stripped target, or for `"Use"` the side of `" -> "` that is not `"Tinderbox"`;
+      - then call `handleGatherClick(gs, key, name)`.
+    - `handleBankClick` also calls `gather.onBankClick(tick)`. `handleNpcDespawned` also calls `gather.onTargetGone(tick, npcKey(index))`.
+    - `onGameObjectDespawned`: `p = getGameObject().getSceneMinLocation()` → `handleObjectDespawned(p.getX(), p.getY())`, which calls `gather.onTargetGone(tick, objectKey(x, y))` unless `tick == loadingTick`.
+    - `handleTick`: move the `me` lookup above the skill trackers. `animating = me != null && me.getAnimation() != -1`. Then `filled = gather.onTick(tick − 1, animating, prevXp, latestInventory, latestFreeSlots)`, where `prevXp` is `prev.xp` (empty when `prev` is null, as today); if `filled && blinkWhenDone` → `pulse.done(nowMs)`. The cue adds `gather.cueTick() == tick`.
+    - `buildState`: `skilling = ModeDetector.skilling(alch, run, gather.showing(t))`. GATHERING → name `gather.skill()`, sub `"auto"` + (`" · " + targetName` when it is known). Set `gather`. Register `GatherView` in `BarPainter`.
+  - `BarRenderSamples.writeGatheringContactSheet` — each GatherPhase and `firemaking()` at 1026 × 62, 720 × 62 and 400 × 36 (same pattern as `writeProductionContactSheet`), to compare with gathering.html.
+- [ ] **Step 4:** Run the tests. Expected: PASS.
+- [ ] **Step 5: Build.** Expected: `BUILD SUCCESSFUL`, and all Phase 1–3 tests pass.
+- [ ] **Step 6: Manual check in the dev client** (chop yews, mine iron, fly-fish, burn logs). Note results:
+  - "Woodcutting · auto · Yew tree" appears within 2 ticks of the chop animation starting;
+  - there is one notch per animating tick, and a log + XP on each log;
+  - the tree falling draws a stump, and re-clicking 2 ticks late shows "+2". If no stump ever appears, the despawn's scene-min tile does not equal the click's `param0/param1`: note both;
+  - iron rocks deplete after each ore, with the ring marker;
+  - a moving fishing spot ends the pill with a marker. If it does not, `NpcDespawned` did not fire: note it (the pill then ends 3 ticks after the animation stops);
+  - the "~" estimate is within about 20 % of the real time to full;
+  - the bar blinks mint once when the inventory fills, and never on a tree fall;
+  - with the metronome on, the outline goes bright on the tick after a tree falls;
+  - powerdropping or banking mid-inventory gives no blink and no crash;
+  - firemaking counts logs down and blinks when the last one is lit;
+  - walking across a region border mid-chop does not draw a false stump;
+  - the login time is still at the far right.
+- [ ] **Step 7: Commit.** `feat: gathering view with rolls, depletion and estimate`
+
+### Task 19a: Agility course and lap tracker
+
+**Files:**
+- Create: `model/skill/AgilityCourses.java`, `model/skill/AgilityCourse.java`
+- Modify: `model/TickRecord.java`
+- Test: `model/skill/AgilityCourseTest.java`
+
+**Interfaces:**
+- Consumes: `Timeline`, `TickRecord`, `XpDrop` (Task 2).
+- Produces:
+  - `TickRecord` gains `public boolean mark; public int agilityLost /* +N on an obstacle click, 0 none */;`.
+  - `final class AgilityCourses { static final class Course { final String id, name; final int region; final int[][] ends /* {x, y, plane} */; } static Course byRegion(int regionId) /* null off course */; static Course byId(String id); static boolean isLapEnd(String id, int x, int y, int plane); static List<Course> all(); }`. The table (from RuneLite 1.13.6 `Courses.java`, BSD-2; credit it in the class comment):
+
+    | id | name | region | lap-end tiles (plane 0) |
+    |---|---|---|---|
+    | GNOME | Gnome | 9781 | (2484,3437), (2487,3437) |
+    | DRAYNOR | Draynor | 12338 | (3103,3261) |
+    | AL_KHARID | Al Kharid | 13105 | (3299,3194) |
+    | VARROCK | Varrock | 12853 | (3236,3417) |
+    | BARBARIAN | Barbarian | 10039 | (2543,3553) |
+    | CANIFIS | Canifis | 13878 | (3510,3485) |
+    | FALADOR | Falador | 12084 | (3029,3332), (3029,3333), (3029,3334), (3029,3335) |
+    | WILDERNESS | Wilderness | 11837 | (2993,3933), (2994,3933), (2995,3933) |
+    | SEERS | Seers' | 10806 | (2704,3464) |
+    | POLLNIVNEACH | Pollnivneach | 13358 | (3363,2998) |
+    | RELLEKKA | Rellekka | 10553 | (2653,3676) |
+    | ARDOUGNE | Ardougne | 10547 | (2668,3297) |
+
+  - `final class AgilityCourse { static final int LOST_MAX = 10, STALE = 30, LINGER = 50, MARK_WINDOW = 2, REVERT_WINDOW = 2, HISTORY = 64, LAPS_KEPT = 16; static final class Obstacle { final int objectId, startTick, endTick /* landing, -1 pending */, number /* 0 unknown */, lap; final boolean failed; } static final class LapStart { final int tick, number; } AgilityCourse(Timeline t); void onCourse(String courseId /* null = not on a course */); void onObstacleClick(int tick, int objectId); boolean onTick(int tick, List<XpDrop> drops, boolean hitOnMe, boolean atLapEnd); void onMark(int tick); void loadBest(String courseId, int ticks); boolean takeBestChanged(); String course(); boolean showing(int tick); boolean pending(); int lapStartTick() /* -1 between laps */; int lapNumber(); int lastLapTicks() /* -1 */; int previousLapTicks() /* -1 */; boolean lastLapWasBest(); int bestTicks() /* -1 */; int lapLost(); int slowestAfter() /* 0 none */; int readyTick() /* -1 */; List<Obstacle> obstacles(); List<LapStart> lapStarts(); void rebind(Timeline t); void reset(); }`
+    - `onCourse(null)` keeps everything. A different course ID switches: the open lap, pending obstacle, last landing, provisional lap and last/previous lap times clear. Best laps, learned orders and gap stats are kept per course. The landing count restarts.
+    - `onObstacleClick` is ignored with no course, and when the ID equals the pending obstacle's. A different ID replaces the pending one.
+    - The gap rule (note 12): `n = tick − lastLanding` when a landing is known, it was not a lap end, and no failure came since. For 1..10 it sets `peek(tick).agilityLost = n`, adds n to `lapLost`, and adds n to the gap stats of the landed obstacle's number. For n ≤ 0 it adds 0 to the stats. For n > 10 it does nothing.
+    - With no open lap, the click starts lap `lapNumber + 1` (`lapStarts` gets `(tick, number)`). The lap is full when it follows a lap end (note 11), and it confirms or discards a provisional lap.
+    - The number is the learned index + 1. When no order is learned, it is the position in the lap. When learned and the ID is not in the order, it is 0.
+    - `onTick(t)`:
+      - An Agility drop with a pending obstacle lands it (`endTick = t`). With `atLapEnd`, the open lap closes: `lastLapTicks = t − lapStart`, `afterLapEnd = true`, and `onTick` returns true. A full lap updates the best and `lastLapWasBest` (strictly faster), and learns the order on the first full lap. A provisional lap is stored for confirmation.
+      - An Agility drop with no pending obstacle counts only when `atLapEnd`.
+      - A drop within 2 ticks of a failure turns the failure into a landing.
+      - `hitOnMe` with a pending obstacle and no drop fails it (`endTick = t`, `failed`).
+      - A pending obstacle older than 30 ticks is removed.
+      - A mark from `onMark(m)` is kept when a landing lies in `[m − 2, m]`; it is resolved at `onTick(m)`.
+    - `showing(t)`: a course is set, there have been ≥ 2 landings on it since the switch or rebind, and either an obstacle is pending or `t − lastLanding ≤ 50`.
+    - `readyTick()` = last landing + 1 when nothing is pending.
+    - `lapLost()` is for the open lap, or for the last lap between laps.
+    - `slowestAfter()` needs one completed full lap (note 12).
+    - `rebind`: like a course switch (the course ID is kept), plus it clears `obstacles` and `lapStarts`.
+    - `loadBest` keeps the lower value, ignores `ticks ≤ 0`, and does not set `takeBestChanged`.
+    - `takeBestChanged()` returns true once after each new best (including a confirmed provisional lap).
+
+- [ ] **Step 1: Write failing tests** (`AgilityCourseTest`). Unless stated: `onCourse("SEERS")`; `SEERS_IDS = {14927, 14928, 14932, 14929, 14930, 14931}`; `DUR = {7, 9, 6, 8, 11, 7}`; `XP = {30, 40, 25, 35, 60, 30}`. The helper `int lap(int start, int... gaps)` clicks obstacle k at c, calls `onTick` every tick, lands it at `c + DUR[k]` with `XpDrop("Agility", XP[k])` (`atLapEnd` on k = 5), and sets the next `c = landing + gaps[k]`. It returns the final landing tick. Laps follow each other after a 3-tick walk.
+  - `courseTable`:
+    - `byRegion(10806)` → id `"SEERS"`, name `"Seers'"`; `byRegion(9781).name == "Gnome"`; `byRegion(12850) == null`;
+    - `isLapEnd("SEERS", 2704, 3464, 0)` is true; `(2704, 3464, 2)` and `(2705, 3464, 0)` are false; `isLapEnd("GNOME", 2487, 3437, 0)` is true;
+    - `all().size() == 12`;
+    - every end tile lies in its course's region: `((x >> 6) << 8 | (y >> 6)) == region`.
+  - `obstaclePillFromClickToLanding` — click 14927 at 100, landing 107 → one obstacle with start 100, end 107, number 1, not failed; `readyTick() == 108`.
+  - `pendingUntilXp` — click at 100, ticks to 104 → `endTick == -1`, `pending()`, `readyTick() == -1`.
+  - `clickWithoutCourseIgnored` — a fresh tracker with no `onCourse` → `obstacles().isEmpty()`.
+  - `spamClickKeepsFirst` — 14927 at 100 and 101 → start 100.
+  - `newClickReplacesPending` — 14927 at 100, 14928 at 102 → one obstacle, ID 14928, start 102.
+  - `staleClickDropped` — click at 100, nothing to 131 → `obstacles().isEmpty()`, `!pending()`.
+  - `ticksLostSummed` — `lap(100, 1, 0, 3, 0, 2)` → `peek(#4 click).agilityLost == 3`; at the lap end `lapLost() == 6`.
+  - `lostOverTenIsPause` — gaps `(12, 0, 0, 0, 0)` → `lapLost() == 0`, and the #2 click's `agilityLost == 0`.
+  - `gapAfterLapEndNotCounted` — the next lap's first click 3 ticks after the lap end → its `agilityLost == 0`.
+  - `lapTimeAndBest`:
+    - lap 1 `lap(100, 1, 0, 1, 3, 0)` (53 ticks): its last `onTick` returns true; `lastLapTicks() == 53`; `bestTicks() == -1` (provisional); `!lastLapWasBest()`;
+    - at lap 2's first click (14927): `bestTicks() == 53`, `takeBestChanged()` true then false;
+    - lap 2 with gaps `(0, 1, 0, 2, 1)` (52) → `lastLapTicks() == 52`, `previousLapTicks() == 53`, `bestTicks() == 52`, `lastLapWasBest()`, `takeBestChanged()`.
+  - `lapEndReturnsTrueOnce` — over a whole lap, only the lap-end `onTick` returns true.
+  - `firstLapPartialNotBest` — the session starts at 14932 (obstacles 3–6, ending at the lap end); lap 2 starts with 14927 → `bestTicks() == -1`. After lap 2 → `bestTicks() == lap 2`. Lap 3's obstacles are numbered 1..6. `slowestAfter()` ignores lap 1's gaps.
+  - `fallingOffNoXp` — after the order is learned: the #3 click at t, then `onTick(t + 4, [], true, false)` → the obstacle is `failed`, `endTick == t + 4`, `number == 3`; `lapStartTick()` unchanged; `lapLost()` unchanged. Re-clicking 14932 later gives number 3 and `agilityLost == 0`.
+  - `hitThenXpIsLanding` — a hit at t, then the Agility drop at t + 1 → not failed, `endTick == t + 1`.
+  - `hitWithoutPendingIgnored`.
+  - `slowestObstacle` — laps with gaps `(1, 0, 1, 3, 0)`, `(0, 1, 0, 2, 2)`, then a third with `(0, 0, 1, 3)` → `slowestAfter() == 4`. All gaps 0 → 0.
+  - `landingWithoutClickCountsForLapEnd` — the final obstacle's click is not reported, but its drop has `atLapEnd` → `onTick` returns true and `lastLapTicks()` is set.
+  - `changingCoursesResetsLap` — after two laps (best 52), mid lap 3 `onCourse("CANIFIS")` → `course() == "CANIFIS"`, `lapStartTick() == -1`, `!pending()`, `bestTicks() == -1`. Back with `onCourse("SEERS")` → `bestTicks() == 52`.
+  - `nullCourseKeepsLap` — `onCourse(null)` mid-lap → `lapStartTick()` unchanged.
+  - `markOfGraceOnLanding` — `onMark(107)` with a landing at 107 → `peek(107).mark`. `onMark(109)` → `peek(109).mark`.
+  - `markWithoutRecentLandingIgnored` — `onMark` 5 ticks after the last landing → no mark.
+  - `markOffCourseIgnored` — no course → no mark.
+  - `loggingOutMidLap` — after 2 laps (order learned, best 52), mid lap 3 `rebind(new Timeline(512))` → `lapStartTick() == -1`, `obstacles().isEmpty()`, `bestTicks() == 52`, `!showing(t)`. The next click on 14929 is number 4.
+  - `firstLapAfterLoginIsProvisional` — after `rebind`, a faster full lap from 14927 → `bestTicks()` unchanged until the next lap starts with 14927.
+  - `showingNeedsTwoLandingsAndLingers` — one landing → `!showing`. Second landing at 116 → `showing(116)`, `showing(166)`, `!showing(167)`.
+  - `loadBestKeepsLower` — `loadBest("SEERS", 80)`, then `90` → 80; `loadBest("SEERS", 0)` ignored; `takeBestChanged()` false.
+  - `historyBounded` — 20 laps → `obstacles().size() == 64`, `lapStarts().size() == 16`.
+  - `resetClearsAll` — including bests and learned orders.
+- [ ] **Step 2:** Run `--tests '*AgilityCourseTest'`. Expected: compile failure / FAIL.
+- [ ] **Step 3: Implement** to the contract and notes 10–14. Per-course state lives in a `Map<String, CourseStats>`: `best`, `order` (List<Integer>), `gapSum[]`, `gapCount[]`.
+- [ ] **Step 4:** Run the tests. Expected: PASS.
+- [ ] **Step 5: Commit.** `feat: agility course table and lap tracker`
+
+### Task 19b: Agility view, narrow ticks, detection and best-lap persistence
+
+**Files:**
+- Create: `ui/modes/AgilityView.java`, `model/skill/LapCompare.java`
+- Modify: `model/Mode.java`, `model/ModeDetector.java`, `model/BarState.java`, `ui/BarLayout.java`, `ui/BarPainter.java`, `ui/Palette.java`, `ui/SkillPainter.java`, `SuperHistogramConfig.java`, `SuperHistogramPlugin.java`, `test/.../ui/BarRenderSamples.java`
+- Test: `ui/BarLayoutTest.java`, `model/ModeDetectorTest.java`, `ui/modes/AgilityViewTest.java`, `ui/BarRenderSmokeTest.java`, `ui/SampleStates.java`, `SuperHistogramPluginHandlersTest.java`
+
+**Interfaces:**
+- Consumes: `AgilityCourse`, `AgilityCourses` (19a), `ModeDetector.skilling` (18b), `XpRow` (17a), `SkillPainter.wasted` (Task 16), `ReadoutPainter.right`.
+- Produces:
+  - `Mode` gains `AGILITY`. `ModeDetector.skilling(boolean alching, boolean producing, boolean agility, boolean gathering)` gives ALCH > PRODUCTION > AGILITY > GATHERING (note 17). The 3-argument form delegates with `agility = false`.
+  - `BarLayout withTickWidth(float tw)`: a copy with `tickWidth = tw` and `visibleTicks = floor(timelineW / tw)`. All other fields are equal, and the original is unchanged.
+  - `BarPainter.timelineLayout(BarLayout l, BarState s)`: `s != null && s.mode == AGILITY ? l.withTickWidth(AgilityView.tickWidth(l, s.agility)) : l` (the same object). `paintContent` uses it for `ruler`, `paintTimeline` and `nowLine`. The left and right readouts and the login time keep `l`.
+  - `AgilityView.tickWidth(BarLayout l, AgilityCourse a)`: note 15. `lapRef = max(best, lastLap)`. With a null `a` or `lapRef ≤ 0` it is `14u`.
+  - `Palette.LAP_LINE` = white 30 %. `SkillPainter.mark(g, cx, cy, u)`: the mockup's `MINT` diamond (cx, cy − 4.5u) → (cx + 4u, cy) → (cx, cy + 4.5u) → (cx − 4u, cy).
+  - `enum LapCompare { BEST, LAST }` (toString "Best" / "Last lap").
+  - `BarState` + builder gain `AgilityCourse agility` (null) and `LapCompare lapCompare` (BEST; a null keeps the default).
+  - Config:
+    - `lapCompare` (BEST, position 26, "Agility: compare lap to", "Compare this lap's time with your best lap or your last lap");
+    - the `blinkWhenDone` description becomes "Flash the bar mint when an inventory finishes or fills, an agility lap ends, or the AFK logout warning fires".
+  - `final class AgilityView implements ModeView`; `static String lapTime(int ticks)` (`"0:52.8"`); `static String[] rightLines(BarState s)`; `static Color rightColor(BarState s)` (MINT between laps when `lastLapWasBest`, else WHITE).
+  - Plugin:
+    - `static final String CONFIG_GROUP = "superhistogram"`; `@Inject ConfigManager configManager`;
+    - fields `volatile AgilityCourse agility`, `volatile String regionCourse`, `int lapEndTick = -1`;
+    - `void handleObstacleClick(int objectId)`, `void handleItemSpawned(int itemId, WorldPoint where)`;
+    - `static boolean isObstacleAction(MenuAction a)` (`GAME_OBJECT_FIRST_OPTION … FIFTH_OPTION`);
+    - `@Subscribe onItemSpawned`.
+
+- [ ] **Step 1: Write failing tests.**
+  - `BarLayoutTest.withTickWidthKeepsGeometry` — `of(1026, 62).withTickWidth(14f)`: `tickWidth == 14`, `visibleTicks == 49`, and `timelineX`, `timelineW`, `rows`, `u` are equal. The original's `tickWidth` is still 32.
+  - `ModeDetectorTest.agilityOrder`:
+    - `skilling(false, false, true, true) == AGILITY`;
+    - `skilling(false, true, true, true) == PRODUCTION`;
+    - `skilling(true, false, true, false) == ALCH`;
+    - `skilling(false, false, false, true) == GATHERING`;
+    - the 3-argument results are unchanged.
+  - `SampleStates.agility(AgilityPhase p, LapCompare c, boolean wastedTicks)`, with `enum AgilityPhase { MID_LAP, LAP_DONE, NEW_BEST }`. It drives a real `AgilityCourse` on SEERS like the 19a helper, plus an `XpTracker`:
+    - lap 1 gaps `(1, 0, 1, 3, 0)` = 53 ticks;
+    - a 3-tick walk;
+    - lap 2 gaps `(0, 1, 0, 2, 2)` = 53;
+    - a 3-tick walk;
+    - lap 3.
+    - MID_LAP: lap 3 starts at `S3 = NOW_TICK − 34`, gaps `(0, 0, 1, 3)`; #5 is clicked at `NOW_TICK` (pending); `loadBest("SEERS", 50)`.
+    - LAP_DONE: lap 3 has gaps `(0, 0, 1, 3, 0)` (52) and ends at `NOW_TICK`; `loadBest` 50.
+    - NEW_BEST: as LAP_DONE with no `loadBest`.
+    - A mark of grace is on lap 3's #2 landing (`S3 + 16`).
+    - `agility(p)` = `(p, BEST, true)`. `S3` is exposed as `lapThreeStart(p)`.
+  - `AgilityViewTest`:
+    - `lapTime` — 88 → `"0:52.8"`, 34 → `"0:20.4"`, 100 → `"1:00.0"`, 0 → `"0:00.0"`.
+    - `rightLines`:
+      - MID_LAP → `{"0:20.4", "best 0:30.0 · lost 4t · slowest after #4"}`;
+      - MID_LAP with LAST → `{"0:20.4", "last 0:31.8 · lost 4t · slowest after #4"}`;
+      - MID_LAP with `wastedTicks` false → `{"0:20.4", "best 0:30.0 · slowest after #4"}`;
+      - LAP_DONE → `{"0:31.2", "best 0:30.0 · lost 4t · slowest after #4"}` with `rightColor == WHITE`;
+      - LAP_DONE with LAST → the small line starts `"last 0:31.8"` (the lap before);
+      - NEW_BEST → `{"0:31.2", "best 0:31.2 · lost 4t · slowest after #4"}` with `rightColor == MINT`;
+      - a null `agility` → `{"", ""}`.
+    - `tickWidth`:
+      - no laps → 14 at 1026 × 62, 7 at 1026 × 31;
+      - MID_LAP (lapRef 53) → `688f / 59` (±0.01);
+      - a 200-tick best → 6 at 62 px;
+      - at 1026 × 22 → at least 4.
+  - `BarRenderSmokeTest` (positions use `x(t)` with `BarPainter.timelineLayout(l, s)`; `tickX` changes to use it, and other modes are unaffected):
+    - `agilityRendersAtThreeSizes` — each phase at 1026 × 62, 1026 × 46 and 600 × 30.
+    - `otherModesKeepTickWidth` — `timelineLayout(l, cooking(RUNNING)) == l`.
+    - `obstaclePillIsAgilityBlue` — MID_LAP: `Palette.skill("Agility")` at (x(S3 + 3) + tw/2, 29u).
+    - `obstacleNumberDrawn` — MID_LAP: a pixel with every channel < 60 in x(S3) + 7u .. + 13u, y 25u–33u.
+    - `lapStartLine` — MID_LAP: the pixel at (x(S3) − 2u, 12u) has every channel ≥ 20 above the ground. `DIM` pixels ("lap 3") in x(S3) + 2u .. + 30u, y 51u–60u at 62 px.
+    - `lostLabelOnlyWhenEnabled` — MID_LAP: `LOST` pixels in x(S3 + 31) .. x(NOW_TICK), y 34u–42u; none with `wastedTicks` false.
+    - `markOfGraceIsMint` — MID_LAP: `MINT` pixels within 3u of (x(S3 + 16) − 9u, xpY − 3.5u).
+    - `agilityRightDoesNotOverlapLoginTime` — the same assertion as Phase 2, at 1026 × 62 and 720 × 62, for every phase.
+  - `SuperHistogramPluginHandlersTest`. "On course" means `at(2710, 3470)` (Seers' region 10806). "Obstacle k" means `handleObstacleClick(SEERS_IDS[k])`, `DUR[k]` × `handleTick`, `handleStat("Agility", base + …)`, then one `handleTick` (which processes the landing). An Agility baseline stat comes first. `plugin.configManager = mock(ConfigManager.class)`.
+    - `isObstacleActionMatches` — `GAME_OBJECT_FIRST_OPTION … FIFTH` are true; `NPC_FIRST_OPTION`, `WALK` and null are false.
+    - `agilityDetectedOnCourse` — on course, obstacles 0 and 1 → `buildState().mode == AGILITY`, `modeName == "Agility"`, `modeSub == "auto · Seers'"`; after obstacle 0 only → GENERAL.
+    - `obstacleClickIgnoredOffCourse` — `at(3200, 3200)`, a tick, `handleObstacleClick(14927)` → `agility.obstacles().isEmpty()`.
+    - `lapEndBlinksOnlyAtEndTile` — on course, obstacles 0–4; obstacle 5 lands with `at(2704, 3464)` before its `handleStat`, then `handleTick(now)` → `pulse.mintAlpha(now) > 0`. The earlier landings did not blink. With `blinkWhenDone` false → 0.
+    - `cueOnReadyTick` — metronome CUE_TICK, after detection: `pulse.outlineAlpha` > 0.9 just after the `handleTick` that processes a landing (its tick equals `agility.readyTick()`).
+    - `fallDamageIsNotCombat` — agility showing, `handleHit(me, DAMAGE_ME, 3)` → `mode == AGILITY`. With agility not showing, the same hit → LAZY_FLICK (unchanged behaviour).
+    - `bestLapLoadedFromProfile` — `getRSProfileConfiguration("superhistogram", "bestLap.SEERS", Integer.class)` → 80; on course, one `handleTick` → `agility.bestTicks() == 80`. A null return leaves −1, without throwing.
+    - `newBestSavedToProfile` — a full lap from obstacle 0 (ending on the end tile), then lap 2's first click (14927) and a `handleTick` → `verify(configManager).setRSProfileConfiguration("superhistogram", "bestLap.SEERS", lap1Ticks)`.
+    - `markSpawnOnCourse` — on a landing tick, `handleItemSpawned(ItemID.GRACE, new WorldPoint(2706, 3466, 2))`, then `handleTick` → `timeline.peek(t).mark`. At `(3200, 3200, 0)`, with another item ID, or on a LOADING tick → no mark.
+    - `logoutMidLapKeepsBest` — `LOGIN_SCREEN` mid-lap → `agility.lapStartTick() == -1` and `bestTicks()` unchanged; `regionCourse == null`.
+- [ ] **Step 2:** Run `--tests '*BarLayoutTest' --tests '*ModeDetectorTest' --tests '*AgilityViewTest' --tests '*BarRenderSmokeTest' --tests '*PluginHandlersTest'`. Expected: FAIL.
+- [ ] **Step 3: Implement** to agility.html (62-px values × u, ticks from `timelineLayout`):
+  - **Lap lines:** for each `LapStart` in view:
+    - `lx = x(tick) − 2u`; a 1px-wide `LAP_LINE` rect at `lx − 0.5`, y 8u, height 48u (`rows == 3`). With fewer rows it spans from `pillY − 4u` to `pillY + pillH + 4u`.
+    - Label `"lap " + number`, bold 10u, `DIM`, tracking 0.04, at `(lx + 4u, 59u)` (`rows == 3` only).
+  - **Obstacles:**
+    - `x1 = x(start)`, `x2 = x(endTick == -1 ? nowTick + 1 : min(endTick, nowTick + 1))`;
+    - fill a round rect from `x1 + 1`, `pillY`, width `max(pillH, x2 − x1 − 2)`, arc `pillH`, in `Palette.skill("Agility")`. A failed obstacle uses `withAlpha(…, FAINT_ALPHA)`.
+    - Number (`rows > 1`, `number > 0`): bold 10u, `PILL_LABEL_SOLID`, centred on `nx = x1 + 10u`, baseline `pillY + pillH/2 + 4u`, when `nx < x2 − 6u` and `nx > timelineX`.
+  - **Top row** (`rows > 1`): `TimelinePainter.xp`; for each `mark` tick `SkillPainter.mark(g, x(t) − 9u, xpY − 3.5u, u)`; then `TimelinePainter.hits` (falls show their damage).
+  - **Actions row** (`rows == 3`): for `agilityLost = n > 0` with `wastedTicks`: `SkillPainter.wasted(g, tl, x(t − n) + 1, x(t) − 1, n)`.
+  - **Right:** `ReadoutPainter.right(g, l, s, lines[0], rightColor(s), lines[1])`.
+    - The headline is `lapTime(nowTick − lapStartTick)` while a lap is open, else `lapTime(lastLapTicks)`, else `""`.
+    - The small line joins, with `" · "`:
+      - BEST → `"best " + lapTime(best)` (if best ≥ 0); LAST → `"last " + lapTime(…)`, using `lastLapTicks` while a lap is open and `previousLapTicks` between laps (if ≥ 0);
+      - `"lost " + lapLost() + "t"` (with `wastedTicks`);
+      - `"slowest after #" + k` (k > 0).
+  - **Plugin:**
+    - `initModel` creates `new AgilityCourse(timeline)`. LOGIN_SCREEN calls `agility.rebind(timeline)` and sets `lapEndTick = -1`, `regionCourse = null`. HOPPING keeps them.
+    - `handleTick`, after the `me` lookup:
+      - `c = here == null ? null : AgilityCourses.byRegion(here.getRegionID())`, and `regionCourse = c == null ? null : c.id`;
+      - when `c != null` and `!c.id.equals(agility.course())`: `agility.onCourse(c.id)`, then `Integer b = configManager.getRSProfileConfiguration(CONFIG_GROUP, "bestLap." + c.id, Integer.class)`, and if it is non-null, `agility.loadBest(c.id, b)`;
+      - then `lapDone = agility.onTick(tick − 1, prevXp, prev != null && !prev.hits.isEmpty(), lapEndTick == tick − 1)`; blink when `lapDone && blinkWhenDone`;
+      - when `agility.takeBestChanged()` → `configManager.setRSProfileConfiguration(CONFIG_GROUP, "bestLap." + agility.course(), agility.bestTicks())`;
+      - the cue adds `agility.showing(tick) && agility.readyTick() == tick`.
+      - A null `configManager` (tests that do not set it) skips the load and save.
+    - `handleStat`: for `"Agility"`, when the local player's location satisfies `AgilityCourses.isLapEnd(agility.course(), x, y, plane)`, set `lapEndTick = tick`. Then continue as today.
+    - `onMenuOptionClicked`: `isObstacleAction(action) && !isBankClick(option, target) && gatherSkill(...) == null` → `handleObstacleClick(e.getId())`. That calls `agility.onObstacleClick(tick, id)` only when `regionCourse != null`.
+    - `onItemSpawned` → `handleItemSpawned(e.getItem().getId(), e.getTile().getWorldLocation())`. It calls `agility.onMark(tick)` when `itemId == ItemID.GRACE`, `tick != loadingTick`, and `byRegion(where.getRegionID())` is the current course.
+    - `buildState`:
+      - `agilityOn = agility.showing(t)`; `combat` uses `AttackTimer.NEVER` in place of `lastHitTick` when `agilityOn` (note 13);
+      - `skilling = ModeDetector.skilling(alch, run, agilityOn, gather)`;
+      - AGILITY → name `"Agility"`, sub `"auto · " + AgilityCourses.byId(course).name`;
+      - set `agility` and `lapCompare`. Register `AgilityView`.
+  - `BarRenderSamples.writeAgilityContactSheet` — each AgilityPhase at 1026 × 62, 720 × 62 and 400 × 36, to compare with agility.html.
+- [ ] **Step 4:** Run the tests. Expected: PASS.
+- [ ] **Step 5: Build.** Expected: `BUILD SUCCESSFUL`, and all Phase 1–4 tests pass.
+- [ ] **Step 6: Manual check in the dev client** (Seers' rooftop, then Canifis; one Gnome lap). Note results:
+  - "Agility · auto · Seers'" appears on the second obstacle;
+  - the pills are numbered 1–6 from lap 2 on, and stay numbered correctly after a fall;
+  - a whole lap fits on the bar at 1026 px after the first lap;
+  - "+N" matches the ticks you stood still, and nothing is drawn for the walk back to the start;
+  - the lap-end Agility XP arrives while you stand on the end tile, so the lap closes and the bar blinks once per lap, not per obstacle. If the lap never closes, note the location reported at the final XP;
+  - with the metronome on, the outline goes bright on the tick after each landing;
+  - a mark of grace shows the mint diamond on the landing where it appeared; marks already on the roof when you arrive are not drawn;
+  - a fall shows a faint pill and the bar does not switch to combat;
+  - the best lap survives a client restart, and "compare to Last lap" switches the small line;
+  - moving to Canifis switches the name and best;
+  - logging out mid-lap and back in gives no crash and keeps the best;
+  - the login time stays at the far right.
+- [ ] **Step 7: Commit.** `feat: agility view with lap times, best lap and narrow ticks`
+
+**Phase 4 done:** woodcutting, mining, fishing and firemaking with roll notches, depletion "+N" and an estimated time to full. Agility laps with numbered obstacles, ticks lost, the slowest obstacle and a saved best lap, with the whole lap on the bar.
 
 ---
 

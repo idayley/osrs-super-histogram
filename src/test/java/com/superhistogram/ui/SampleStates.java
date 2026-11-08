@@ -540,13 +540,13 @@ public final class SampleStates
 	// ---- high alch (high-alch.html) ----
 
 	/** Cast ticks of the alch sample; the last one (NOW_TICK - 2) has no price. */
-	public static final int CAST_LATE = NOW_TICK - 12, CAST_LOSS = NOW_TICK - 7, CAST_LAST = NOW_TICK - 2;
+	public static final int CAST_LATE = NOW_TICK - 12, CAST_MID = NOW_TICK - 7, CAST_LAST = NOW_TICK - 2;
 	/** Profit of the late cast. */
-	public static final long LATE_PROFIT = 236;
+	public static final long LATE_COINS = 2360;
 
 	/**
-	 * Drives a real AlchTracker like the plugin: casts at NOW-29 (236), -24 (212), -19 (198), CAST_LATE
-	 * (236, two ticks late), CAST_LOSS (-40) and CAST_LAST (unpriced), each a click on the tick before and a
+	 * Drives a real AlchTracker like the plugin: casts at NOW-29 (2360), -24 (2120), -19 (1980), CAST_LATE
+	 * (2360, two ticks late), CAST_MID (400) and CAST_LAST (unpriced), each a click on the tick before and a
 	 * Magic 65 drop on the cast tick. Online for 1 h.
 	 */
 	public static BarState alch(AlchTopRow top, RightSide side)
@@ -562,29 +562,29 @@ public final class SampleStates
 
 	public static BarState alch(AlchTopRow top, RightSide side, boolean fletch, boolean wastedTicks)
 	{
-		int[] ticks = {NOW_TICK - 29, NOW_TICK - 24, NOW_TICK - 19, CAST_LATE, CAST_LOSS, CAST_LAST};
-		Long[] profits = {236L, 212L, 198L, LATE_PROFIT, -40L, null};
-		return alchRun(top, side, fletch, wastedTicks, ticks, profits, 13_034_301);
+		int[] ticks = {NOW_TICK - 29, NOW_TICK - 24, NOW_TICK - 19, CAST_LATE, CAST_MID, CAST_LAST};
+		Long[] coins = {2360L, 2120L, 1980L, LATE_COINS, 400L, null};
+		return alchRun(top, side, fletch, wastedTicks, ticks, coins, 13_034_301);
 	}
 
-	/** Casts every 5 ticks ending at CAST_LAST with the given profits (oldest first); Magic starts at 13,034,301. */
-	public static BarState alchText(Long... profits)
+	/** Casts every 5 ticks ending at CAST_LAST with the given coins (oldest first); Magic starts at 13,034,301. */
+	public static BarState alchText(Long... coins)
 	{
-		return alchText(AlchTopRow.GOLD, RightSide.PER_HOUR, profits);
+		return alchText(AlchTopRow.GOLD, RightSide.PER_HOUR, coins);
 	}
 
-	public static BarState alchText(AlchTopRow top, RightSide side, Long... profits)
+	public static BarState alchText(AlchTopRow top, RightSide side, Long... coins)
 	{
-		int[] ticks = new int[profits.length];
+		int[] ticks = new int[coins.length];
 		for (int i = 0; i < ticks.length; i++)
 		{
 			ticks[i] = CAST_LAST - (ticks.length - 1 - i) * AlchTracker.CAST_TICKS;
 		}
-		return alchRun(top, side, false, true, ticks, profits, 13_034_301);
+		return alchRun(top, side, false, true, ticks, coins, 13_034_301);
 	}
 
 	private static BarState alchRun(AlchTopRow top, RightSide side, boolean fletch, boolean wastedTicks, int[] castTicks,
-		Long[] profits, int magicBase)
+		Long[] coins, int magicBase)
 	{
 		Timeline t = new Timeline(512);
 		XpTracker xp = new XpTracker(t);
@@ -600,7 +600,7 @@ public final class SampleStates
 			{
 				if (castTicks[i] - 1 == tick)
 				{
-					alch.onCastClick(tick, profits[i]);
+					alch.onCastClick(tick, coins[i]);
 				}
 				if (castTicks[i] == tick)
 				{
