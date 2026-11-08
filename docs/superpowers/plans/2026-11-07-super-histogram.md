@@ -533,19 +533,301 @@ All paths below are under `src/main/java/com/superhistogram/` or `src/test/java/
 
 ---
 
-## Phase 3 — Production + alch (mockups: `cooking.html`, `high-alch.html`, `multi-xp.html`)
+## Phase 3 — Production + alch (mockups: `cooking.html`, `high-alch.html`, `multi-xp.html`, `settings-panel.html`)
 
-### Task 15: Inventory activity tracker
-`model/skill/InventoryRun.java`: counts processed items per inventory, gets action ticks from the gap between successive XP drops of the same skill, gives exact ETA = remaining × ticks-per-action × 0.6 s, and records "+N" wasted ticks between the last item and the next bank click. Tests: `etaExactForCooking`, `wastedTicksBeforeBank`.
+Paths, test and build commands, and the 62-px × `u` convention are as in Phase 2. "Opaque white" in pixel tests means alpha ≥ 200 and every channel ≥ 240 (this excludes the 14 % ruler marks). Colour matches allow ±8 per channel.
 
-### Task 16: Production view + detection
-`ui/modes/ProductionView.java`: inventory pill filling, finish flag ahead on the ruler, countdown on the right; `Pulse.done` when the inventory finishes (if `blinkWhenDone`). Detection: the same production skill's XP drops 2+ times within 12 ticks while the inventory count of its input decreases.
+**RuneLite API used, confirmed with `javap` against client / runelite-api 1.13.6:** `client.game.ItemManager.getItemPrice(int)` (returns `long`), `ItemManager.getItemComposition(int)`, `ItemManager.canonicalize(int)` (noted / placeholder → base item), `ItemComposition.getHaPrice()/isTradeable()`, `gameval.ItemID.NATURERUNE` (561), `events.MenuOptionClicked.getMenuAction()/getMenuOption()/getMenuTarget()/getItemId()`, `MenuAction.WIDGET_TARGET_ON_WIDGET`, `client.util.Text.removeTags(String)`, `events.StatChanged.getSkill()/getXp()`, `Skill.COOKING/FLETCHING/HERBLORE/CRAFTING/SMITHING/PRAYER/MAGIC.getName()`, `events.ItemContainerChanged` + `InventoryID.INVENTORY` (already used in Phase 2). Runtime behaviour that `javap` cannot show is checked in the manual steps: that `getItemId()` is the target item on a spell-on-item click, and that the target text reads `High Level Alchemy -> <item>`.
 
-### Task 17: High alch + multi-XP
-- `model/skill/AlchTracker.java`: cast = High Level Alchemy spell click + Magic XP 65. Profit per cast = item HA value (`ItemComposition.getHaPrice()`) − item price − nature rune price (prices via `ItemManager.getItemPrice`). Session gold and /hr.
-- `ui/modes/AlchView.java` with `alchTopRow` (GOLD / XP / BOTH).
-- `ui/XpRow.java` paints multi-skill coloured numbers side by side, with frequent skills (≥ 1 drop per 2 ticks over the last 10) as dots, hidden under number groups, matching `multi-xp.html`.
-- Tests: `profitNegativeShowsMinus`, `dotsHiddenUnderNumbers`.
+**Expansion notes (changes from the task-level text):**
+1. Task 17 is split: **17a** multi-XP row (XP grammar for every mode) and **17b** high alch. 17b depends on 17a; either can be rejected alone.
+2. An inventory "action" is a decrease of the run's input item, not an XP drop. A burnt fish uses an input but gives no XP, so it counts toward "n of 28" and is drawn as grey "burnt". XP is the detection signal: an action is matched when a drop of the run's skill lands on the same tick, or on the next tick if that tick has no action of its own.
+3. The input is the limiting reagent: of the items that dropped on the first matched action, the one with the fewest actions left (`count / decrease`). Smithing's 5 bars per platebody works the same way.
+4. Ticks per action = the smallest of the last 3 gaps between actions (gaps of 0 are ignored). A faster rate takes effect at once. A pause (level-up dialog) does not inflate the ETA. A slower rate takes effect after 3 gaps.
+5. A bank click ends the run. If items were left, the run is abandoned: no done blink, no "+N", and the mode drops back at once. An increase in the input count (withdrawing items) also ends the run. A production action of another skill ends the run and starts a new candidate.
+6. Detection: production shows after 2 matched actions of one skill no more than 12 ticks apart. It lingers 20 ticks after the last action or bank click. Alch shows after 2 confirmed casts no more than 15 ticks apart (5 + `LOST_MAX` 10) and lingers 10 ticks. Priority: AFK > combat > alch > production > baseline. Alch beats production so alch + fletch shows the alch view with Fletching dots, as `multi-xp.html` does.
+7. Multi-XP is not a Mode. `XpRow` is the XP grammar wherever XP is drawn. `TimelinePainter.xp` (General, Minimal, AFK, Production, Alch: top row) and `CombatPainter.xpLow` (lazy flick, 1-tick: actions row) both delegate to it, with the same offsets as today. The cooking mockup's grey, centred "+210" and the alch mockup's "+65 xp" are replaced by this grammar: bold 10u, skill colour, at `x(t) − 4u`.
+8. Config, mirroring `settings-panel.html`: `xpDrops` (NUMBERS / DOTS_ONLY / OFF, NUMBERS), `xpDots` ("Frequent skills as dots", true), `alchTopRow` (GOLD / XP / BOTH, GOLD), `rightSide` (PER_HOUR / SESSION, PER_HOUR, "Right side shows"), `timeToFinish` (true), `wastedTicks` ("Wasted ticks (+N)", true). Positions are 20–25; Phase 5 adds the sections. `rightSide` is used only by the alch view. General and Minimal keep their Phase 1 readouts. The mockup's per-skill "Str 92k/hr" right column is not adopted, because each mode keeps one headline.
+9. Every right readout goes through `ReadoutPainter.right` (bold 20u headline, clamped at `rightLimit`), so the login time stays at the far right in every mode. This differs from the mockups' 22u headline. A new `coin` overload draws the coin icon before a gold headline.
+10. Profit = HA value − GE price of the item − GE price of a nature rune, from `ItemManager` (its cached price data; there are no other network calls). If any price is ≤ 0, or the item ID or composition is missing, the profit is unknown (`null`). An unknown cast is drawn as a coin with a dim "?", is left out of the gold totals, and adds " · N unpriced" to the small line. Fire runes are not counted, as the spec says.
+11. The finish flag and the next-cast ▲ are the player's own rhythm, which the rules boundary allows. With the metronome on (Every tick or Cue tick), the outline pulses bright on the finish tick and on the cast-ready tick, as the mockups say. When the inventory finishes, `Pulse.done` fires once, if `blinkWhenDone` is on.
+12. The run's pills are kept in a bounded list inside `InventoryRun` (the last 8), not in the timeline's spans. If they were timeline spans, `TimelinePainter.spans` would paint them a second time in General. The pot icon is drawn for Cooking only. The other production skills get their icons in Phase 5.
+13. `InventoryRun` and `AlchTracker` are read by the render thread: their public methods are `synchronized`, and their lists are returned as copies (as `Beat` does).
+
+### Task 15: Inventory run tracker
+
+**Files:**
+- Create: `model/skill/InventoryRun.java`
+- Modify: `model/TickRecord.java`
+- Test: `model/skill/InventoryRunTest.java`
+
+**Interfaces:**
+- Consumes: `Timeline`, `TickRecord`, `XpDrop`, `Span` (Task 2).
+- Produces:
+  - `TickRecord` gains `public boolean failedAction; public boolean bankClick; public int wasted;`.
+  - `final class InventoryRun { static final Set<String> SKILLS /* "Cooking","Fletching","Herblore","Crafting","Smithing","Prayer" */; static final int DETECT_WINDOW = 12, LINGER = 20, HISTORY = 8; InventoryRun(Timeline t); boolean onTick(int tick, List<XpDrop> drops, Map<Integer,Integer> inventory /* full counts, null = unchanged */); void onBankClick(int tick); boolean showing(int tick); boolean running(); boolean finished(); String skill(); int done(); int total(); int remaining(); int ticksPerAction() /* 0 unknown */; int finishTick() /* -1 unknown */; int bankTick() /* -1 none */; int wasted(); List<Span> runs() /* oldest first, copy; kind = skill, endTick -1 while running */; void reset(); }`
+    - The first non-null inventory only sets the baseline.
+    - `onTick` returns true exactly once per run, on the tick its last item is made, and only if the run was detected (running).
+    - On detection, the run's span starts at `firstActionTick − ticksPerAction`. It closes at the last action tick: on finish, abandon, or a switch.
+    - `finishTick = lastActionTick + remaining × ticksPerAction` while running; after the finish it is the last action tick.
+    - `onBankClick` after a finish sets `bankTick`, `wasted = max(0, bankTick − finishTick)`, and the record's `bankClick` and `wasted`. Before a finish it abandons the run (note 5).
+    - `showing(tick)`: running or finished, and `tick − max(lastActionTick, bankTick) ≤ 20`.
+
+- [ ] **Step 1: Write failing tests** (`InventoryRunTest`; unless stated: raw shark 383, baseline `{383: 28}`, an action = inventory one lower plus `XpDrop("Cooking", 210)` on that tick, actions at 100, 104, 108, …, `onTick` for every tick in order):
+  - `singleDropDoesNotDetect` — one action at 100, ticks to 110 → `running() == false`, `showing(110) == false`.
+  - `twoDropsWithin12TicksDetect` — actions at 100 and 104 → `running()`, `skill() == "Cooking"`, `total() == 28`, `done() == 2`, `runs().get(0).startTick == 96`.
+  - `dropsTooFarApartDoNotDetect` — actions at 100 and 113 → not running.
+  - `xpWithoutInventoryDropIsNoAction` — Cooking drops at 100 and 104 with an unchanged inventory → not running, `done() == 0`.
+  - `xpOneTickAfterDecreaseStillMatches` — decreases at 100 and 104, drops at 101 and 105 → running, no `failedAction`.
+  - `burntCountsButFlagged` — at 108 the inventory drops with no drop at 108 or 109 → `peek(108).failedAction`, `done() == 3`, `remaining() == 25`.
+  - `etaExactForCooking` — 14 actions (last at 152) → `ticksPerAction() == 4`, `finishTick() == 208`, `remaining() == 14`.
+  - `etaFollowsRateChange` — actions at 100, 104, 108, 112, 114, 116 → `ticksPerAction() == 2`, `finishTick() == 160`.
+  - `pauseDoesNotInflateEta` — actions at 100, 104, 108, 128 → `ticksPerAction() == 4`, `finishTick() == 224`.
+  - `finishReturnsTrueOnce` — all 28 actions: `onTick(208, …)` returns true, every other call false; `finished()`; `runs().get(0).endTick == 208`.
+  - `wastedTicksBeforeBank` — after the finish at 208, `onBankClick(211)` → `wasted() == 3`, `peek(211).bankClick`, `peek(211).wasted == 3`; on a fresh run `onBankClick(208)` → `wasted() == 0`.
+  - `bankMidInventoryEndsRunWithoutBlink` — 10 actions, `onBankClick(140)` → no `onTick` ever returned true, `!running()`, `!showing(140)`, `peek(140).bankClick == false`, the span ends at 136, and the later deposit (`{383: 0}` at 143) adds no actions.
+  - `withdrawEndsRun` — mid-run the count rises to 28 → `!running()`; the next two actions start a new run with `total() == 28`.
+  - `secondProductionSkillStartsNewRun` — baseline `{383: 28, 1511: 28}`, 10 cooking actions, then logs 1511 dropping by 1 with `XpDrop("Fletching", 5)` at 150 and 153 → `skill() == "Fletching"`, `total() == 28`, cooking span ends at 136, `runs().size() == 2`.
+  - `limitingReagentIsInput` — baseline `{1777: 14, 62: 20}`, each action drops both by 1 with Fletching XP → `total() == 14`.
+  - `multiUnitInput` — baseline `{2363: 25}` (bars), each action −5 with Smithing XP → `total() == 5`, `remaining()` after 2 actions `== 3`.
+  - `nonProductionSkillIgnored` — Magic drops with the inventory falling → not running.
+  - `historyBounded` — 10 complete runs → `runs().size() == 8`.
+  - `resetClearsAll`.
+- [ ] **Step 2:** Run `--tests '*InventoryRunTest'`. Expected: compile failure / FAIL.
+- [ ] **Step 3: Implement** to the contract and notes 2–6. Keep at most one pending unmatched decrease (from the previous tick). Keep the last 3 positive gaps.
+- [ ] **Step 4:** Run the tests. Expected: PASS.
+- [ ] **Step 5: Commit.** `feat: inventory run tracker`
+
+### Task 16: Production view, detection and done blink
+
+**Files:**
+- Create: `ui/modes/ProductionView.java`, `ui/SkillPainter.java`
+- Modify: `model/Mode.java`, `model/ModeDetector.java`, `model/BarState.java`, `ui/BarPainter.java`, `ui/Palette.java`, `SuperHistogramConfig.java`, `SuperHistogramPlugin.java`, `test/.../ui/BarRenderSamples.java`
+- Test: `model/ModeDetectorTest.java`, `ui/modes/ProductionViewTest.java`, `ui/BarRenderSmokeTest.java`, `ui/SampleStates.java`, `SuperHistogramPluginHandlersTest.java`
+
+**Interfaces:**
+- Consumes: `InventoryRun` (Task 15), `Pulse.tick/done` (Task 4), `TimelinePainter.x/pill/pillY/pillH/xp/hits` (Task 8), `ReadoutPainter.right/minSec` (Task 8).
+- Produces:
+  - `Mode` gains `PRODUCTION`. `Mode detect(boolean afk, boolean inCombat, Mode skilling /* PRODUCTION, ALCH or null */, PrayerMode prayerMode, BaselineSetting baseline)`: AFK, then combat, then `skilling`, then the baseline. The 4-argument `detect` delegates with `null`, so the existing tests are unchanged.
+  - `BarState` + builder gain `InventoryRun run` (null), `boolean timeToFinish` (true), `boolean wastedTicks` (true).
+  - `Palette` adds `COOK_PILL = #d9a35b`, `BURNT = #6b737c`, `WASTED_LINE = white 55%`.
+  - `final class SkillPainter` (static): `pot(g, x, y, u, Color)`, `flag(g, x, y0, y1, u, Color)`, `bank(g, x, y, u, Color)`, `wasted(g, l, x0, x1, int n)`. `wasted` draws a 1.5u `WASTED_LINE` at y 45.25u from x0 to x1, and `"+N"` in bold 9u `LOST` centred on the line, baseline 42u. Paths are the mockup's `pot`, `flag` and `bank` functions × u.
+  - `final class ProductionView implements ModeView`; `static String[] rightLines(BarState s)` (headline, small line); `static Color rightColor(BarState s)`.
+  - Config: `timeToFinish` (true, position 24, "Time to finish"), `wastedTicks` (true, 25, "Wasted ticks (+N)"). The `blinkWhenDone` description becomes "Flash the bar mint when an inventory finishes or the AFK logout warning fires".
+  - Plugin: `volatile InventoryRun run`, `Map<Integer,Integer> latestInventory`, `void handleBankClick()`, `static boolean isBankClick(String option, String target)` (`"Bank"`, or `"Use"` with a tag-stripped target containing `"Bank"`).
+
+- [ ] **Step 1: Write failing tests.**
+  - `ModeDetectorTest`: `productionBeatsBaseline` — `detect(false, false, PRODUCTION, LAZY_FLICK, MINIMAL) == PRODUCTION`. `combatBeatsProduction` — `detect(false, true, PRODUCTION, LAZY_FLICK, GENERAL) == LAZY_FLICK`. `afkBeatsProduction` — `detect(true, false, PRODUCTION, …) == AFK`.
+  - `SampleStates.cooking(ProdPhase p)`, with `enum ProdPhase { RUNNING, DONE, BANKED }`, drives a real `InventoryRun` as cooking.html: 28 raw sharks, 4 ticks per action, burnt at items 9 and 25.
+    - RUNNING: 27 actions, the last at `NOW_TICK − 2`, so `finishTick == NOW_TICK + 2`.
+    - DONE: 28 actions, the last at `NOW_TICK − 3`.
+    - BANKED: the last action at `NOW_TICK − 5`, bank click at `NOW_TICK − 2` (wasted 3).
+    - `cooking(p, boolean timeToFinish, boolean wastedTicks)` varies the two settings.
+  - `ProductionViewTest.rightLines`:
+    - RUNNING → `{"0:01", "left · 27 of 28 cooked"}` (2 ticks × 0.6 = 1.2 s, rounded);
+    - DONE → `{"Bank now", "28 of 28 cooked"}`;
+    - BANKED → `{"Banking · +3", "28 of 28 cooked"}` with `rightColor == MINT`; with wasted 0 → `"Banking ✓"`;
+    - RUNNING with `timeToFinish` false → `{"27 of 28", "cooked"}`;
+    - a Fletching run uses `"done"` in place of `"cooked"`;
+    - a null `run` → `{"", ""}`.
+  - `BarRenderSmokeTest`:
+    - `productionRendersAtThreeSizes` — each ProdPhase at 1026 × 62, 1026 × 46 and 600 × 30, no exception (the `Mode.values()` loops cover a null `run`).
+    - `cookedPillSolidRemainingFaint` — RUNNING: `COOK_PILL` pixels at (x(NOW_TICK − 10), 29u); at (x(NOW_TICK + 1) + 16u, 29u) only the 1.5u outline, so the interior pixel equals the ground.
+    - `finishFlagAheadOfNow` — RUNNING: opaque white within x(NOW_TICK + 2) − 1u .. + 9u, y 42u–60u at 62 px. None at 46 px, and none with `timeToFinish` false.
+    - `wastedLabelOnlyWhenEnabled` — BANKED: `LOST` pixels in x(NOW_TICK − 5) .. x(NOW_TICK − 2), y 34u–42u; none with `wastedTicks` false.
+    - `burntIsGrey` — RUNNING: `BURNT` pixels within x(item 25's tick) ± 12u, y 6u–16u.
+    - `productionRightDoesNotOverlapLoginTime` — the same assertion as `lazyFlickTrailDoesNotOverlapLoginTime`, at 1026 × 62 and 720 × 62.
+  - `SuperHistogramPluginHandlersTest` (logged in; an action = `handleTick`, `handleInventory({383: n})`, `handleStat("Cooking", base + 210·k)`; the first inventory and stat are baselines):
+    - `productionDetectedAfterTwoActions` — after one action plus 4 ticks, `buildState().mode == GENERAL`; after the second, `PRODUCTION` with `modeName == "Cooking"` and `modeSub == "auto"`.
+    - `inventoryDoneBlinks` — 28 actions, one per tick, then one more `handleTick(now)` → `pulse.mintAlpha(now) > 0`. With `blinkWhenDone` false → 0.
+    - `cueOnFinishTick` — metronome CUE_TICK: `pulse.outlineAlpha` > 0.9 just after the `handleTick` whose tick equals `run.finishTick()`, and 0 on the tick before.
+    - `bankClickRecordsWasted` — 3 ticks after the finish, `handleBankClick()` → `timeline.peek(tick).wasted == 3`.
+    - `isBankClickMatches` — `("Bank", "<col=ffff>Banker")`, `("Bank", null)` and `("Use", "<col=ffff>Bank chest")` are true; `("Use", "Raw shark")` and `("Use", null)` are false, without throwing.
+    - `logoutClearsRun` — `LOGIN_SCREEN` → `run.running() == false`, `latestInventory == null`.
+- [ ] **Step 2:** Run `--tests '*ModeDetectorTest' --tests '*ProductionViewTest' --tests '*BarRenderSmokeTest' --tests '*PluginHandlersTest'`. Expected: FAIL.
+- [ ] **Step 3: Implement** to cooking.html (62-px values × u):
+  - Pills (from `s.run.runs()`): fill `COOK_PILL` for Cooking, otherwise `Palette.skill(skill)`; y `pillY(l)`, h `pillH(l)`.
+    - The current unfinished run first gets a faint outline from `x(start)` to `x(finishTick)`: stroke 1.5u, 45 % alpha.
+    - Then a solid part from `x(start)` to `x(min(nowTick + 1, end or finishTick))`, at least `pillH` wide.
+    - Pot (Cooking only): at `ix = max(x(start) + 11u, timelineX + 11u)`, `pillY + pillH/2 + 1u`, in `PILL_LABEL_SOLID`, drawn when `ix < solidEnd − 6u`.
+  - Top row: `TimelinePainter.xp`. `"burnt"` (semibold 9.5u, `BURNT`) is centred on `x(t)` at baseline 15u for each `failedAction` tick, then `TimelinePainter.hits`.
+  - Actions row (`rows == 3`):
+    - finish flag at `x(finishTick)`, y 41u–61u, white, when the run is running, `finishTick > nowTick` and `timeToFinish`;
+    - bank icon at `(x(t), 46u)` in `TEXT` on `bankClick` ticks;
+    - when `wasted > 0` and `wastedTicks`: `SkillPainter.wasted(g, l, x(t − wasted), x(t) − 9u, wasted)` (this leaves room for the bank icon).
+  - Right: `ReadoutPainter.right(g, l, s, lines[0], rightColor(s), lines[1])`. While running with `timeToFinish`, the headline is `minSec(round((finishTick − nowTick) × 0.6))`.
+  - Plugin:
+    - `initModel` and LOGIN_SCREEN create `new InventoryRun(timeline)` and set `latestInventory = null`. HOPPING keeps them.
+    - `handleInventory` also stores `latestInventory = new HashMap<>(counts)`.
+    - In `handleTick`, before the metronome: `prev = timeline.peek(tick − 1)`, `boolean finished = run.onTick(tick − 1, prev == null ? emptyList() : prev.xp, latestInventory)`; if `finished && config.blinkWhenDone()` → `pulse.done(nowMs)`. The metronome cue becomes `beat.isBeat(tick) || (run.running() && run.finishTick() == tick)`; CUE_TICK pulses only when that cue is true.
+    - In `onMenuOptionClicked`: `isBankClick(option, target)` → `handleBankClick()`.
+    - `buildState`: `skilling = run.showing(tickNow) ? PRODUCTION : null`. PRODUCTION → name `run.skill()`, sub `"auto"`. Set `run`, `timeToFinish`, `wastedTicks`. Register `ProductionView` in `BarPainter`.
+  - `BarRenderSamples.writeProductionContactSheet` — each ProdPhase at 1026 × 62, 1026 × 46 and 600 × 30 (same pattern as `writeLazyFlickContactSheet`), to compare with cooking.html.
+- [ ] **Step 4:** Run the tests. Expected: PASS.
+- [ ] **Step 5: Build.** Expected: `BUILD SUCCESSFUL`, all earlier tests pass.
+- [ ] **Step 6: Manual check in the dev client** (cook a full inventory at a range, then fletch logs). Note results:
+  - the bar switches to "Cooking · auto" on the second item, not the first;
+  - the pill fills and the faint part shrinks;
+  - a burnt fish shows grey "burnt";
+  - the countdown matches the real finish to within one tick;
+  - the flag sits on the last item's tick, and with the metronome on, the outline goes bright there;
+  - the bar blinks mint once when the last item is done;
+  - clicking the bank 2 ticks late shows "+2" and "Banking · +2";
+  - banking halfway drops back to General with no blink;
+  - fletching right after cooking switches to "Fletching";
+  - XP and the inventory change land on the same tick (if not, note the offset, since note 2 depends on it);
+  - the login time is still at the far right.
+- [ ] **Step 7: Commit.** `feat: production view with finish flag and done blink`
+
+### Task 17a: Multi-XP row
+
+**Files:**
+- Create: `ui/XpRow.java`, `model/XpDrops.java`
+- Modify: `ui/TimelinePainter.java`, `ui/CombatPainter.java`, `model/BarState.java`, `SuperHistogramConfig.java`, `SuperHistogramPlugin.java`
+- Test: `ui/XpRowTest.java`, `ui/BarRenderSmokeTest.java`, `ui/SampleStates.java`
+
+**Interfaces:**
+- Consumes: `TickRecord.xp`, `TickRecord.attackLate`, `BarState.actionsRow` (Tasks 2, 10, 12).
+- Produces:
+  - `enum XpDrops { NUMBERS, DOTS_ONLY, OFF }` (toString "Numbers" / "Dots only" / "Off").
+  - `final class XpRow { enum Row { TOP, LOW } static final int FREQUENT_WINDOW = 10, FREQUENT_MIN = 5; static Set<String> frequentSkills(Timeline t, int nowTick); static void paint(Graphics2D g, BarLayout l, BarState s, Row row); }`
+    - `frequentSkills`: skills with drops on ≥ 5 distinct ticks in `[nowTick − 9, nowTick]`. It is computed once per frame and applies to every visible tick.
+    - `paint` goes oldest tick → newest, with one `busyTo` carried across ticks. Start `x = x(t) − 4u`; LOW uses `x(t) + 8u` when `actionsRow != OFF` and `attackLate >= 0` (today's `xpLow` rule). For each entry:
+      - a dot (frequent skill with `xpDots`, or any skill under DOTS_ONLY): skipped if `x < busyTo`, otherwise a circle r 2.6u at `(x + 2.6u, dotY)` in the skill colour, then `x += 9u`;
+      - otherwise a number: `"+N"` bold 10u in the skill colour at the baseline, then `x += width + 6u` and `busyTo = x + 2u`.
+    - TOP: baseline `xpY(l)`, dotY `xpY − 3u`, hidden at `rows == 1`. LOW: baseline 48u, dotY 44u, hidden at `rows < 3`. OFF draws nothing.
+    - Task 17b adds gold entries at the front of a cast tick.
+  - `TimelinePainter.xp(g, l, s)` → `XpRow.paint(g, l, s, TOP)`; `CombatPainter.xpLow(g, l, s)` → `XpRow.paint(g, l, s, LOW)`.
+  - `BarState` + builder gain `XpDrops xpDrops` (NUMBERS), `boolean xpDots` (true).
+  - Config: `xpDrops` (XpDrops, NUMBERS, position 20, "XP drops"), `xpDots` (true, 21, "Frequent skills as dots").
+
+- [ ] **Step 1: Write failing tests.**
+  - `XpRowTest`: `frequentNeedsFiveTicksInTen` — Fletching on ticks 191, 193, 195, 197, 199 with now 200 → frequent; drop 191 → not. `frequencyCountsTicksNotDrops` — 6 Fletching drops on tick 199 → not frequent. `oldDropsDoNotCount` — 5 drop ticks at 180–188 → not frequent at 200.
+  - `SampleStates.multiXp(XpDrops d, boolean dots)` (General mode): Strength 120 + Hitpoints 40 at `NOW_TICK − 10`, Magic 123456 at `NOW_TICK − 6`, Fletching 15 at `NOW_TICK − 9, −7, −5, −3, −1`.
+  - `BarRenderSmokeTest`:
+    - `numbersSideBySide` — Strength-colour pixels in y 6u–16u all lie left of every Hitpoints-colour pixel on tick `NOW_TICK − 10`.
+    - `dotsHiddenUnderNumbers` — there are no Fletching-colour pixels within 2u of `(x(NOW_TICK − 5) − 1.4u, 12u)`, which is under the "+123456" group; there are some within 2u of `(x(NOW_TICK − 3) − 1.4u, 12u)`.
+    - `dotsOffShowsFrequentAsNumbers` — `xpDots` false: Fletching pixels in x(NOW_TICK − 3) + 4u .. + 14u, y 6u–16u.
+    - `dotsOnlyDrawsDots` — DOTS_ONLY: Strength pixels within 2u of `(x(NOW_TICK − 10) − 1.4u, 12u)`, none in x(NOW_TICK − 10) + 4u .. + 18u.
+    - `xpDropsOffHidesXp` — OFF: no pixel of any of the four skill colours in y 5u–17u.
+    - `combatXpStillLow` — `lazyFlick()` still has Strength pixels at y 40u–49u, and none at y 5u–17u. The existing lazy-flick and 1-tick tests pass unchanged.
+- [ ] **Step 2:** Run `--tests '*XpRowTest' --tests '*BarRenderSmokeTest'`. Expected: FAIL.
+- [ ] **Step 3: Implement** `XpRow` and the two delegations. Plugin `buildState` sets `xpDrops` and `xpDots` from the config.
+- [ ] **Step 4:** Run the tests. Expected: PASS.
+- [ ] **Step 5: Build.** Expected: `BUILD SUCCESSFUL`.
+- [ ] **Step 6: Manual check.** Note results:
+  - melee slayer shows Strength, Hitpoints and Slayer numbers side by side by the sword;
+  - fletching darts while walking shows Fletching as dots, and the dots hide under a number group;
+  - "Dots only" and "Off" behave as named.
+- [ ] **Step 7: Commit.** `feat: multi-xp row with frequent-skill dots`
+
+### Task 17b: High alch
+
+**Files:**
+- Create: `model/skill/AlchTracker.java`, `model/skill/AlchTopRow.java`, `model/RightSide.java`, `ui/modes/AlchView.java`
+- Modify: `model/TickRecord.java`, `model/XpTracker.java`, `model/Mode.java`, `model/ModeDetector.java`, `model/BarState.java`, `ui/XpRow.java`, `ui/SkillPainter.java`, `ui/ReadoutPainter.java`, `ui/modes/MinimalView.java`, `ui/BarPainter.java`, `SuperHistogramConfig.java`, `SuperHistogramPlugin.java`, `test/.../ui/BarRenderSamples.java`
+- Test: `model/skill/AlchTrackerTest.java`, `model/XpTrackerTest.java`, `model/ModeDetectorTest.java`, `ui/modes/AlchViewTest.java`, `ui/BarRenderSmokeTest.java`, `ui/SampleStates.java`, `SuperHistogramPluginHandlersTest.java`
+
+**Interfaces:**
+- Consumes: `XpRow` (17a), `SkillPainter.wasted` (Task 16), `CombatPainter.caret` (Task 12), `MinimalView` level line (Task 8), `ModeDetector.detect` with `skilling` (Task 16).
+- Produces:
+  - `TickRecord` gains `public boolean cast; public Long castProfit /* null = unknown */; public int castLost;`.
+  - `final class AlchTracker { static final int CAST_TICKS = 5, XP = 65, PENDING_TICKS = 2, LOST_MAX = 10, LINGER = 10; AlchTracker(Timeline t); void onCastClick(int tick, Long profit); void onTick(int tick, List<XpDrop> drops); boolean showing(int tick); int casts(); int lastCastTick() /* -1 */; int nextReadyTick() /* lastCast + 5, -1 none */; long sessionGold(); int unpricedCasts(); long goldPerHour(long sessionMs); void rebind(Timeline t); void reset(); }`
+    - A `"Magic"` drop of exactly 65 at `onTick(t)` confirms the oldest pending click with `click ≤ t ≤ click + 2`, and records the cast on tick `t`. Expired clicks are dropped. A drop with no pending click is ignored.
+    - `castLost = t − (lastCast + 5)` when that is 1..10, otherwise 0.
+    - `showing`: the last two casts are ≤ 15 ticks apart, and `tick − lastCast ≤ 10`.
+    - `rebind` keeps the session gold, as `XpTracker.rebind` does.
+  - `enum AlchTopRow { GOLD, XP, BOTH }`, `enum RightSide { PER_HOUR, SESSION }` (toString "Per hour" / "Session totals").
+  - `SkillPainter.coin(g, cx, cy, float r)`: a `DAMAGE` disc of radius r, with a `#b8901d` ring at 0.53r, stroke 0.26r (the mockup's 3.4 / 1.8 / 0.9).
+  - `XpTracker.sessionXp(String skill)`. `MinimalView.levelPart(BarState s, String skill, long perHour)` returns `"level 87 in 1h 5m"`; `smallLine` becomes `skill + " · " + levelPart`, and its output is unchanged.
+  - `Mode` gains `ALCH`; `static Mode ModeDetector.skilling(boolean alching, boolean producing)` gives ALCH, PRODUCTION or null.
+  - `XpRow` (TOP, `s.mode == ALCH`): on a `cast` tick, unless `alchTopRow == XP`, a gold entry comes first: `coin(g, x + 3u, baseline − 3.5u, 3.4u)`, `x += 9u`, then `formatProfit` in bold 10u (`DAMAGE` when ≥ 0, `TEXT` when < 0, `DIM` when unknown). With `alchTopRow == GOLD`, that tick's 65 Magic drop is skipped. Other skills are always drawn.
+  - `ReadoutPainter.right(g, l, s, big, colour, small, boolean coin)`: with `coin`, `SkillPainter.coin(g, x + 6u, 26u, 6u)` is drawn and the headline starts 15u later.
+  - `final class AlchView implements ModeView`; `static String formatProfit(Long p)` gives `"+236"`, `"−40"`, `"+1.2k"` (`compact` of the absolute value) or `"?"`; `static String[] rightLines(BarState s)`.
+  - `BarState` + builder gain `AlchTracker alch` (null), `AlchTopRow alchTopRow` (GOLD), `RightSide rightSide` (PER_HOUR).
+  - Config: `alchTopRow` (GOLD, position 22, "Alch top row"), `rightSide` (PER_HOUR, 23, "Right side shows").
+  - Plugin: `volatile AlchTracker alch`, `void handleCastClick(int itemId)`, `Long alchProfit(int itemId)`, `static boolean isHighAlchClick(MenuAction a, String target)`.
+
+- [ ] **Step 1: Write failing tests.**
+  - `AlchTrackerTest`:
+    - `castConfirmedByMagic65` — `onCastClick(100, 200L)`, `onTick(101, [Magic 65])` → `peek(101).cast`, `castProfit == 200`, `casts() == 1`, `nextReadyTick() == 106`.
+    - `xpWithoutClickIsNoCast` — one Magic 65 drop and no click → `casts() == 0`.
+    - `clickWithoutXpExpires` — click at 100, no XP at 101–102, a 65 drop at 103 → no cast.
+    - `otherMagicXpIsNoCast` — click, then Magic 31 → no cast.
+    - `singleCastDoesNotShow` — one cast at 101 → `showing(102) == false`. A second at 106 → `showing(106)`, `showing(116)`, `!showing(117)`.
+    - `lostTicksBetweenCasts` — casts at 101 and 108 → `castLost == 2`; 101 and 106 → 0; 101 and 130 → 0 (a pause).
+    - `unknownPriceExcludedFromGold` — profits 200 and `null` → `sessionGold() == 200`, `unpricedCasts() == 1`, `peek(t).castProfit == null`.
+    - `sessionGoldAndPerHour` — profits 200 and −40 → `sessionGold() == 160`, `goldPerHour(3_600_000) == 160`, `goldPerHour(0) == 0`.
+    - `rebindKeepsGold` — after `rebind(new Timeline(512))`, `sessionGold()` is unchanged and `lastCastTick() == -1`.
+  - `XpTrackerTest.sessionXpPerSkill` — Magic +65 twice, Fishing +50 → `sessionXp("Magic") == 130`, `sessionXp("Cooking") == 0`.
+  - `ModeDetectorTest`: `skillingPrefersAlch` — `skilling(true, true) == ALCH`, `skilling(false, true) == PRODUCTION`, `skilling(false, false) == null`. `combatBeatsAlch` — `detect(false, true, ALCH, LAZY_FLICK, GENERAL) == LAZY_FLICK`.
+  - `SampleStates.alch(AlchTopRow top, RightSide side)` drives a real `AlchTracker` as high-alch.html:
+    - casts every 5 ticks, the last at `NOW_TICK − 2` (next ready `NOW_TICK + 3`);
+    - casts at `NOW_TICK − 19`, then `CAST_LATE = NOW_TICK − 12` (2 ticks late, profit 236), `CAST_LOSS = NOW_TICK − 7` (−40) and `NOW_TICK − 2` (unpriced); earlier casts every 5 ticks, at 212 and 198;
+    - a Magic 65 drop on each cast tick;
+    - the clock is online 1 h;
+    - for exact text: `alchText(Long... profits)` with Magic at 13,034,301 then +65 per cast (level 99).
+  - `AlchViewTest`:
+    - `formatProfit` — 236 → `"+236"`, −40 → `"−40"`, 1234 → `"+1.2k"`, null → `"?"`.
+    - `rightLines` with `alchText(200L, -40L)`:
+      - GOLD / PER_HOUR → `{"+160/hr", "+160 this session"}`;
+      - GOLD / SESSION → `{"+160", "+160/hr"}`;
+      - XP / PER_HOUR → `{"130 xp/hr", "130 xp · level 99"}`;
+      - XP / SESSION → `{"130 xp", "130/hr · level 99"}`;
+      - BOTH / PER_HOUR → `{"+160/hr", "+160 this session · 130 xp/hr"}`;
+      - BOTH / SESSION → `{"+160", "+160/hr · 130 xp"}`.
+    - `lossTotalHasMinus` — `alchText(-40L)` GOLD / SESSION → `"−40"`.
+    - `unpricedNoted` — `alchText(200L, null)` → the small line ends `" · 1 unpriced"`.
+  - `BarRenderSmokeTest`:
+    - `alchRendersAtThreeSizes` — each AlchTopRow at 1026 × 62, 1026 × 46 and 600 × 30.
+    - `castPillIsMagicBlue` — `PRAYER_MAGIC` at (x(CAST_LOSS) + 16u, 29u).
+    - `goldHasCoin` — `DAMAGE` within 1u of (x(CAST_LATE) − 1u, 11.5u) with GOLD and BOTH, not with XP.
+    - `profitNegativeShowsMinus` — GOLD: `TEXT` pixels and no `DAMAGE` pixels in x(CAST_LOSS) + 5u .. + 25u, y 7u–16u.
+    - `lostTicksLabel` — `LOST` pixels in x(CAST_LATE − 2) .. x(CAST_LATE), y 34u–42u; none with `wastedTicks` false.
+    - `nextCastCaretAhead` — non-ground pixels in x(NOW_TICK + 3) ± 3u, y 57u–60u at 62 px (below the ruler marks); none at 46 px.
+    - `alchFletchShowsDots` — `alch` plus Fletching 15 on every even tick → Fletching pixels within 2u of (x(NOW_TICK − 4) − 1.4u, 12u), and none in x(NOW_TICK − 4) + 4u .. + 20u (a dot, not a number).
+    - `alchRightDoesNotOverlapLoginTime` — the same assertion as Phase 2, at 1026 × 62 and 720 × 62, for each AlchTopRow.
+  - `SuperHistogramPluginHandlersTest` (mocked `ItemManager`: `canonicalize(1127)` and `canonicalize(1128)` → 1127, `getItemComposition(1127).getHaPrice()` 39000, `getItemPrice(1127)` 38500, `getItemPrice(ItemID.NATURERUNE)` 100):
+    - `alchProfitFromPrices` — `alchProfit(1127) == 400L`.
+    - `notedItemUsesBasePrice` — `alchProfit(1128) == 400L`.
+    - `alchProfitUnknownWhenNoPrice` — item price 0 → null; nature price 0 → null; `alchProfit(-1)` → null; a null composition → null; none throw.
+    - `highAlchClickDetected` — `isHighAlchClick(WIDGET_TARGET_ON_WIDGET, "<col=00ff00>High Level Alchemy</col><col=ffffff> -> <col=ff9040>Rune platebody")` is true. `"Low Level Alchemy -> …"`, another `MenuAction`, and a null target are false.
+    - `alchModeAfterTwoCasts` — after a Magic baseline: `handleCastClick(1127)`, `handleTick`, `handleStat("Magic", base + 65)`, 4 more ticks, a second cast → `buildState().mode == ALCH`, `modeName == "High alch"`, `modeSub == "auto · 5t"`; after only the first cast → GENERAL.
+    - `alchBeatsProductionInPlugin` — an active cooking run and two casts → ALCH.
+    - `logoutKeepsGoldClearsCasts` — `LOGIN_SCREEN` → `alch.sessionGold()` unchanged, `alch.lastCastTick() == -1`.
+- [ ] **Step 2:** Run `--tests '*AlchTrackerTest' --tests '*XpTrackerTest' --tests '*ModeDetectorTest' --tests '*AlchViewTest' --tests '*BarRenderSmokeTest' --tests '*PluginHandlersTest'`. Expected: FAIL.
+- [ ] **Step 3: Implement** to high-alch.html (62-px values × u):
+  - Timeline:
+    - for ticks from `oldestTick − 5`, each `cast` tick c gets `TimelinePainter.pill(g, l, x(c), x(min(c + 5, nowTick + 1)), PRAYER_MAGIC, false, null)`;
+    - then `TimelinePainter.xp` (the gold entries through `XpRow`) and `TimelinePainter.hits`;
+    - actions row (`rows == 3`): `SkillPainter.wasted(g, l, x(c − castLost) + 1, x(c) − 1, castLost)` when `castLost > 0` and `wastedTicks`;
+    - `CombatPainter.caret(g, x(next), 55u, u, NEXT_BEAT)` when `nextReadyTick > nowTick` and alch is showing.
+  - Right: `ReadoutPainter.right(g, l, s, lines[0], colour, lines[1], coin)`.
+    - The headline is gold for GOLD and BOTH. It is drawn with the coin, in `DAMAGE` (≥ 0) or `TEXT` (< 0). The rate uses `clock.onlineMs`.
+    - The headline is XP for XP: white, no coin, using `xp.sessionXp("Magic")` and `xp.xpPerHour("Magic", …)`.
+    - `rightSide` picks which of total / rate is the headline. The other goes in the small line. BOTH appends the Magic XP in the `rightSide` form. XP appends `levelPart`.
+  - Plugin:
+    - `initModel` creates `new AlchTracker(timeline)`; LOGIN_SCREEN calls `alch.rebind(timeline)`.
+    - `onMenuOptionClicked`: `isHighAlchClick(e.getMenuAction(), e.getMenuTarget())` → `handleCastClick(e.getItemId())`, which calls `alch.onCastClick(tick, alchProfit(itemId))`. This runs on the client thread, so `getItemComposition` is safe there.
+    - `alchProfit`: `id = itemManager.canonicalize(itemId)`, `ha = composition.getHaPrice()`, `item = getItemPrice(id)`, `nat = getItemPrice(ItemID.NATURERUNE)`; return null under note 10, else `ha − item − nat`.
+    - `handleTick`: `alch.onTick(tick − 1, prev.xp)` next to `run.onTick`. The cue adds `alch.showing(tick) && alch.nextReadyTick() == tick`.
+    - `buildState`: `skilling = ModeDetector.skilling(alch.showing(t), run.showing(t))`. ALCH → name `"High alch"`, sub `"auto · 5t"`. Set `alch`, `alchTopRow`, `rightSide`.
+    - Register `AlchView`.
+  - `BarRenderSamples.writeAlchContactSheet` — each AlchTopRow × RightSide at 1026 × 62, plus 1026 × 46 and 600 × 30.
+- [ ] **Step 4:** Run the tests. Expected: PASS.
+- [ ] **Step 5: Build.** Expected: `BUILD SUCCESSFUL`, and all Phase 1–3 tests pass.
+- [ ] **Step 6: Manual check in the dev client** (high alch a stack of noted items with a fire staff). Note results:
+  - the click event's `getItemId()` is the alched item (if it is −1, note it: every cast then shows "?");
+  - the bar switches to "High alch · auto · 5t" on the second cast;
+  - the pills touch when casting on the ▲, and a late cast shows "+N";
+  - the per-cast gold matches the HA value − GE price − nature rune price shown by the GE tooltip;
+  - an untradeable item shows "?" and no crash;
+  - Top row Gold / XP / Both and Right side Per hour / Session totals switch the readout;
+  - alch + fletch darts shows Fletching dots;
+  - the login time stays at the far right.
+- [ ] **Step 7: Commit.** `feat: high alch view with per-cast profit`
+
+**Phase 3 done:** inventory skilling with exact countdowns and the done blink, high alch profit, and multi-skill XP numbers and dots in every mode.
 
 ---
 
