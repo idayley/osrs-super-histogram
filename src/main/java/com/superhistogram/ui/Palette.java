@@ -42,6 +42,12 @@ public final class Palette
 	public static final Color BURNT = hex(0x6b737c);
 	public static final Color WASTED_LINE = new Color(255, 255, 255, Math.round(0.55f * 255));
 
+	/** Gathering view (gathering.html): the woodcutting pill, the log icon, the roll notches. */
+	public static final Color WC_PILL = hex(0xb5a06a);
+	public static final Color LOG = hex(0xc89a5a);
+	public static final Color LOG_END = hex(0xe8c58f);
+	public static final Color NOTCH = new Color(20, 23, 27, Math.round(0.45f * 255));
+
 	/** The coin's ring (high-alch.html). */
 	public static final Color COIN_RING = hex(0xb8901d);
 

@@ -103,4 +103,60 @@ public final class SkillPainter
 		float w = g.getFontMetrics().stringWidth(text);
 		g.drawString(text, (x0 + x1) / 2f - w / 2f, 42f * u);
 	}
+
+	/** Axe: a 1.6u x 10u handle centred on x and a 5.2u x 5u head to its right with rounded right corners. */
+	public static void axe(Graphics2D g, float x, float y, float u, Color c)
+	{
+		g.setColor(c);
+		g.fill(new RoundRectangle2D.Float(x - 0.8f * u, y - 5 * u, 1.6f * u, 10 * u, 1.6f * u, 1.6f * u));
+		Path2D head = new Path2D.Float();
+		head.moveTo(x + 0.8f * u, y - 5 * u);
+		float r = 2f * u;
+		head.lineTo(x + 6f * u - r, y - 5 * u);
+		head.curveTo(x + 6f * u - r + r * K, y - 5 * u, x + 6f * u, y - 5 * u + r - r * K, x + 6f * u, y - 5 * u + r);
+		head.lineTo(x + 6f * u, y - r);
+		head.curveTo(x + 6f * u, y - r + r * K, x + 6f * u - r + r * K, y, x + 6f * u - r, y);
+		head.lineTo(x + 0.8f * u, y);
+		head.closePath();
+		g.fill(head);
+	}
+
+	/** Log: a 10u x 5.2u rounded bar centred on (x, y) with a paler end circle (r 2.6u) at x + 4u. */
+	public static void log(Graphics2D g, float x, float y, float u)
+	{
+		g.setColor(Palette.LOG);
+		g.fill(new RoundRectangle2D.Float(x - 5 * u, y - 2.6f * u, 10 * u, 5.2f * u, 5.2f * u, 5.2f * u));
+		g.setColor(Palette.LOG_END);
+		g.fill(new Ellipse2D.Float(x + 4 * u - 2.6f * u, y - 2.6f * u, 5.2f * u, 5.2f * u));
+	}
+
+	/** Tree stump: a trapezoid with a dim cut top; (x, y) is the mockup's x, y. */
+	public static void stump(Graphics2D g, float x, float y, float u)
+	{
+		g.setColor(Palette.TEXT);
+		Path2D p = new Path2D.Float();
+		p.moveTo(x - 4 * u, y + 4 * u);
+		p.lineTo(x + 4 * u, y + 4 * u);
+		p.lineTo(x + 2.8f * u, y - 2 * u);
+		p.lineTo(x - 2.8f * u, y - 2 * u);
+		p.closePath();
+		g.fill(p);
+		g.setColor(Palette.DIM);
+		g.fill(new Ellipse2D.Float(x - 2.8f * u, y - 2 * u - 1.1f * u, 5.6f * u, 2.2f * u));
+	}
+
+	/** A gathered item with no icon yet: a disc of radius 2.8u. */
+	public static void item(Graphics2D g, float x, float y, float u, Color c)
+	{
+		g.setColor(c);
+		g.fill(new Ellipse2D.Float(x - 2.8f * u, y - 2.8f * u, 5.6f * u, 5.6f * u));
+	}
+
+	/** A depleted rock or spot: a ring of radius 3u, stroke 1.2u. */
+	public static void depleted(Graphics2D g, float x, float y, float u)
+	{
+		g.setColor(Palette.TEXT);
+		g.setStroke(new BasicStroke(1.2f * u));
+		g.draw(new Ellipse2D.Float(x - 3 * u, y - 3 * u, 6 * u, 6 * u));
+	}
 }

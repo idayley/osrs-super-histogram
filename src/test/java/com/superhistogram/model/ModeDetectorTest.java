@@ -102,4 +102,27 @@ public class ModeDetectorTest
 		assertEquals(Mode.LAZY_FLICK,
 			detector.detect(false, true, Mode.ALCH, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
 	}
+
+	@Test
+	public void skillingOrder()
+	{
+		assertEquals(Mode.ALCH, ModeDetector.skilling(true, true, true));
+		assertEquals(Mode.PRODUCTION, ModeDetector.skilling(false, true, true));
+		assertEquals(Mode.GATHERING, ModeDetector.skilling(false, false, true));
+		assertEquals(null, ModeDetector.skilling(false, false, false));
+		assertEquals(Mode.ALCH, ModeDetector.skilling(true, true));
+		assertEquals(Mode.PRODUCTION, ModeDetector.skilling(false, true));
+		assertEquals(null, ModeDetector.skilling(false, false));
+	}
+
+	@Test
+	public void combatAndAfkBeatGathering()
+	{
+		assertEquals(Mode.LAZY_FLICK,
+			detector.detect(false, true, Mode.GATHERING, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
+		assertEquals(Mode.AFK,
+			detector.detect(true, false, Mode.GATHERING, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
+		assertEquals(Mode.GATHERING,
+			detector.detect(false, false, Mode.GATHERING, PrayerMode.LAZY_FLICK, BaselineSetting.MINIMAL));
+	}
 }

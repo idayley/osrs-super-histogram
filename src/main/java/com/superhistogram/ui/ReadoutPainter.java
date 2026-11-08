@@ -23,14 +23,17 @@ public final class ReadoutPainter
 			return;
 		}
 		float u = l.u, x = 22f * u, mid = l.height / 2f;
+		float room = l.timelineX - x - 6f * u;
+		Font nf = Fonts.bold(Math.max(10f, 11f * u));
 		if (l.rows == 1)
 		{
-			text(g, s.modeName, Fonts.bold(Math.max(10f, 11f * u)), Palette.TEXT, x, mid + 4f * u);
+			text(g, fit(g, s.modeName, nf, room), nf, Palette.TEXT, x, mid + 4f * u);
 			return;
 		}
 		float subY = mid + 12f * u;
-		text(g, s.modeName, Fonts.bold(Math.max(10f, 11f * u)), Palette.TEXT, x, mid - 4f * u);
-		text(g, s.modeSub, Fonts.semiBold(11f * u), Palette.DIM, x, subY);
+		text(g, fit(g, s.modeName, nf, room), nf, Palette.TEXT, x, mid - 4f * u);
+		Font sf = Fonts.semiBold(11f * u);
+		text(g, fit(g, s.modeSub, sf, room), sf, Palette.DIM, x, subY);
 		if (!s.showRunEnergy)
 		{
 			return;

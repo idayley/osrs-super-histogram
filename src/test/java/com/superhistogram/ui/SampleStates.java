@@ -15,6 +15,7 @@ import com.superhistogram.model.combat.FlickClassifier;
 import com.superhistogram.model.combat.FoodKind;
 import com.superhistogram.model.skill.AlchTopRow;
 import com.superhistogram.model.skill.AlchTracker;
+import com.superhistogram.model.skill.GatherRun;
 import com.superhistogram.model.skill.InventoryRun;
 import com.superhistogram.model.RightSide;
 import java.util.HashMap;
@@ -493,8 +494,211 @@ public final class SampleStates
 			.build();
 	}
 
+	// ---- gathering (gathering.html) ----
+
+	/** Where the woodcutting sample stands. */
+	public enum GatherPhase
+	{
+		/** Two yews, 12 logs, 16 free slots, 10 % success per roll. */
+		CHOPPING,
+		/** CHOPPING plus the second tree falling on NOW_TICK. */
+		FELLED,
+		/** Starts at 22 logs, so the last log fills the inventory on NOW_TICK. */
+		FULL,
+		/** Only the second tree, one log: no estimate yet. */
+		EARLY
+	}
+
+	public static BarState gathering(GatherPhase p)
+	{
+		return gathering(p, true, true);
+	}
+
+	public static BarState gathering(GatherPhase p, boolean timeToFinish, boolean wastedTicks)
+	{
+		return gatherSample("Woodcutting", 1515, "Yew tree", p, timeToFinish, wastedTicks);
+	}
+
+	/** CHOPPING with another skill and item (the target is named after the skill). */
+	public static BarState gatheringSkill(String skill, int itemId)
+	{
+		String name = "Mining".equals(skill) ? "Iron rocks" : "Fishing".equals(skill) ? "Rod Fishing spot" : "Yew tree";
+		return gatherSample(skill, itemId, name, GatherPhase.CHOPPING, true, true);
+	}
+
+	private static final int GATHER_XP = 175;
+
+	/** Mutable driver around a real GatherRun and XpTracker, ticking like the plugin does. */
+	private static final class GatherSim
+	{
+		final Timeline t = new Timeline(512);
+		final XpTracker xp = new XpTracker(t);
+		final GatherRun run = new GatherRun(t);
+		final String skill;
+		final int item;
+		final int xpPer;
+		final Map<Integer, Integer> inv = new HashMap<>();
+		int free;
+		int total = 1_000_000;
+
+		GatherSim(String skill, int item, int xpPer)
+		{
+			this.skill = skill;
+			this.item = item;
+			this.xpPer = xpPer;
+		}
+
+		void baseline(int tick, int count, int freeSlots)
+		{
+			xp.onStat(skill, total, tick);
+			inv.put(item, count);
+			free = freeSlots;
+			t.at(tick);
+			run.onTick(tick, false, t.at(tick).xp, new HashMap<>(inv), free);
+		}
+
+		void click(int tick, int key, String name)
+		{
+			run.onTargetClick(tick, skill, key, name);
+		}
+
+		/** One tick; delta is the change in item count on a success (+1 gather, -1 firemaking), goneKey -1 for none. */
+		void tick(int tick, boolean animating, boolean success, int delta, int goneKey)
+		{
+			t.at(tick);
+			if (success)
+			{
+				total += xpPer;
+				inv.merge(item, delta, Integer::sum);
+				free -= delta;
+				xp.onStat(skill, total, tick);
+			}
+			if (goneKey >= 0)
+			{
+				run.onTargetGone(tick, goneKey);
+			}
+			run.onTick(tick, animating, t.at(tick).xp, success ? new HashMap<>(inv) : null, success ? free : -1);
+		}
+
+		BarState state(String name, String sub, boolean timeToFinish, boolean wastedTicks)
+		{
+			SessionClock clock = new SessionClock();
+			clock.onLoggedIn(NOW_MS - (2 * 3600 + 14 * 60 + 7) * 1000L);
+			return BarState.builder()
+				.timeline(t).nowTick(NOW_TICK).xp(xp).idle(new IdleTracker(60)).clock(clock)
+				.runEnergyPct(64).modeName(name).modeSub(sub).showRunEnergy(true)
+				.showLoginTime(true).mode(Mode.GATHERING).nowMs(NOW_MS)
+				.gather(run).timeToFinish(timeToFinish).wastedTicks(wastedTicks)
+				.build();
+		}
+	}
+
+	private static boolean in(int v, int... xs)
+	{
+		for (int x : xs)
+		{
+			if (x == v)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static BarState gatherSample(String skill, int item, String name, GatherPhase p, boolean timeToFinish,
+		boolean wastedTicks)
+	{
+		GatherSim sim = new GatherSim(skill, item, GATHER_XP);
+		int start = NOW_TICK - 65;
+		boolean early = p == GatherPhase.EARLY;
+		if (p == GatherPhase.FULL)
+		{
+			sim.baseline(start, 22, 6);
+		}
+		else
+		{
+			sim.baseline(start, 6, 22);
+		}
+		for (int tk = start + 1; tk <= NOW_TICK; tk++)
+		{
+			if (!early && tk == NOW_TICK - 64)
+			{
+				sim.click(tk, 101, name);
+			}
+			if (tk == NOW_TICK - 31)
+			{
+				sim.click(tk, 102, name);
+			}
+			boolean rollA = !early && tk >= NOW_TICK - 62 && tk <= NOW_TICK - 33;
+			boolean rollB = tk >= NOW_TICK - 29;
+			boolean success = early ? tk == NOW_TICK - 20
+				: in(tk, NOW_TICK - 53, NOW_TICK - 43, NOW_TICK - 33, NOW_TICK - 20, NOW_TICK - 10, NOW_TICK);
+			int gone = tk == NOW_TICK - 33 && !early ? 101 : tk == NOW_TICK && p == GatherPhase.FELLED ? 102 : -1;
+			sim.tick(tk, rollA || rollB, success, 1, gone);
+		}
+		return sim.state(skill, "auto \u00b7 " + name, timeToFinish, wastedTicks);
+	}
+
+	/**
+	 * A short woodcutting sample whose tree falls inside the 1026-px window: baseline at NOW-20, a yew clicked
+	 * at NOW-15 and rolled NOW-13..NOW-8 (logs at NOW-11 and NOW-8, falling at NOW-8), the next one clicked
+	 * 2 ticks late at NOW-6 and rolled NOW-4..NOW (a log at NOW-2).
+	 */
+	public static BarState gatheringFall()
+	{
+		GatherSim sim = new GatherSim("Woodcutting", 1515, GATHER_XP);
+		sim.baseline(NOW_TICK - 20, 6, 22);
+		for (int tk = NOW_TICK - 19; tk <= NOW_TICK; tk++)
+		{
+			if (tk == NOW_TICK - 15)
+			{
+				sim.click(tk, 101, "Yew tree");
+			}
+			if (tk == NOW_TICK - 6)
+			{
+				sim.click(tk, 102, "Yew tree");
+			}
+			boolean roll = (tk >= NOW_TICK - 13 && tk <= NOW_TICK - 8) || tk >= NOW_TICK - 4;
+			boolean success = in(tk, NOW_TICK - 11, NOW_TICK - 8, NOW_TICK - 2);
+			sim.tick(tk, roll, success, 1, tk == NOW_TICK - 8 ? 101 : -1);
+		}
+		return sim.state("Woodcutting", "auto \u00b7 Yew tree", true, true);
+	}
+
+	/**
+	 * Burning logs: baseline 27 logs (1 free slot) at NOW-16; lights clicked at NOW-15, -10 and -5, each
+	 * animating 4 ticks and using a log on the 4th.
+	 */
+	public static BarState firemaking()
+	{
+		GatherSim sim = new GatherSim("Firemaking", 1515, 40);
+		sim.baseline(NOW_TICK - 16, 27, 1);
+		for (int tk = NOW_TICK - 15; tk <= NOW_TICK; tk++)
+		{
+			boolean clickTick = tk == NOW_TICK - 15 || tk == NOW_TICK - 10 || tk == NOW_TICK - 5;
+			if (clickTick)
+			{
+				sim.click(tk, 0, "Yew logs");
+			}
+			int lastClick = tk >= NOW_TICK - 5 ? NOW_TICK - 5 : tk >= NOW_TICK - 10 ? NOW_TICK - 10 : NOW_TICK - 15;
+			int k = tk - lastClick;
+			sim.tick(tk, k <= 3, k == 3, -1, -1);
+		}
+		return sim.state("Firemaking", "auto \u00b7 Yew logs", true, true);
+	}
+
 	/** The same state without its run. */
 	static BarState withoutRun(BarState s)
+	{
+		return BarState.builder()
+			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
+			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
+			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.build();
+	}
+
+	/** The same state without its gather run. */
+	static BarState withoutGather(BarState s)
 	{
 		return BarState.builder()
 			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)

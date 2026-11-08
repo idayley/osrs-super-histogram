@@ -5,6 +5,7 @@ import com.superhistogram.model.combat.Beat;
 import com.superhistogram.model.combat.FlickClassifier;
 import com.superhistogram.model.skill.AlchTopRow;
 import com.superhistogram.model.skill.AlchTracker;
+import com.superhistogram.model.skill.GatherRun;
 import com.superhistogram.model.skill.InventoryRun;
 
 /**
@@ -42,6 +43,8 @@ public final class BarState
 	/** High-alch tracker; null when none. */
 	public final AlchTracker alch;
 	public final AlchTopRow alchTopRow;
+	/** Gathering run; null when none. */
+	public final GatherRun gather;
 	public final RightSide rightSide;
 
 	private BarState(Builder b)
@@ -70,6 +73,7 @@ public final class BarState
 		xpDots = b.xpDots;
 		alch = b.alch;
 		alchTopRow = b.alchTopRow;
+		gather = b.gather;
 		rightSide = b.rightSide;
 	}
 
@@ -101,6 +105,7 @@ public final class BarState
 		private boolean xpDots = true;
 		private AlchTracker alch;
 		private AlchTopRow alchTopRow = AlchTopRow.GOLD;
+		private GatherRun gather;
 		private RightSide rightSide = RightSide.PER_HOUR;
 
 		public Builder timeline(Timeline v)
@@ -238,6 +243,12 @@ public final class BarState
 		public Builder alch(AlchTracker v)
 		{
 			alch = v;
+			return this;
+		}
+
+		public Builder gather(GatherRun v)
+		{
+			gather = v;
 			return this;
 		}
 

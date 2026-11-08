@@ -857,4 +857,222 @@ public class BarRenderSmokeTest
 			}
 		}
 	}
+
+	// ---- gathering (gathering.html) ----
+
+	@Test
+	public void gatheringRendersAtThreeSizes()
+	{
+		java.util.List<BarState> all = new java.util.ArrayList<>();
+		for (SampleStates.GatherPhase p : SampleStates.GatherPhase.values())
+		{
+			all.add(SampleStates.gathering(p));
+		}
+		all.add(SampleStates.firemaking());
+		all.add(SampleStates.gatheringFall());
+		all.add(SampleStates.gatheringSkill("Mining", 440));
+		all.add(SampleStates.gatheringSkill("Fishing", 335));
+		for (BarState s : all)
+		{
+			render(1026, 62, s, new Pulse());
+			render(1026, 46, s, new Pulse());
+			render(600, 30, s, new Pulse());
+		}
+	}
+
+	@Test
+	public void pillHasWoodcuttingColour()
+	{
+		BarState s = SampleStates.gathering(SampleStates.GatherPhase.CHOPPING);
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		assertEquals(Palette.WC_PILL.getRGB(), img.getRGB((int) (tickX(l, s, NOW - 12) + 16 * l.u), (int) (29 * l.u)));
+	}
+
+	@Test
+	public void rollNotchesDarkenPill()
+	{
+		BarState s = SampleStates.gathering(SampleStates.GatherPhase.CHOPPING);
+		BarLayout l = BarLayout.of(1026, 62);
+		int px = (int) tickX(l, s, NOW - 12);
+		int c = render(1026, 62, s, null).getRGB(px, (int) (29 * l.u));
+		java.awt.Color wc = Palette.WC_PILL;
+		assertTrue(((c >> 16) & 255) <= wc.getRed() - 20);
+		assertTrue(((c >> 8) & 255) <= wc.getGreen() - 20);
+		assertTrue((c & 255) <= wc.getBlue() - 20);
+		// One row has no notches.
+		BarLayout l1 = BarLayout.of(600, 30);
+		BufferedImage one = render(600, 30, s, null);
+		int y = (int) (TimelinePainter.pillY(l1) + TimelinePainter.pillH(l1) / 2f);
+		int x = (int) tickX(l1, s, NOW - 12);
+		assertEquals(Palette.WC_PILL.getRGB(), one.getRGB(x, y));
+	}
+
+	@Test
+	public void stumpMarksFall()
+	{
+		BarState s = SampleStates.gatheringFall();
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u, x = tickX(l, s, NOW - 8);
+		assertTrue(hasPixel(render(1026, 62, s, null), x + 2 * u, x + 10 * u, 40 * u, 50 * u, Palette.TEXT));
+		// No stump before the tree falls, and not on the off-screen fall of the long sample.
+		BarState early = SampleStates.gathering(SampleStates.GatherPhase.CHOPPING);
+		float ex = tickX(l, early, NOW - 8);
+		assertFalse(hasPixel(render(1026, 62, early, null), ex + 2 * u, ex + 10 * u, 40 * u, 50 * u, Palette.TEXT));
+		// A fall on the newest tick draws one too.
+		BarState felled = SampleStates.gathering(SampleStates.GatherPhase.FELLED);
+		float fx = tickX(l, felled, NOW);
+		assertTrue(hasPixel(render(1026, 62, felled, null), fx + 2 * u, fx + 10 * u, 40 * u, 50 * u, Palette.TEXT));
+	}
+
+	@Test
+	public void reclickLabelOnlyWhenEnabled()
+	{
+		BarState on = SampleStates.gatheringFall();
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u, x0 = tickX(l, on, NOW - 8) + 13 * u, x1 = tickX(l, on, NOW - 6);
+		assertTrue(hasPixel(render(1026, 62, on, null), x0, x1, 34 * u, 42 * u, Palette.LOST));
+		BarState off = SampleStates.gathering(SampleStates.GatherPhase.CHOPPING, true, false);
+		assertFalse(hasPixel(render(1026, 62, off, null), x0, x1, 34 * u, 42 * u, Palette.LOST));
+	}
+
+	@Test
+	public void reclickLabelOffWhenWastedTicksOff()
+	{
+		BarState s = SampleStates.gatheringFall();
+		BarState off = BarState.builder()
+			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
+			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub).mode(s.mode).nowMs(s.nowMs)
+			.gather(s.gather).wastedTicks(false).build();
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u, x0 = tickX(l, s, NOW - 8) + 13 * u, x1 = tickX(l, s, NOW - 6);
+		assertFalse(hasPixel(render(1026, 62, off, null), x0, x1, 34 * u, 42 * u, Palette.LOST));
+	}
+
+	@Test
+	public void logBeforeXp()
+	{
+		BarState s = SampleStates.gathering(SampleStates.GatherPhase.CHOPPING);
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u, x = tickX(l, s, NOW - 10);
+		assertTrue(hasPixel(render(1026, 62, s, null), x - 16 * u, x - 5 * u, 6 * u, 16 * u, Palette.LOG));
+		BarLayout l1 = BarLayout.of(600, 30);
+		assertFalse(hasPixel(render(600, 30, s, null), 0, 600, 0, 30, Palette.LOG));
+		assertTrue(l1.rows == 1);
+	}
+
+	@Test
+	public void noFinishFlagForEstimate()
+	{
+		BarState s = SampleStates.gathering(SampleStates.GatherPhase.CHOPPING);
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		float u = l.u;
+		for (int y = (int) (42 * u); y < (int) (60 * u); y++)
+		{
+			for (int x = (int) tickX(l, s, NOW + 1); x < (int) tickX(l, s, NOW + 4); x++)
+			{
+				int argb = img.getRGB(x, y);
+				boolean white = (argb >>> 24) >= 200 && ((argb >> 16) & 255) >= 240 && ((argb >> 8) & 255) >= 240
+					&& (argb & 255) >= 240;
+				assertFalse("white at " + x + "," + y, white);
+			}
+		}
+	}
+
+	@Test
+	public void gatheringRightDoesNotOverlapLoginTime()
+	{
+		for (int w : new int[]{1026, 720})
+		{
+			java.util.List<BarState> all = new java.util.ArrayList<>();
+			for (SampleStates.GatherPhase p : SampleStates.GatherPhase.values())
+			{
+				all.add(SampleStates.gathering(p));
+			}
+			all.add(SampleStates.firemaking());
+			for (BarState s : all)
+			{
+				BarLayout l = BarLayout.of(w, 62);
+				BufferedImage img = render(w, 62, s, null);
+				BufferedImage ref = render(w, 62, SampleStates.withoutGather(s), null);
+				Graphics2D g = img.createGraphics();
+				int tw = g.getFontMetrics(Fonts.semiBold(11f * l.u)).stringWidth(s.clock.format(s.nowMs));
+				g.dispose();
+				int x1 = (int) (l.width - 26f * l.u), x0 = x1 - tw - 2;
+				for (int y = (int) (14f * l.u); y < (int) (50f * l.u); y++)
+				{
+					for (int x = x0; x < l.width; x++)
+					{
+						assertEquals("w=" + w + " paint over login time at " + x + "," + y,
+							ref.getRGB(x, y), img.getRGB(x, y));
+					}
+				}
+				boolean painted = false;
+				for (int y = 0; y < 62 && !painted; y++)
+				{
+					for (int x = (int) CombatPainter.rightX(l); x < x0 && !painted; x++)
+					{
+						painted = img.getRGB(x, y) != ref.getRGB(x, y);
+					}
+				}
+				assertTrue("w=" + w + " readout not painted", painted);
+			}
+		}
+	}
+
+	private static BarState withSub(BarState s, String name, String sub)
+	{
+		return BarState.builder()
+			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
+			.runEnergyPct(s.runEnergyPct).modeName(name).modeSub(sub)
+			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.gather(s.gather).wastedTicks(s.wastedTicks).timeToFinish(s.timeToFinish).build();
+	}
+
+	@Test
+	public void longModeSubStaysInLeftReadout()
+	{
+		BarState base = SampleStates.gathering(SampleStates.GatherPhase.CHOPPING);
+		String longName = "Woodcutting and other very long names";
+		String longSub = "auto \u00b7 An extremely long fishing spot name that cannot fit";
+		for (int w : new int[]{1026, 720})
+		{
+			BarLayout l = BarLayout.of(w, 62);
+			BufferedImage lng = render(w, 62, withSub(base, longName, longSub), null);
+			BufferedImage shortImg = render(w, 62, withSub(base, "W", "a"), null);
+			int x0 = (int) l.timelineX - (int) (1f * l.u);
+			for (int y = 0; y < 62; y++)
+			{
+				for (int x = x0; x < (int) l.timelineX + (int) (4f * l.u); x++)
+				{
+					assertEquals("w=" + w + " text reaches the timeline at " + x + "," + y,
+						shortImg.getRGB(x, y), lng.getRGB(x, y));
+				}
+			}
+			// The gauge and its % label sit below the sub line and never move or get overpainted.
+			int gaugeTop = (int) (l.height / 2f + 18f * l.u);
+			for (int y = gaugeTop; y < 62; y++)
+			{
+				for (int x = (int) (22f * l.u); x < (int) l.timelineX; x++)
+				{
+					assertEquals("w=" + w + " gauge area changed at " + x + "," + y,
+						shortImg.getRGB(x, y), lng.getRGB(x, y));
+				}
+			}
+		}
+	}
+
+	@Test
+	public void gatherPillNeverLeftOfTimeline()
+	{
+		BarState s = SampleStates.gatheringFall();
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		int y = (int) (TimelinePainter.pillY(l) + TimelinePainter.pillH(l) / 2f);
+		for (int x = (int) (l.timelineX - 6f * l.u); x < (int) l.timelineX; x++)
+		{
+			assertFalse("pill at " + x, Palette.WC_PILL.getRGB() == img.getRGB(x, y));
+		}
+	}
 }

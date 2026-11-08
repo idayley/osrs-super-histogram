@@ -9,5 +9,6 @@ public enum Mode
 	LAZY_FLICK,
 	ONE_TICK,
 	PRODUCTION,
-	ALCH
+	ALCH,
+	GATHERING
 }

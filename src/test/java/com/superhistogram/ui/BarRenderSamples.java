@@ -187,6 +187,36 @@ public class BarRenderSamples
 		sheet(new File(dir, "task17b-contact-all.png"), all);
 	}
 
+	/**
+	 * Gathering contact sheet: each GatherPhase, the near-fall woodcutting sample, mining, fishing and
+	 * firemaking at 1026x62, 720x62 and 400x36, stacked and scaled 2x. Writes task18b-contact.png.
+	 */
+	@Test
+	public void writeGatheringContactSheet() throws IOException
+	{
+		String dir = System.getProperty("superhistogram.renderDir");
+		assumeTrue(dir != null && !dir.isEmpty());
+		java.util.List<BarState> states = new java.util.ArrayList<>();
+		for (SampleStates.GatherPhase p : SampleStates.GatherPhase.values())
+		{
+			states.add(SampleStates.gathering(p));
+		}
+		states.add(SampleStates.gatheringFall());
+		states.add(SampleStates.gatheringSkill("Mining", 440));
+		states.add(SampleStates.gatheringSkill("Fishing", 335));
+		states.add(SampleStates.firemaking());
+		int[][] sizes = {{1026, 62}, {720, 62}, {400, 36}};
+		java.util.List<Object[]> rows = new java.util.ArrayList<>();
+		for (int[] wh : sizes)
+		{
+			for (BarState s : states)
+			{
+				rows.add(new Object[]{wh[0], wh[1], s});
+			}
+		}
+		sheet(new File(dir, "task18b-contact.png"), rows);
+	}
+
 	private static void sheet(File file, java.util.List<Object[]> rows) throws IOException
 	{
 		int pad = 8, total = pad;

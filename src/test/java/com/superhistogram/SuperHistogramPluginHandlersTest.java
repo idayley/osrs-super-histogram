@@ -840,4 +840,221 @@ public class SuperHistogramPluginHandlersTest
 		assertEquals(1, plugin.alch.unpricedCasts());
 		assertEquals(0, plugin.alch.sessionGold());
 	}
+
+	// ---- gathering ----
+
+	private static final int YEW = 1515;
+
+	/** Baseline inventory (6 logs, 22 free), one tick, a click on tree (50, 50), then n ticks animating. */
+	private void detectChopping(int rollTicks)
+	{
+		ticks = 0;
+		plugin.handleInventory(java.util.Collections.singletonMap(YEW, 6), 22);
+		plugin.handleStat("Woodcutting", 1_000_000);
+		tickOnly();
+		plugin.handleGatherClick("Woodcutting", SuperHistogramPlugin.objectKey(50, 50), "Yew tree");
+		when(me.getAnimation()).thenReturn(867);
+		for (int i = 0; i < rollTicks; i++)
+		{
+			tickOnly();
+		}
+	}
+
+	/** A log arrives on a new tick (n logs in the inventory in total, free slots accordingly). */
+	private void logArrives(int n)
+	{
+		plugin.handleInventory(java.util.Collections.singletonMap(YEW, n), 28 - n);
+		plugin.handleStat("Woodcutting", 1_000_000 + 175 * (n - 6));
+		tickOnly();
+	}
+
+	@Test
+	public void gatherSkillFromMenu()
+	{
+		assertEquals("Woodcutting",
+			SuperHistogramPlugin.gatherSkill(MenuAction.GAME_OBJECT_FIRST_OPTION, "Chop down", "<col=ffff>Yew tree"));
+		assertEquals("Mining",
+			SuperHistogramPlugin.gatherSkill(MenuAction.GAME_OBJECT_FIRST_OPTION, "Mine", "<col=ffff>Rocks"));
+		assertEquals("Fishing",
+			SuperHistogramPlugin.gatherSkill(MenuAction.NPC_FIRST_OPTION, "Lure", "<col=ffff>Fishing spot"));
+		assertEquals("Fishing",
+			SuperHistogramPlugin.gatherSkill(MenuAction.NPC_SECOND_OPTION, "Bait", "<col=ffff>Fishing spot"));
+		assertEquals("Firemaking",
+			SuperHistogramPlugin.gatherSkill(MenuAction.CC_OP, "Light", "<col=ff9040>Logs"));
+		assertEquals("Firemaking", SuperHistogramPlugin.gatherSkill(MenuAction.WIDGET_TARGET_ON_WIDGET, "Use",
+			"Tinderbox -> <col=ff9040>Logs"));
+		assertEquals("Firemaking",
+			SuperHistogramPlugin.gatherSkill(MenuAction.WIDGET_TARGET_ON_WIDGET, "Use", "Logs -> Tinderbox"));
+		assertNull(SuperHistogramPlugin.gatherSkill(MenuAction.GAME_OBJECT_FIRST_OPTION, "Lure", "Tree"));
+		assertNull(SuperHistogramPlugin.gatherSkill(MenuAction.WALK, "Walk here", null));
+		assertNull(SuperHistogramPlugin.gatherSkill(MenuAction.GAME_OBJECT_FIRST_OPTION, null, "Tree"));
+		assertNull(SuperHistogramPlugin.gatherSkill(MenuAction.WIDGET_TARGET_ON_WIDGET, "Use", null));
+		assertNull(SuperHistogramPlugin.gatherSkill(null, "Mine", "Rocks"));
+	}
+
+	@Test
+	public void keysDistinct()
+	{
+		assertTrue(SuperHistogramPlugin.objectKey(0, 0) > 0);
+		assertTrue(SuperHistogramPlugin.npcKey(0) < 0);
+		assertTrue(SuperHistogramPlugin.objectKey(1, 2) != SuperHistogramPlugin.objectKey(2, 1));
+	}
+
+	@Test
+	public void gatheringDetectedAfterRolls()
+	{
+		detectChopping(3);
+		BarState s = plugin.buildState();
+		assertEquals(Mode.GATHERING, s.mode);
+		assertEquals("Woodcutting", s.modeName);
+		assertEquals("auto \u00b7 Yew tree", s.modeSub);
+		assertTrue(s.gather == plugin.gather);
+	}
+
+	@Test
+	public void oneRollIsNotGathering()
+	{
+		detectChopping(1);
+		assertEquals(Mode.GENERAL, plugin.buildState().mode);
+	}
+
+	@Test
+	public void treeFallCuesNextTick()
+	{
+		when(config.metronome()).thenReturn(SuperHistogramConfig.Metronome.CUE_TICK);
+		detectChopping(3);
+		plugin.handleObjectDespawned(50, 50);
+		long now = ticks * 600L;
+		tickOnly();
+		assertTrue(plugin.pulse.outlineAlpha(now) > 0.9f);
+	}
+
+	@Test
+	public void despawnWhileLoadingIgnored()
+	{
+		detectChopping(3);
+		plugin.handleGameState(GameState.LOADING, 5000);
+		plugin.handleObjectDespawned(50, 50);
+		tickOnly();
+		assertTrue(plugin.gather.active());
+		assertFalse(plugin.gather.pills().get(0).depleted);
+	}
+
+	@Test
+	public void despawnOfOtherObjectIgnored()
+	{
+		detectChopping(3);
+		plugin.handleObjectDespawned(51, 50);
+		tickOnly();
+		assertTrue(plugin.gather.active());
+	}
+
+	@Test
+	public void inventoryFullBlinks()
+	{
+		plugin.handleInventory(java.util.Collections.singletonMap(YEW, 26), 2);
+		ticks = 0;
+		plugin.handleStat("Woodcutting", 1_000_000);
+		tickOnly();
+		plugin.handleGatherClick("Woodcutting", SuperHistogramPlugin.objectKey(50, 50), "Yew tree");
+		when(me.getAnimation()).thenReturn(867);
+		tickOnly();
+		tickOnly();
+		plugin.handleInventory(java.util.Collections.singletonMap(YEW, 27), 1);
+		plugin.handleStat("Woodcutting", 1_000_175);
+		tickOnly();
+		assertEquals(0f, plugin.pulse.mintAlpha((ticks - 1) * 600L), 0f);
+		plugin.handleInventory(java.util.Collections.singletonMap(YEW, 28), 0);
+		plugin.handleStat("Woodcutting", 1_000_350);
+		tickOnly();
+		assertTrue(plugin.pulse.mintAlpha((ticks - 1) * 600L) > 0f);
+	}
+
+	@Test
+	public void inventoryFullDoesNotBlinkWhenDisabled()
+	{
+		when(config.blinkWhenDone()).thenReturn(false);
+		plugin.handleInventory(java.util.Collections.singletonMap(YEW, 27), 1);
+		ticks = 0;
+		plugin.handleStat("Woodcutting", 1_000_000);
+		tickOnly();
+		plugin.handleGatherClick("Woodcutting", SuperHistogramPlugin.objectKey(50, 50), "Yew tree");
+		when(me.getAnimation()).thenReturn(867);
+		tickOnly();
+		tickOnly();
+		plugin.handleInventory(java.util.Collections.singletonMap(YEW, 28), 0);
+		plugin.handleStat("Woodcutting", 1_000_175);
+		tickOnly();
+		tickOnly();
+		assertEquals(0f, plugin.pulse.mintAlpha((ticks - 1) * 600L), 0f);
+	}
+
+	@Test
+	public void npcDespawnEndsFishing()
+	{
+		ticks = 0;
+		tickOnly();
+		plugin.handleGatherClick("Fishing", SuperHistogramPlugin.npcKey(7), "Rod Fishing spot");
+		when(me.getAnimation()).thenReturn(622);
+		tickOnly();
+		tickOnly();
+		tickOnly();
+		when(npc.getIndex()).thenReturn(7);
+		plugin.handleNpcDespawned(npc);
+		tickOnly();
+		assertTrue(plugin.gather.pills().get(0).depleted);
+	}
+
+	@Test
+	public void bankClickEndsGatherPill()
+	{
+		detectChopping(3);
+		assertTrue(plugin.gather.active());
+		plugin.handleBankClick();
+		assertFalse(plugin.gather.active());
+	}
+
+	@Test
+	public void logoutClearsGather()
+	{
+		plugin.handleInventory(java.util.Collections.singletonMap(YEW, 6), 22);
+		assertEquals(22, plugin.latestFreeSlots);
+		detectChopping(3);
+		plugin.handleGameState(GameState.LOGIN_SCREEN, 100_000);
+		assertFalse(plugin.gather.active());
+		assertTrue(plugin.gather.pills().isEmpty());
+		assertEquals(-1, plugin.latestFreeSlots);
+	}
+
+	@Test
+	public void hoppingKeepsGather()
+	{
+		detectChopping(3);
+		plugin.handleGameState(GameState.HOPPING, 100_000);
+		assertTrue(plugin.gather.active());
+	}
+
+	@Test
+	public void oneArgumentInventoryKeepsFreeSlots()
+	{
+		plugin.handleInventory(java.util.Collections.singletonMap(YEW, 6), 22);
+		plugin.handleInventory(java.util.Collections.singletonMap(YEW, 7));
+		assertEquals(22, plugin.latestFreeSlots);
+	}
+
+	@Test
+	public void despawnRightAfterLoadingIgnoredButLaterCounts()
+	{
+		detectChopping(3);
+		plugin.handleGameState(GameState.LOADING, 5000);
+		tickOnly();
+		plugin.handleObjectDespawned(50, 50);
+		tickOnly();
+		assertFalse(plugin.gather.pills().get(0).depleted);
+		tickOnly();
+		tickOnly();
+		plugin.handleObjectDespawned(50, 50);
+		tickOnly();
+		assertTrue(plugin.gather.pills().get(0).depleted);
+	}
 }

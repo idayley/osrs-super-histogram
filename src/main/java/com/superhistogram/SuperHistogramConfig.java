@@ -102,7 +102,7 @@ public interface SuperHistogramConfig extends Config
 		position = 7,
 		keyName = "blinkWhenDone",
 		name = "Blink when done",
-		description = "Flash the bar mint when an inventory finishes or the AFK logout warning fires"
+		description = "Flash the bar mint when an inventory finishes or fills, or the AFK logout warning fires"
 	)
 	default boolean blinkWhenDone()
 	{

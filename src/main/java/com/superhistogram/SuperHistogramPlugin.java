@@ -22,13 +22,17 @@ import com.superhistogram.model.combat.Bosses;
 import com.superhistogram.model.combat.FlashRule;
 import com.superhistogram.model.combat.HitAttribution;
 import com.superhistogram.model.skill.AlchTracker;
+import com.superhistogram.model.skill.GatherRun;
 import com.superhistogram.model.skill.InventoryRun;
 import com.superhistogram.ui.BarOverlay;
 import com.superhistogram.ui.HullFlashOverlay;
 import com.superhistogram.ui.Pulse;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import javax.inject.Inject;
 import net.runelite.api.Actor;
 import net.runelite.api.AnimationID;
@@ -46,6 +50,7 @@ import net.runelite.api.VarClientStr;
 import net.runelite.api.Player;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.AnimationChanged;
+import net.runelite.api.events.GameObjectDespawned;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
@@ -118,6 +123,11 @@ public class SuperHistogramPlugin extends Plugin
 	volatile FlickClassifier flicks;
 	volatile InventoryRun run;
 	volatile AlchTracker alch;
+	volatile GatherRun gather;
+	/** Free inventory slots from the newest inventory event; -1 when unknown. */
+	volatile int latestFreeSlots = -1;
+	/** The tick the last LOADING state arrived on: a scene reload despawns every object (this and the next tick are ignored). */
+	int loadingTick = Integer.MIN_VALUE;
 	/** Newest inventory item counts; null before the first inventory event and after logout. */
 	volatile Map<Integer, Integer> latestInventory;
 	private int lastHitTick = AttackTimer.NEVER;
@@ -187,6 +197,9 @@ public class SuperHistogramPlugin extends Plugin
 		flicks = new FlickClassifier();
 		run = new InventoryRun(timeline);
 		alch = new AlchTracker(timeline);
+		gather = new GatherRun(timeline);
+		latestFreeSlots = -1;
+		loadingTick = Integer.MIN_VALUE;
 		latestInventory = null;
 		lastHitTick = AttackTimer.NEVER;
 		idleThreshold = config.afkAfterSeconds();
@@ -239,6 +252,16 @@ public class SuperHistogramPlugin extends Plugin
 	}
 
 	@Subscribe
+	public void onGameObjectDespawned(GameObjectDespawned e)
+	{
+		net.runelite.api.Point p = e.getGameObject() == null ? null : e.getGameObject().getSceneMinLocation();
+		if (p != null)
+		{
+			handleObjectDespawned(p.getX(), p.getY());
+		}
+	}
+
+	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked e)
 	{
 		long now = System.currentTimeMillis();
@@ -261,6 +284,14 @@ public class SuperHistogramPlugin extends Plugin
 		if (isHighAlchClick(e.getMenuAction(), e.getMenuTarget()))
 		{
 			handleCastClick(e.getItemId());
+		}
+		MenuAction action = e.getMenuAction();
+		String gs = gatherSkill(action, option, e.getMenuTarget());
+		if (gs != null)
+		{
+			int key = action.name().startsWith("GAME_OBJECT_") ? objectKey(e.getParam0(), e.getParam1())
+				: action.name().startsWith("NPC_") ? npcKey(e.getId()) : 0;
+			handleGatherClick(gs, key, gatherTargetName(option, e.getMenuTarget()));
 		}
 	}
 
@@ -286,14 +317,16 @@ public class SuperHistogramPlugin extends Plugin
 		else if (e.getContainerId() == InventoryID.INVENTORY.getId())
 		{
 			Map<Integer, Integer> counts = new HashMap<>();
+			int used = 0;
 			for (Item i : c.getItems())
 			{
 				if (i != null && i.getId() > 0)
 				{
 					counts.merge(i.getId(), i.getQuantity(), Integer::sum);
+					used++;
 				}
 			}
-			handleInventory(counts);
+			handleInventory(counts, GatherRun.INVENTORY - used);
 		}
 	}
 
@@ -329,10 +362,17 @@ public class SuperHistogramPlugin extends Plugin
 			pulse.done(nowMs);
 		}
 		alch.onTick(tick - 1, prev == null ? Collections.<XpDrop>emptyList() : prev.xp);
-		boolean cue = beat.isBeat(tick) || (run.running() && run.finishTick() == tick)
-			|| (alch.showing(tick) && alch.nextReadyTick() == tick);
-
 		Player me = client.getLocalPlayer();
+		boolean animating = me != null && me.getAnimation() != -1;
+		boolean filled = gather.onTick(tick - 1, animating, prev == null ? Collections.<XpDrop>emptyList() : prev.xp,
+			latestInventory, latestFreeSlots);
+		if (filled && config.blinkWhenDone())
+		{
+			pulse.done(nowMs);
+		}
+		boolean cue = beat.isBeat(tick) || (run.running() && run.finishTick() == tick)
+			|| (alch.showing(tick) && alch.nextReadyTick() == tick) || gather.cueTick() == tick;
+
 		if (me != null)
 		{
 			WorldPoint here = me.getWorldLocation();
@@ -437,6 +477,10 @@ public class SuperHistogramPlugin extends Plugin
 		{
 			return;
 		}
+		if (gather != null)
+		{
+			gather.onTargetGone(tick, npcKey(npc.getIndex()));
+		}
 		attribution.forget(npc.getIndex());
 		swingers.remove(npc.getIndex());
 		HullFlashOverlay.Target t = flash;
@@ -498,6 +542,13 @@ public class SuperHistogramPlugin extends Plugin
 
 	void handleInventory(Map<Integer, Integer> counts)
 	{
+		handleInventory(counts, latestFreeSlots);
+	}
+
+	/** counts is the whole inventory; freeSlots the number of empty slots (-1 when unknown). */
+	void handleInventory(Map<Integer, Integer> counts, int freeSlots)
+	{
+		latestFreeSlots = freeSlots;
 		latestInventory = new HashMap<>(counts);
 		if (eats != null)
 		{
@@ -513,6 +564,99 @@ public class SuperHistogramPlugin extends Plugin
 		{
 			r.onBankClick(tick);
 		}
+		GatherRun gr = gather;
+		if (gr != null)
+		{
+			gr.onBankClick(tick);
+		}
+	}
+
+	/** The player clicked a tree, rock, fishing spot or logs to light. */
+	void handleGatherClick(String skill, int key, String name)
+	{
+		GatherRun gr = gather;
+		if (gr != null)
+		{
+			gr.onTargetClick(tick, skill, key, name);
+		}
+	}
+
+	/** A game object despawned at this scene tile (client thread); ignored on the tick a scene loads. */
+	void handleObjectDespawned(int sceneX, int sceneY)
+	{
+		GatherRun gr = gather;
+		if (gr != null && (long) tick - loadingTick > 1)
+		{
+			gr.onTargetGone(tick, objectKey(sceneX, sceneY));
+		}
+	}
+
+	/** Identity of a clicked or despawned object: always positive. */
+	static int objectKey(int sceneX, int sceneY)
+	{
+		return 1 + sceneX * 512 + sceneY;
+	}
+
+	/** Identity of an NPC (a fishing spot): always negative. */
+	static int npcKey(int index)
+	{
+		return -(index + 1);
+	}
+
+	private static final Set<String> FISHING_OPTIONS = new HashSet<>(Arrays.asList(
+		"Net", "Small Net", "Big Net", "Bait", "Lure", "Harpoon", "Cage", "Fish", "Use-rod"));
+
+	/** The gathering skill a menu click starts, or null when it is not a gathering click. */
+	static String gatherSkill(MenuAction a, String option, String target)
+	{
+		if (a == null || option == null)
+		{
+			return null;
+		}
+		switch (a)
+		{
+			case GAME_OBJECT_FIRST_OPTION:
+			case GAME_OBJECT_SECOND_OPTION:
+			case GAME_OBJECT_THIRD_OPTION:
+			case GAME_OBJECT_FOURTH_OPTION:
+			case GAME_OBJECT_FIFTH_OPTION:
+				return "Chop down".equals(option) || "Chop".equals(option) ? "Woodcutting"
+					: "Mine".equals(option) ? "Mining" : null;
+			case NPC_FIRST_OPTION:
+			case NPC_SECOND_OPTION:
+			case NPC_THIRD_OPTION:
+			case NPC_FOURTH_OPTION:
+			case NPC_FIFTH_OPTION:
+				return FISHING_OPTIONS.contains(option) ? "Fishing" : null;
+			case CC_OP:
+				return "Light".equals(option) ? "Firemaking" : null;
+			case WIDGET_TARGET_ON_WIDGET:
+				return "Use".equals(option) && target != null && Text.removeTags(target).contains("Tinderbox")
+					? "Firemaking" : null;
+			default:
+				return null;
+		}
+	}
+
+	/** The clicked target's name: tags removed; for "Use" the side of " -> " that is not the tinderbox. */
+	static String gatherTargetName(String option, String target)
+	{
+		if (target == null)
+		{
+			return "";
+		}
+		String t = Text.removeTags(target);
+		if ("Use".equals(option))
+		{
+			for (String side : t.split(" -> "))
+			{
+				if (!"Tinderbox".equals(side.trim()))
+				{
+					return side.trim();
+				}
+			}
+		}
+		return t;
 	}
 
 	static boolean isBankClick(String option, String target)
@@ -622,6 +766,9 @@ public class SuperHistogramPlugin extends Plugin
 				loggedIn = true;
 				clock.onLoggedIn(nowMs);
 				break;
+			case LOADING:
+				loadingTick = tick;
+				break;
 			case HOPPING:
 				clock.onHopping();
 				clearFlash();
@@ -646,6 +793,9 @@ public class SuperHistogramPlugin extends Plugin
 				flicks.reset();
 				run = new InventoryRun(timeline);
 				alch.rebind(timeline);
+				gather = new GatherRun(timeline);
+				latestFreeSlots = -1;
+				loadingTick = Integer.MIN_VALUE;
 				latestInventory = null;
 				lastHitTick = AttackTimer.NEVER;
 				tick = -1;
@@ -678,8 +828,9 @@ public class SuperHistogramPlugin extends Plugin
 			&& ModeDetector.inCombat(me.getInteracting() instanceof NPC, tickNow, lastHitTick, at.lastAttackTick());
 		InventoryRun runNow = run;
 		AlchTracker alchNow = alch;
+		GatherRun gatherNow = gather;
 		Mode skilling = ModeDetector.skilling(alchNow != null && alchNow.showing(tickNow),
-			runNow != null && runNow.showing(tickNow));
+			runNow != null && runNow.showing(tickNow), gatherNow != null && gatherNow.showing(tickNow));
 		Mode mode = modeDetector.detect(afk, combat, skilling, config.prayerMode(), config.baseline());
 		return BarState.builder()
 			.timeline(timeline)
@@ -688,8 +839,9 @@ public class SuperHistogramPlugin extends Plugin
 			.idle(idleNow)
 			.clock(clock)
 			.runEnergyPct(runEnergyPct)
-			.modeName(mode == Mode.PRODUCTION ? runNow.skill() : modeName(mode))
-			.modeSub(modeSub(mode))
+			.modeName(mode == Mode.PRODUCTION ? runNow.skill()
+				: mode == Mode.GATHERING ? gatherNow.skill() : modeName(mode))
+			.modeSub(mode == Mode.GATHERING ? gatherSub(gatherNow) : modeSub(mode))
 			.showRunEnergy(config.showRunEnergy())
 			.showLoginTime(config.showLoginTime())
 			.mode(mode)
@@ -705,9 +857,16 @@ public class SuperHistogramPlugin extends Plugin
 			.xpDrops(config.xpDrops())
 			.xpDots(config.xpDots())
 			.alch(alchNow)
+			.gather(gatherNow)
 			.alchTopRow(config.alchTopRow())
 			.rightSide(config.rightSide())
 			.build();
+	}
+
+	private static String gatherSub(GatherRun g)
+	{
+		String name = g.targetName();
+		return name == null || name.isEmpty() ? "auto" : "auto \u00b7 " + name;
 	}
 
 	private String modeSub(Mode mode)
@@ -722,6 +881,8 @@ public class SuperHistogramPlugin extends Plugin
 				return "auto";
 			case ALCH:
 				return "auto \u00b7 5t";
+			case GATHERING:
+				return "auto";
 			case LAZY_FLICK:
 				return weaponSpeed + "t \u00b7 " + config.beatKey();
 			default:
