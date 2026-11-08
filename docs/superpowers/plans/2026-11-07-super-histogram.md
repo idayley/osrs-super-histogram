@@ -80,7 +80,7 @@ Phases 2–5 are written at task level (files, interfaces, tests to write). Befo
   - `final class Hit { final int amount; final boolean blocked; }` (blocked = 0 or miss)
   - `final class Span { final String kind; final int startTick; int endTick; String label; }`. kind ∈ `"walk"`, `"run"`, `"action"`, `"idle"`; later phases add their own kinds; `endTick` is inclusive and -1 while open.
   - `final class TickRecord { final int tick; final List<XpDrop> xp; final List<Hit> hits; final List<Float> clicks; }`. Clicks are the in-tick fraction 0..1 when known, else 0.
-  - `final class Timeline { Timeline(int capacity); TickRecord at(int tick) /* creates if absent and within capacity of newest, else null */; TickRecord peek(int tick) /* null if absent */; int newestTick(); void openSpan(Span s); Span openSpan(String kind); void closeSpan(String kind, int endTick); List<Span> spansBetween(int fromTick, int toTick); }`. Capacity 512. Spans older than the oldest retained tick are dropped.
+  - `final class Timeline { Timeline(int capacity); TickRecord at(int tick) /* creates if absent and within capacity of newest, else null */; TickRecord peek(int tick) /* null if absent */; int newestTick(); Span openSpan(String kind, int startTick); void closeSpan(String kind, int endTick); List<Span> spansBetween(int fromTick, int toTick); }`. Capacity 512. Spans older than the oldest retained tick are dropped.
 
 - [ ] **Step 1: Write failing tests.**
   - `atCreatesRecordForTick` — `at(10).tick == 10` and `peek(10) != null`.
@@ -143,7 +143,7 @@ Phases 2–5 are written at task level (files, interfaces, tests to write). Befo
 
 **Interfaces:**
 - Consumes: `Timeline`, `XpDrop` (Task 2).
-- Produces: `final class XpTracker { XpTracker(Timeline t); void onStat(String skill, int totalXp, int tick); void onLoginScreen(); long sessionXp(); XpDrop lastDrop(); long xpPerHour(String skill, long sessionMs); String topSkill(); }`. Skill names are RuneLite `Skill.getName()` strings, passed in by the plugin.
+- Produces: `final class XpTracker { XpTracker(Timeline t); void onStat(String skill, int totalXp, int tick); void onLoginScreen(); long sessionXp(); XpDrop lastDrop(); long xpPerHour(String skill, long sessionMs); String topSkill(); long currentXp(String skill) /* -1 if unknown */; }`. Skill names are RuneLite `Skill.getName()` strings, passed in by the plugin.
 
 - [ ] **Step 1: Write failing tests.**
   - `firstStatIsBaselineNotDrop` — `onStat("Fishing", 1_000_000, 5)` adds no drop.
@@ -202,7 +202,7 @@ Phases 2–5 are written at task level (files, interfaces, tests to write). Befo
 ### Task 8: Painters, overlay and baseline modes
 
 **Files:**
-- Create: `ui/Palette.java`, `ui/Fonts.java`, `ui/BarOverlay.java`, `ui/TimelinePainter.java`, `ui/ReadoutPainter.java`, `ui/ModeView.java`, `ui/modes/GeneralView.java`, `ui/modes/AfkView.java`, `ui/modes/MinimalView.java`, `model/ModeDetector.java`, `model/BarState.java`
+- Create: `model/Levels.java` (OSRS XP table: `static int levelFor(long xp)`, `static long xpForLevel(int level)`; tests `level99At13034431`, `level2At83`), `ui/Palette.java`, `ui/Fonts.java`, `ui/BarOverlay.java`, `ui/TimelinePainter.java`, `ui/ReadoutPainter.java`, `ui/ModeView.java`, `ui/modes/GeneralView.java`, `ui/modes/AfkView.java`, `ui/modes/MinimalView.java`, `model/ModeDetector.java`, `model/BarState.java`
 - Test: `ui/BarRenderSmokeTest.java`, `model/ModeDetectorTest.java`
 
 **Interfaces:**
