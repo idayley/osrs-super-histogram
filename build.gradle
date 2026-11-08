@@ -68,3 +68,11 @@ tasks.register('shadowJar', Jar) {
 	archiveClassifier.set('shadow')
 	archiveFileName.set("${rootProject.name}-${project.version}-all.jar")
 }
+
+test {
+	systemProperty 'java.awt.headless', 'true'
+	if (project.hasProperty('renderDir'))
+	{
+		systemProperty 'superhistogram.renderDir', project.property('renderDir')
+	}
+}
