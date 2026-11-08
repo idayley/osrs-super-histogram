@@ -125,7 +125,7 @@ public final class TimelinePainter
 					pill(g, l, x0, x1, Palette.TEXT, true, sp.label != null ? sp.label : "walking");
 					break;
 				case "run":
-					pill(g, l, x0, x1, Palette.RUN_ENERGY, true, sp.label != null ? sp.label : "running");
+					pill(g, l, x0, x1, Palette.runEnergy(), true, sp.label != null ? sp.label : "running");
 					break;
 				default:
 					pill(g, l, x0, x1, Palette.ACTION, false, sp.label);
@@ -186,7 +186,7 @@ public final class TimelinePainter
 			{
 				landed |= !h.blocked;
 			}
-			Color c = landed ? Palette.DAMAGE : Palette.BLOCKED;
+			Color c = landed ? Palette.damage() : Palette.BLOCKED;
 			float x = x(l, s, t);
 			g.setColor(c);
 			if (l.rows == 1)

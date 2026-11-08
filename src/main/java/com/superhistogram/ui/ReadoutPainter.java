@@ -42,7 +42,7 @@ public final class ReadoutPainter
 		float gy = subY + 6f * u, gw = 64f * u, gh = 3f * u;
 		g.setColor(Palette.GAUGE_TRACK);
 		g.fill(new RoundRectangle2D.Float(x, gy, gw, gh, gh, gh));
-		g.setColor(pct < 20 ? Palette.WHITE : Palette.RUN_ENERGY);
+		g.setColor(pct < 20 ? Palette.WHITE : Palette.runEnergy());
 		g.fill(new RoundRectangle2D.Float(x, gy, gw * pct / 100f, gh, gh, gh));
 		text(g, pct + "%", Fonts.bold(8.5f * u), Palette.DIM, x + 68f * u, gy + 3.5f * u);
 	}

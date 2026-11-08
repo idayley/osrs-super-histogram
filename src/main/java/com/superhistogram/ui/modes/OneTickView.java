@@ -163,7 +163,7 @@ public final class OneTickView implements ModeView
 			histogram(g, l, s, hx, hw, f);
 		}
 		g.setFont(Fonts.bold(size));
-		g.setColor(word ? Palette.WHITE : Palette.MINT);
+		g.setColor(word ? Palette.WHITE : Palette.mint());
 		g.drawString(main, vx, (word ? 36f : 33f) * f);
 		if (!word)
 		{
@@ -208,7 +208,7 @@ public final class OneTickView implements ModeView
 				continue;
 			}
 			float bh = 22f * f * bins[i] / max;
-			g.setColor(i < FlickClassifier.SPLIT_BIN ? Palette.MINT : Palette.WHITE);
+			g.setColor(i < FlickClassifier.SPLIT_BIN ? Palette.mint() : Palette.WHITE);
 			g.fill(new RoundRectangle2D.Float(hx + pitch * i + pitch / 8f, 33f * f - bh, pitch * 0.75f, bh,
 				3f * u, 3f * u));
 		}

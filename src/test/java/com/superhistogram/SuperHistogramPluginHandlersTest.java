@@ -1455,4 +1455,42 @@ public class SuperHistogramPluginHandlersTest
 		tickOnly();
 		assertEquals(70, plugin.agility.bestTicks());
 	}
+
+	@Test
+	public void pinnedModeOverridesDetectionInBuildState()
+	{
+		when(config.mode()).thenReturn(com.superhistogram.model.ModeSetting.ALCH);
+		assertEquals(Mode.ALCH, plugin.buildState().mode);
+		when(config.mode()).thenReturn(com.superhistogram.model.ModeSetting.AUTO);
+		assertEquals(Mode.GENERAL, plugin.buildState().mode);
+	}
+
+	@Test
+	public void pinnedModeStillBlankWhenLoggedOut()
+	{
+		when(config.mode()).thenReturn(com.superhistogram.model.ModeSetting.ALCH);
+		plugin.handleGameState(GameState.LOGIN_SCREEN, 0);
+		assertNull(plugin.buildState());
+	}
+
+	@Test
+	public void configChangePushesColoursAndSize()
+	{
+		com.superhistogram.ui.BarOverlay o = new com.superhistogram.ui.BarOverlay(plugin::buildState, null);
+		plugin.overlay = o;
+		plugin.overlayManager = mock(net.runelite.client.ui.overlay.OverlayManager.class);
+		when(config.size()).thenReturn(com.superhistogram.model.BarSize.LARGE);
+		when(config.position()).thenReturn(com.superhistogram.model.BarPosition.FLOATING);
+		when(config.damageColour()).thenReturn(java.awt.Color.RED);
+		plugin.handleConfigChanged(SuperHistogramPlugin.CONFIG_GROUP, "size");
+		assertEquals(new java.awt.Dimension(1026, 80), o.getPreferredSize());
+		plugin.handleConfigChanged(SuperHistogramPlugin.CONFIG_GROUP, "position");
+		assertTrue(o.isMovable());
+		plugin.handleConfigChanged(SuperHistogramPlugin.CONFIG_GROUP, "damageColour");
+		assertEquals(java.awt.Color.RED, o.colours().damage);
+		// Other groups are ignored.
+		when(config.size()).thenReturn(com.superhistogram.model.BarSize.SMALL);
+		plugin.handleConfigChanged("other", "size");
+		assertEquals(new java.awt.Dimension(1026, 80), o.getPreferredSize());
+	}
 }

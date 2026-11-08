@@ -132,7 +132,7 @@ public final class LazyFlickView implements ModeView
 				{
 					g.setFont(Fonts.bold(9f * u));
 					boolean free = r.eatCost <= 0;
-					g.setColor(free ? Palette.MINT : Palette.LOST);
+					g.setColor(free ? Palette.mint() : Palette.LOST);
 					g.drawString(free ? "free" : "+" + r.eatCost, ex + 9f * u, 47.5f * u);
 				}
 			}
@@ -214,7 +214,7 @@ public final class LazyFlickView implements ModeView
 			float x = tx + 2f * u + 11f * u * i;
 			if (v == Beat.Verdict.ON_TIME)
 			{
-				g.setColor(Palette.withAlpha(Palette.MINT, 0.8f));
+				g.setColor(Palette.withAlpha(Palette.mint(), 0.8f));
 				g.fill(new RoundRectangle2D.Float(x, 30f * u + dy, 7f * u, 4f * u, 4f * u, 4f * u));
 			}
 			else
@@ -236,7 +236,7 @@ public final class LazyFlickView implements ModeView
 			check.moveTo(vx + 4f * u, 29f * u + dy);
 			check.lineTo(vx + 10f * u, 35f * u + dy);
 			check.lineTo(vx + 22f * u, 23f * u + dy);
-			g.setColor(Palette.MINT);
+			g.setColor(Palette.mint());
 			g.setStroke(new BasicStroke(3f * u, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 			g.draw(check);
 		}

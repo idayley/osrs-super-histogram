@@ -127,7 +127,7 @@ final class XpRow
 				if (draw)
 				{
 					SkillPainter.coin(g, x + 3f * u, baseline - 3.5f * u, 3.4f * u);
-					g.setColor(r.castCoins == null ? Palette.DIM : Palette.DAMAGE);
+					g.setColor(r.castCoins == null ? Palette.DIM : Palette.damage());
 					g.drawString(text, x + 9f * u, baseline);
 				}
 				x += 9f * u + w + 6f * u;

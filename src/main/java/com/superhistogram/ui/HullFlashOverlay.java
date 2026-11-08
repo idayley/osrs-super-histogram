@@ -36,6 +36,7 @@ public final class HullFlashOverlay extends Overlay
 
 	private final ModelOutlineRenderer renderer;
 	private final Supplier<Target> target;
+	private volatile Colours colours = Colours.DEFAULT;
 
 	public HullFlashOverlay(ModelOutlineRenderer renderer, Supplier<Target> target)
 	{
@@ -43,6 +44,11 @@ public final class HullFlashOverlay extends Overlay
 		this.target = target;
 		setLayer(OverlayLayer.ABOVE_SCENE);
 		setPosition(OverlayPosition.DYNAMIC);
+	}
+
+	public void setColours(Colours c)
+	{
+		this.colours = c == null ? Colours.DEFAULT : c;
 	}
 
 	/** 1 at the hit, falling linearly to 0 at 500 ms; 0 for negative ages. */
@@ -74,7 +80,7 @@ public final class HullFlashOverlay extends Overlay
 		{
 			return null;
 		}
-		Color base = t.miss ? Palette.BLOCKED : Palette.DAMAGE;
+		Color base = t.miss ? Palette.BLOCKED : colours.damage;
 		Color c = new Color(base.getRed(), base.getGreen(), base.getBlue(), Math.round(255 * a));
 		renderer.drawOutline(t.npc, WIDTH, c, FEATHER);
 		return null;

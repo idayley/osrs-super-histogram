@@ -102,7 +102,7 @@ public final class AlchView implements ModeView
 		{
 			return Palette.WHITE;
 		}
-		return Palette.DAMAGE;
+		return Palette.damage();
 	}
 
 	/** "+236", "+1.2k" or "?" when the value is unknown. */

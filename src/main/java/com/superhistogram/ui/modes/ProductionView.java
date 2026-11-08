@@ -169,6 +169,6 @@ public final class ProductionView implements ModeView
 	public static Color rightColor(BarState s)
 	{
 		InventoryRun run = s.run;
-		return run != null && !run.running() && run.bankTick() != -1 ? Palette.MINT : Palette.WHITE;
+		return run != null && !run.running() && run.bankTick() != -1 ? Palette.mint() : Palette.WHITE;
 	}
 }

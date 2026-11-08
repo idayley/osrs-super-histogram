@@ -236,6 +236,6 @@ public final class AgilityView implements ModeView
 	public static Color rightColor(BarState s)
 	{
 		AgilityCourse a = s.agility;
-		return a != null && a.lapStartTick() < 0 && a.lastLapWasBest() ? Palette.MINT : Palette.WHITE;
+		return a != null && a.lapStartTick() < 0 && a.lastLapWasBest() ? Palette.mint() : Palette.WHITE;
 	}
 }

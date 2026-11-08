@@ -88,8 +88,57 @@ public final class Palette
 		skill("Sailing", 0xa3d3f0);
 	}
 
+	private static final ThreadLocal<Colours> ACTIVE = new ThreadLocal<>();
+
 	private Palette()
 	{
+	}
+
+	/** Makes {@code c} the colours of this thread's current paint; returns what to hand back to {@link #leave}. */
+	static Colours enter(Colours c)
+	{
+		Colours prev = ACTIVE.get();
+		ACTIVE.set(c);
+		return prev;
+	}
+
+	static void leave(Colours prev)
+	{
+		if (prev == null)
+		{
+			ACTIVE.remove();
+		}
+		else
+		{
+			ACTIVE.set(prev);
+		}
+	}
+
+	private static Colours active()
+	{
+		Colours c = ACTIVE.get();
+		return c == null ? Colours.DEFAULT : c;
+	}
+
+	/** The overridable colours. Constants above are the defaults; painters must use these. */
+	public static Color ground()
+	{
+		return active().ground;
+	}
+
+	public static Color damage()
+	{
+		return active().damage;
+	}
+
+	public static Color mint()
+	{
+		return active().mint;
+	}
+
+	public static Color runEnergy()
+	{
+		return active().runEnergy;
 	}
 
 	/** Colour for a skill by its RuneLite display name; text colour if unknown. */

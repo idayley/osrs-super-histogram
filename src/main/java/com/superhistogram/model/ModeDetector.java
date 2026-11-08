@@ -10,6 +10,17 @@ public final class ModeDetector
 		return detect(afk, inCombat, null, prayerMode, baseline);
 	}
 
+	/** As below, but a pinned (non-AUTO) setting overrides detection completely, AFK included. */
+	public Mode detect(ModeSetting pinned, boolean afk, boolean inCombat, Mode skilling, PrayerMode prayerMode,
+		BaselineSetting baseline)
+	{
+		if (pinned != null && pinned.mode() != null)
+		{
+			return pinned.mode();
+		}
+		return detect(afk, inCombat, skilling, prayerMode, baseline);
+	}
+
 	/**
 	 * @param skilling the skilling view to show (PRODUCTION, ALCH, AGILITY, GATHERING) or null; it beats the baseline
 	 *                 but not AFK or combat

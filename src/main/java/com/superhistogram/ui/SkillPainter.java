@@ -77,7 +77,7 @@ public final class SkillPainter
 	/** Gold coin: a DAMAGE disc of radius r with a darker ring at 0.53r (stroke 0.26r). */
 	public static void coin(Graphics2D g, float cx, float cy, float r)
 	{
-		g.setColor(Palette.DAMAGE);
+		g.setColor(Palette.damage());
 		g.fill(new Ellipse2D.Float(cx - r, cy - r, 2 * r, 2 * r));
 		float rr = 0.53f * r;
 		g.setColor(Palette.COIN_RING);
@@ -169,7 +169,7 @@ public final class SkillPainter
 		p.lineTo(cx, cy + 4.5f * u);
 		p.lineTo(cx - 4 * u, cy);
 		p.closePath();
-		g.setColor(Palette.MINT);
+		g.setColor(Palette.mint());
 		g.fill(p);
 	}
 }

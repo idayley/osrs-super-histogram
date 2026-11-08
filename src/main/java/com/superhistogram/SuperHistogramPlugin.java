@@ -27,6 +27,7 @@ import com.superhistogram.model.skill.AlchTracker;
 import com.superhistogram.model.skill.GatherRun;
 import com.superhistogram.model.skill.InventoryRun;
 import com.superhistogram.ui.BarOverlay;
+import com.superhistogram.ui.Colours;
 import com.superhistogram.ui.HullFlashOverlay;
 import com.superhistogram.ui.Pulse;
 import java.util.ArrayDeque;
@@ -53,6 +54,7 @@ import net.runelite.api.NPC;
 import net.runelite.api.VarClientStr;
 import net.runelite.api.Player;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.widgets.Widget;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.GameObjectDespawned;
@@ -65,6 +67,7 @@ import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.NpcDespawned;
 import net.runelite.api.events.StatChanged;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.RuneScapeProfileChanged;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemEquipmentStats;
@@ -158,7 +161,7 @@ public class SuperHistogramPlugin extends Plugin
 			clientThread.invoke(SuperHistogramPlugin.this::handleBeatKey);
 		}
 	};
-	private BarOverlay overlay;
+	BarOverlay overlay;
 	private HullFlashOverlay hullOverlay;
 	private final HitAttribution attribution = new HitAttribution();
 	private final Map<Integer, NPC> swingers = new HashMap<>();
@@ -178,9 +181,14 @@ public class SuperHistogramPlugin extends Plugin
 		initModel();
 		pulse = new Pulse();
 		overlay = new BarOverlay(this::buildState, pulse);
+		overlay.setChatHeight(this::chatboxHeight);
 		overlayManager.add(overlay);
+		// RuneLite restores a saved (hand-dragged) size on add; only fill in the preset when there is none.
+		overlay.applySizeIfUnset(config.size());
+		overlay.applyPosition(config.position());
 		hullOverlay = new HullFlashOverlay(outlineRenderer, this::flashTarget);
 		overlayManager.add(hullOverlay);
+		applyColours();
 		keyManager.registerKeyListener(beatHotkey);
 	}
 
@@ -372,12 +380,68 @@ public class SuperHistogramPlugin extends Plugin
 	}
 
 	@Subscribe
+	public void onConfigChanged(ConfigChanged e)
+	{
+		handleConfigChanged(e.getGroup(), e.getKey());
+	}
+
+	@Subscribe
 	public void onGameStateChanged(GameStateChanged e)
 	{
 		handleGameState(e.getGameState(), System.currentTimeMillis());
 	}
 
 	// ---- handlers ----
+
+	/** Pushes Bar and Colours settings into the overlays. Other settings are read live. */
+	void handleConfigChanged(String group, String key)
+	{
+		if (!CONFIG_GROUP.equals(group) || key == null || overlay == null)
+		{
+			return;
+		}
+		switch (key)
+		{
+			case "size":
+				overlay.applySize(config.size());
+				// Persist so a stale hand-dragged size saved earlier does not come back on restart.
+				overlayManager.saveOverlay(overlay);
+				break;
+			case "position":
+				overlay.applyPosition(config.position());
+				overlayManager.saveOverlay(overlay);
+				break;
+			case "damageColour":
+			case "mintColour":
+			case "runEnergyColour":
+			case "backgroundColour":
+				applyColours();
+				break;
+			default:
+				break;
+		}
+	}
+
+	private void applyColours()
+	{
+		Colours c = Colours.orDefaults(config.backgroundColour(), config.damageColour(), config.mintColour(),
+			config.runEnergyColour());
+		if (overlay != null)
+		{
+			overlay.setColours(c);
+		}
+		if (hullOverlay != null)
+		{
+			hullOverlay.setColours(c);
+		}
+	}
+
+	/** Height of the chatbox widget in px; 0 when unknown (the placement falls back to 165). */
+	private int chatboxHeight()
+	{
+		Widget w = client == null ? null : client.getWidget(net.runelite.api.gameval.InterfaceID.Chatbox.UNIVERSE);
+		return w == null || w.isHidden() ? 0 : w.getHeight();
+	}
 
 	void handleTick(long nowMs)
 	{
@@ -971,7 +1035,7 @@ public class SuperHistogramPlugin extends Plugin
 		GatherRun gatherNow = gather;
 		Mode skilling = ModeDetector.skilling(alchNow != null && alchNow.showing(tickNow),
 			runNow != null && runNow.showing(tickNow), agilityOn, gatherNow != null && gatherNow.showing(tickNow));
-		Mode mode = modeDetector.detect(afk, combat, skilling, config.prayerMode(), config.baseline());
+		Mode mode = modeDetector.detect(config.mode(), afk, combat, skilling, config.prayerMode(), config.baseline());
 		return BarState.builder()
 			.timeline(timeline)
 			.nowTick(timeline == null ? -1 : timeline.newestTick())

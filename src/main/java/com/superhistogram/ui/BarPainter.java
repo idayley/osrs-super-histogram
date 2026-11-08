@@ -23,6 +23,7 @@ import java.util.Map;
 public final class BarPainter
 {
 	private final Pulse pulse;
+	private volatile Colours colours = Colours.DEFAULT;
 	private final Map<Mode, ModeView> views = new EnumMap<>(Mode.class);
 
 	/** @param pulse metronome / done-blink timing; null for none. */
@@ -40,6 +41,17 @@ public final class BarPainter
 		views.put(Mode.AGILITY, new AgilityView());
 	}
 
+	/** Replaces the overridable colours; takes effect on the next paint. */
+	public void setColours(Colours c)
+	{
+		this.colours = c == null ? Colours.DEFAULT : c;
+	}
+
+	public Colours colours()
+	{
+		return colours;
+	}
+
 	/** The layout the ruler, timeline and now line use: narrower ticks in the agility view, else {@code l} itself. */
 	public static BarLayout timelineLayout(BarLayout l, BarState s)
 	{
@@ -50,6 +62,7 @@ public final class BarPainter
 	public void paint(Graphics2D g0, BarLayout l, BarState s, long nowMs)
 	{
 		Graphics2D g = (Graphics2D) g0.create();
+		Colours prev = Palette.enter(colours);
 		try
 		{
 			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -59,12 +72,12 @@ public final class BarPainter
 
 			float w = l.width, h = l.height;
 			RoundRectangle2D ground = new RoundRectangle2D.Float(0, 0, w, h, h, h);
-			g.setColor(Palette.GROUND);
+			g.setColor(Palette.ground());
 			g.fill(ground);
 			float mint = pulse == null ? 0f : pulse.mintAlpha(nowMs);
 			if (mint > 0f)
 			{
-				g.setColor(Palette.withAlpha(Palette.MINT, mint));
+				g.setColor(Palette.withAlpha(Palette.mint(), mint));
 				g.fill(ground);
 			}
 
@@ -84,6 +97,7 @@ public final class BarPainter
 		}
 		finally
 		{
+			Palette.leave(prev);
 			g.dispose();
 		}
 	}
