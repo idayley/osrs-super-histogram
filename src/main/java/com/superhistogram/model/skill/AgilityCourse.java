@@ -116,6 +116,10 @@ public final class AgilityCourse
 	private int previousLap = -1;
 	private boolean lastWasBest;
 	private boolean bestChanged;
+	/** Laps finished and marks of grace picked up this session (kept across logouts and courses). */
+	private int sessionLaps, sessionMarks;
+	/** Agility XP gained since the last lap ended; the XP of the last full (or, before one, any) lap. */
+	private int lapXpRunning, lapXp, lapXpFull = -1;
 
 	public AgilityCourse(Timeline t)
 	{
@@ -161,6 +165,10 @@ public final class AgilityCourse
 		course = courseId;
 		courseSince = lastTick;
 		clearSession();
+		// Another course gives other XP per lap.
+		lapXpRunning = 0;
+		lapXp = 0;
+		lapXpFull = -1;
 	}
 
 	public synchronized void rebind(Timeline t)
@@ -181,6 +189,11 @@ public final class AgilityCourse
 		lapStarts.clear();
 		course = null;
 		bestChanged = false;
+		sessionLaps = 0;
+		sessionMarks = 0;
+		lapXpRunning = 0;
+		lapXp = 0;
+		lapXpFull = -1;
 		lastTick = -1;
 		courseSince = -1;
 	}
@@ -378,6 +391,13 @@ public final class AgilityCourse
 		lastLap = ticks;
 		lapStart = -1;
 		afterLapEnd = true;
+		sessionLaps++;
+		if (lapFull)
+		{
+			lapXpFull = lapXpRunning;
+		}
+		lapXp = lapXpRunning;
+		lapXpRunning = 0;
 		if (lapFull)
 		{
 			CourseStats s = stats(course);
@@ -427,6 +447,7 @@ public final class AgilityCourse
 				if (AGILITY.equals(d.skill))
 				{
 					agi = true;
+					lapXpRunning += Math.max(0, d.amount);
 				}
 			}
 			if (agi && pending != null)
@@ -500,6 +521,33 @@ public final class AgilityCourse
 		{
 			pendingMark = tick;
 		}
+	}
+
+	/** Marks of grace picked up on a course. */
+	public synchronized void onMarksPickedUp(int n)
+	{
+		if (n > 0)
+		{
+			sessionMarks += n;
+		}
+	}
+
+	/** Agility XP of a lap on this course: the last full lap, else the last lap; 0 before one. */
+	public synchronized int lapXp()
+	{
+		return lapXpFull > 0 ? lapXpFull : lapXp;
+	}
+
+	/** Laps finished this session. */
+	public synchronized int laps()
+	{
+		return sessionLaps;
+	}
+
+	/** Marks of grace picked up this session. */
+	public synchronized int marks()
+	{
+		return sessionMarks;
 	}
 
 	public synchronized String course()

@@ -1,28 +1,73 @@
 package com.superhistogram.model;
 
+import java.util.Objects;
+
 /** Position math for the bar, free of RuneLite types. */
 public final class BarPlacement
 {
-	/** Used when the chatbox bounds cannot be read. */
-	public static final int FALLBACK_CHAT_HEIGHT = 165;
+	/** Classic chatbox: 519 wide, 165 tall including the 23 px button row. */
+	static final int CLASSIC_CHAT_W = 519, CLASSIC_CHAT_H = 165, CLASSIC_BUTTONS_H = 23;
 
 	private BarPlacement()
 	{
 	}
 
-	/** How far above the bottom-left anchor the bar sits. */
-	public static int lift(BarPosition position, int chatHeight)
+	/** A rectangle in canvas pixels. */
+	public static final class Rect
 	{
-		if (position != BarPosition.ABOVE_CHAT)
+		public final int x, y, w, h;
+
+		public Rect(int x, int y, int w, int h)
 		{
-			return 0;
+			this.x = x;
+			this.y = y;
+			this.w = w;
+			this.h = h;
 		}
-		return chatHeight > 0 ? chatHeight : FALLBACK_CHAT_HEIGHT;
+
+		@Override
+		public boolean equals(Object o)
+		{
+			if (!(o instanceof Rect))
+			{
+				return false;
+			}
+			Rect r = (Rect) o;
+			return x == r.x && y == r.y && w == r.w && h == r.h;
+		}
+
+		@Override
+		public int hashCode()
+		{
+			return Objects.hash(x, y, w, h);
+		}
+
+		@Override
+		public String toString()
+		{
+			return "Rect(" + x + "," + y + " " + w + "x" + h + ")";
+		}
 	}
 
-	/** Height of the overlay block: the bar drawn at its top, with the lift below it. */
-	public static int blockHeight(BarPosition position, int barHeight, int chatHeight)
+	/**
+	 * Where the bar goes for a chat-anchored position: as wide as the chat text area, either sitting at its
+	 * bottom (replace chat) or just above it. Null for FLOATING, which RuneLite places.
+	 */
+	public static Rect place(BarPosition position, Rect chatArea, int barHeight)
 	{
-		return barHeight + lift(position, chatHeight);
+		if (position == BarPosition.FLOATING || chatArea == null)
+		{
+			return null;
+		}
+		int y = position == BarPosition.ABOVE_CHAT
+			? chatArea.y - barHeight
+			: chatArea.y + chatArea.h - barHeight;
+		return new Rect(chatArea.x, y, chatArea.w, barHeight);
+	}
+
+	/** The classic chat text area at the bottom-left of a canvas, for when the chat widgets can't be read. */
+	public static Rect fallbackChat(int canvasHeight)
+	{
+		return new Rect(0, canvasHeight - CLASSIC_CHAT_H, CLASSIC_CHAT_W, CLASSIC_CHAT_H - CLASSIC_BUTTONS_H);
 	}
 }

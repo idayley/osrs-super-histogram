@@ -1,17 +1,16 @@
 package com.superhistogram.ui;
 
 import com.superhistogram.model.BarState;
-import com.superhistogram.model.Hit;
 import com.superhistogram.model.Span;
 import com.superhistogram.model.TickRecord;
 import java.awt.Color;
+import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Shape;
-import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 
 /**
- * Shared timeline drawing: tick ruler, "now" line, pills, XP, hits and clicks.
+ * Shared timeline geometry and drawing: tick positions, span ends, the "now" line and pill labels.
  * Positions follow always-on-baseline.html (62-px frame) scaled by u, with the
  * 2-row and 1-row placements from resizable-bar.html.
  */
@@ -28,6 +27,11 @@ public final class TimelinePainter
 
 	static int leadTicks(BarLayout l)
 	{
+		if (l.nowPct > 0)
+		{
+			int lead = Math.round(l.visibleTicks * (100 - Math.min(100, l.nowPct)) / 100f);
+			return Math.max(0, Math.min(l.visibleTicks - 1, lead));
+		}
 		return Math.min(MAX_LEAD_TICKS, l.visibleTicks / 4);
 	}
 
@@ -37,16 +41,74 @@ public final class TimelinePainter
 		return l.timelineX + (l.visibleTicks - leadTicks(l)) * l.tickWidth;
 	}
 
-	/** Left edge of a tick's slot. */
+	/**
+	 * Where something still going on ends: at the "now" line on screen. The timeline is drawn slid left by
+	 * the glide, so this sits glide px right of {@link #nowX} in timeline coordinates.
+	 */
+	public static float liveX(BarLayout l)
+	{
+		return nowX(l) + l.glide - l.lag;
+	}
+
+	/**
+	 * Right end of a span on screen. Open spans reach the "now" line. A prayer you click off stays on in the game
+	 * until the next tick, so its pill runs to where the game turned it off (your click is the white mark); it
+	 * never grows past that and shrinks back. A span closed on the newest tick eases to its end over the tick.
+	 */
+	public static float spanEndX(BarLayout l, BarState s, Span sp)
+	{
+		if (sp.endTick == -1)
+		{
+			return liveX(l);
+		}
+		float end = x(l, s, Math.min(sp.endTick, s.nowTick) + 1);
+		float live = liveX(l);
+		if (s.smooth && sp.closedAt == s.nowTick && live > end && l.tickWidth > 0)
+		{
+			float t = Math.min(1f, l.glide / l.tickWidth);
+			t = 1f - (1f - t) * (1f - t);
+			return live + (end - live) * t;
+		}
+		return end;
+	}
+
+	/** Left end of a span: the tick it started (a prayer: the tick the game turned it on). */
+	public static float spanStartX(BarLayout l, BarState s, Span sp)
+	{
+		return x(l, s, sp.startTick);
+	}
+
+	/** A tick that ran at least this long (a normal one is 600 ms) is drawn wider: the server lagged. */
+	public static final int LAG_MS = 750;
+	private static final float MAX_STRETCH = 2.5f;
+
+	/** Width of a tick's slot: wider in proportion for a lag tick. */
+	public static float slotW(BarLayout l, BarState s, int tick)
+	{
+		TickRecord r = s.timeline == null || tick >= s.nowTick ? null : s.timeline.peek(tick);
+		return r == null || r.lengthMs < LAG_MS ? l.tickWidth : l.tickWidth * Math.min(MAX_STRETCH, r.lengthMs / 600f);
+	}
+
+	/** Left edge of a tick's slot. Lag ticks before it push it left. */
 	public static float x(BarLayout l, BarState s, int tick)
 	{
-		return nowX(l) - (float) (s.nowTick + 1 - tick) * l.tickWidth;
+		float x = nowX(l) - (float) (s.nowTick + 1 - tick) * l.tickWidth;
+		if (s.timeline == null || tick >= s.nowTick)
+		{
+			return x;
+		}
+		for (int t = Math.max(tick, s.nowTick - l.visibleTicks - 2); t < s.nowTick; t++)
+		{
+			x -= slotW(l, s, t) - l.tickWidth;
+		}
+		return x;
 	}
 
 	/** Oldest tick with any part on screen. */
 	public static int oldestTick(BarLayout l, BarState s)
 	{
-		return s.nowTick + 1 - (l.visibleTicks - leadTicks(l));
+		// One extra: with smooth scrolling the timeline sits up to a slot right, so the tick before is in view.
+		return s.nowTick - (l.visibleTicks - leadTicks(l));
 	}
 
 	public static float pillY(BarLayout l)
@@ -72,149 +134,73 @@ public final class TimelinePainter
 
 	// ---- structure ----
 
-	public static void ruler(Graphics2D g, BarLayout l)
-	{
-		g.setColor(Palette.RULER);
-		float y = l.height - 9f * l.u;
-		for (int i = 0; i <= l.visibleTicks; i++)
-		{
-			g.fill(new Rectangle2D.Float(l.timelineX + i * l.tickWidth - 0.5f, y, 1f, 3f * l.u));
-		}
-	}
-
 	public static void nowLine(Graphics2D g, BarLayout l)
 	{
 		g.setColor(Palette.NOW_LINE);
 		g.fill(new RoundRectangle2D.Float(nowX(l) - 1f, l.height * 0.22f, 2f, l.height * 0.6f, 2f, 2f));
 	}
 
-	// ---- middle row ----
+	// ---- pills ----
 
-	/** Walk and run as faint pills with labels, anything else (animations) solid. */
-	public static void spans(Graphics2D g, BarLayout l, BarState s)
-	{
-		if (!hasTicks(s))
-		{
-			return;
-		}
-		for (Span sp : s.timeline.spansBetween(oldestTick(l, s), s.nowTick))
-		{
-			int end = (sp.endTick == -1 ? s.nowTick : Math.min(sp.endTick, s.nowTick)) + 1;
-			float x0 = x(l, s, sp.startTick), x1 = x(l, s, end);
-			switch (sp.kind)
-			{
-				case "walk":
-					pill(g, l, x0, x1, Palette.TEXT, true, sp.label != null ? sp.label : "walking");
-					break;
-				case "run":
-					pill(g, l, x0, x1, Palette.runEnergy(), true, sp.label != null ? sp.label : "running");
-					break;
-				default:
-					pill(g, l, x0, x1, Palette.ACTION, false, sp.label);
-			}
-		}
-	}
-
-	/** A pill across [x0, x1) on the middle row; label omitted when null or the pill is too thin. */
-	public static void pill(Graphics2D g, BarLayout l, float x0, float x1, Color c, boolean faint, String label)
+	/** A pill across [x0, x1) at y, h tall; label omitted when null or the pill is too thin. */
+	public static void pill(Graphics2D g, BarLayout l, float x0, float x1, float y, float h, Color c, boolean faint,
+		String label)
 	{
 		float w = x1 - x0 - 2f;
 		if (w <= 0)
 		{
 			return;
 		}
-		float y = pillY(l), h = pillH(l);
 		Shape pill = new RoundRectangle2D.Float(x0 + 1f, y, w, h, h, h);
 		g.setColor(faint ? Palette.withAlpha(c, Palette.FAINT_ALPHA) : c);
 		g.fill(pill);
-		if (label == null || l.rows == 1)
+		label(g, l, x0, x1, y, h, label, faint ? Palette.PILL_LABEL_FAINT
+			: Palette.isDark(c) ? Palette.TEXT : Palette.PILL_LABEL_SOLID);
+	}
+
+	/** A pill's label, riding its right end; skipped when null or the pill is too short for it. */
+	public static void label(Graphics2D g, BarLayout l, float x0, float x1, float y, float h, String label, Color c)
+	{
+		if (label == null)
 		{
 			return;
 		}
-		Shape clip = g.getClip();
-		g.clip(pill);
-		g.setFont(Fonts.bold(10f * l.u));
-		g.setColor(faint ? Palette.PILL_LABEL_FAINT : Palette.PILL_LABEL_SOLID);
-		g.drawString(label, x0 + 9f * l.u, y + 10.5f * l.u);
-		g.setClip(clip);
-	}
-
-	// ---- top row ----
-
-	/** XP drops in the top row (see {@link XpRow}). Hidden in one-row mode. */
-	public static void xp(Graphics2D g, BarLayout l, BarState s)
-	{
-		XpRow.paint(g, l, s, XpRow.Row.TOP);
-	}
-
-	/** Hits on you: yellow line + icon + number; blocked/zero in faint grey. Notches in one-row mode. */
-	public static void hits(Graphics2D g, BarLayout l, BarState s)
-	{
-		if (!hasTicks(s))
+		// Whole words only, skipped when the pill is too short. The label rides the pill's right end, so on an
+		// ongoing action it stays by the "now" line and on finished ones it scrolls off with the pill, never
+		// snapping back as history moves.
+		float[] r = labelRange(g, l, x0, x1, label);
+		if (r == null)
 		{
 			return;
 		}
-		float pY = pillY(l), pH = pillH(l), u = l.u;
-		g.setFont(Fonts.bold(11f * u));
-		for (int t = oldestTick(l, s); t <= s.nowTick; t++)
-		{
-			TickRecord r = s.timeline.peek(t);
-			if (r == null || r.hits.isEmpty())
-			{
-				continue;
-			}
-			boolean landed = false;
-			for (Hit h : r.hits)
-			{
-				landed |= !h.blocked;
-			}
-			Color c = landed ? Palette.damage() : Palette.BLOCKED;
-			float x = x(l, s, t);
-			g.setColor(c);
-			if (l.rows == 1)
-			{
-				g.fill(new Rectangle2D.Float(x + l.tickWidth / 2f - 1.5f, pY - 4f * u, 3f, 4f * u + 1f));
-				continue;
-			}
-			g.fill(new RoundRectangle2D.Float(x - 1f, pY - 4f * u, 2f, pH + 8f * u, 2f, 2f));
-			g.fill(Icons.icon(Icons.Icon.HIT, x - 6f * u, pY - 4.6f * u, 1.05f * u));
-			float tx = x + 5f * u;
-			for (Hit h : r.hits)
-			{
-				if (h.blocked)
-				{
-					continue;
-				}
-				String text = String.valueOf(h.amount);
-				g.drawString(text, tx, pY - 6f * u);
-				tx += g.getFontMetrics().stringWidth(text) + 4f * u;
-			}
-		}
+		float fs = labelSize(l);
+		g.setFont(Fonts.bold(fs));
+		g.setColor(c);
+		g.drawString(label, r[0], y + h / 2f + 0.35f * fs);
 	}
 
-	// ---- actions row ----
-
-	/** Clicks as 2 × 8 white marks, placed by in-tick time. Only with the actions row (3 rows). */
-	public static void clicks(Graphics2D g, BarLayout l, BarState s)
+	/** {left, right} of a pill's label as {@link #label} would draw it; null when it is not drawn. */
+	public static float[] labelRange(Graphics2D g, BarLayout l, float x0, float x1, String label)
 	{
-		if (!hasTicks(s) || l.rows < 3)
+		if (label == null)
 		{
-			return;
+			return null;
 		}
-		g.setColor(Palette.WHITE);
-		float y = l.actionsY - 4f * l.u, h = 8f * l.u;
-		for (int t = oldestTick(l, s); t <= s.nowTick; t++)
-		{
-			TickRecord r = s.timeline.peek(t);
-			if (r == null)
-			{
-				continue;
-			}
-			for (Float f : r.clicks)
-			{
-				float x = x(l, s, t) + (f == null ? 0f : f) * l.tickWidth;
-				g.fill(new RoundRectangle2D.Float(x - 1f, y, 2f, h, 2f, 2f));
-			}
-		}
+		Font f = Fonts.bold(labelSize(l));
+		float tw = (float) f.getStringBounds(label, g.getFontRenderContext()).getWidth();
+		float tx = labelX(x0, x1, tw, l.u);
+		return tx + tw > x1 - 6f * l.u ? null : new float[]{tx, tx + tw};
+	}
+
+	/** Pill label size: 10u, but never under 8 px, where the pixel font stops reading. */
+	static float labelSize(BarLayout l)
+	{
+		return Math.max(8f, 10f * l.u);
+	}
+
+	/** Where a label of width {@code tw} starts: 9u before the pill's right end, but never before 9u in. */
+	static float labelX(float x0, float x1, float tw, float u)
+	{
+		return Math.max(x0 + 9f * u, x1 - 9f * u - tw);
 	}
 }

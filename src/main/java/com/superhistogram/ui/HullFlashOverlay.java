@@ -17,8 +17,9 @@ import net.runelite.client.ui.overlay.outline.ModelOutlineRenderer;
 public final class HullFlashOverlay extends Overlay
 {
 	public static final long FADE_MS = 500;
-	public static final float MISS_PEAK = 0.5f;
-	public static final int WIDTH = 4, FEATHER = 4;
+	public static final float MISS_PEAK = 0.9f;
+	/** A miss is a thinner outline in the light blue of the game's own miss splat, so it reads on any monster. */
+	public static final int WIDTH = 4, MISS_WIDTH = 2, FEATHER = 4;
 
 	public static final class Target
 	{
@@ -80,9 +81,9 @@ public final class HullFlashOverlay extends Overlay
 		{
 			return null;
 		}
-		Color base = t.miss ? Palette.BLOCKED : colours.damage;
+		Color base = t.miss ? Palette.MISS_FLASH : colours.damage;
 		Color c = new Color(base.getRed(), base.getGreen(), base.getBlue(), Math.round(255 * a));
-		renderer.drawOutline(t.npc, WIDTH, c, FEATHER);
+		renderer.drawOutline(t.npc, t.miss ? MISS_WIDTH : WIDTH, c, FEATHER);
 		return null;
 	}
 }

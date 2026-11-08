@@ -174,4 +174,38 @@ public class AlchTrackerTest
 		a.onTick(101, MAGIC_65);
 		assertEquals(Long.valueOf(1), t.peek(101).castCoins);
 	}
+
+	@Test
+	public void lastHourDropsCastsOlderThanAnHour()
+	{
+		cast(100, 101, 200L);
+		cast(3000, 3001, 300L);
+		assertEquals(500, a.goldLastHour(3001));
+		assertEquals(500, a.goldLastHour(101 + AlchTracker.HOUR_TICKS - 1));
+		assertEquals(300, a.goldLastHour(101 + AlchTracker.HOUR_TICKS + 1));
+		assertEquals(500, a.sessionGold());
+	}
+
+	@Test
+	public void runStartsAgainAfterAnotherActivityAndKeepsItsFirstCast()
+	{
+		cast(100, 101, 200L);
+		cast(105, 106, 200L);
+		assertEquals(400, a.runGold());
+		a.breakRun();                 // went salvaging
+		cast(400, 401, 300L);
+		a.breakRun();                 // the bar still shows salvaging until the second cast
+		cast(405, 406, 300L);
+		assertEquals(600, a.runGold());
+		assertEquals(1000, a.sessionGold());
+	}
+
+	@Test
+	public void bankTripsWithoutAnotherActivityKeepTheRun()
+	{
+		cast(100, 101, 200L);
+		cast(105, 106, 200L);
+		cast(400, 401, 300L);
+		assertEquals(700, a.runGold());
+	}
 }

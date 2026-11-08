@@ -40,8 +40,10 @@ public class EatCollectorTest
 	{
 		c.onEatClick(101, 385);
 		c.onInventory(102, inv(3, 2));
-		assertEquals(FoodKind.NORMAL, tl.peek(101).eat);
-		assertEquals(3, tl.peek(101).eatCost);
+		// Eaten on the tick the food leaves the bag, a tick after the click.
+		assertEquals(FoodKind.NORMAL, tl.peek(102).eat);
+		assertTrue(tl.peek(101) == null || tl.peek(101).eat == null);
+		assertEquals(3, tl.peek(102).eatCost);
 	}
 
 	@Test
@@ -61,8 +63,8 @@ public class EatCollectorTest
 		c.onEatClick(102, 385);
 		c.onInventory(102, inv(3, 2));
 		c.onInventory(103, inv(3, 2));
-		assertEquals(FoodKind.NORMAL, tl.peek(101).eat);
-		assertTrue(tl.peek(102) == null || tl.peek(102).eat == null);
+		assertEquals(FoodKind.NORMAL, tl.peek(102).eat);
+		assertTrue(tl.peek(103) == null || tl.peek(103).eat == null);
 		assertEquals(107, timer.readyTick());
 	}
 
@@ -72,8 +74,8 @@ public class EatCollectorTest
 		c.onEatClick(101, 385);
 		c.onEatClick(101, 3144);
 		c.onInventory(102, inv(3, 1));
-		assertEquals(FoodKind.COMBO, tl.peek(101).eat);
-		assertEquals(5, tl.peek(101).eatCost);
+		assertEquals(FoodKind.COMBO, tl.peek(102).eat);
+		assertEquals(5, tl.peek(102).eatCost);
 	}
 
 	@Test

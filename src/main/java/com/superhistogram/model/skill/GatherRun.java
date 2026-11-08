@@ -22,7 +22,12 @@ import java.util.Set;
 public final class GatherRun
 {
 	public static final Set<String> SKILLS = Collections.unmodifiableSet(new LinkedHashSet<>(
-		Arrays.asList("Woodcutting", "Mining", "Fishing", "Firemaking")));
+		Arrays.asList("Woodcutting", "Mining", "Fishing", "Firemaking", "Sailing")));
+	/** Shipwreck salvage items: Sailing XP is a salvaging success only when one of these came in recently. */
+	public static final Set<Integer> SALVAGE = salvageIds();
+	/** Sailing XP this long after salvage came in is salvaging (the hook pulls every few ticks). */
+	static final int SALVAGE_WINDOW = 12;
+	private static final String SAILING = "Sailing";
 	public static final int INVENTORY = 28;
 	public static final int ROLL_WINDOW = 100;
 	public static final int MIN_SUCCESSES = 2;
@@ -99,6 +104,10 @@ public final class GatherRun
 	private int prevTick = -1;
 	/** A success waiting for its item on the next tick; -1 none. */
 	private int pendingTick = -1;
+	/** The last tick shipwreck salvage came into the inventory. */
+	private int lastSalvageTick = Integer.MIN_VALUE / 2;
+	/** Salvage left the inventory this tick (sorting it at a station: production, not salvaging). */
+	private boolean salvageOut;
 
 	private MutablePill open;
 	private String skill;
@@ -207,6 +216,18 @@ public final class GatherRun
 			}
 			baseline = new HashMap<>(inventory);
 		}
+		salvageOut = false;
+		for (int id : SALVAGE)
+		{
+			if (inc.containsKey(id))
+			{
+				lastSalvageTick = tick;
+			}
+			if (dec.containsKey(id))
+			{
+				salvageOut = true;
+			}
+		}
 		if (freeSlots >= 0)
 		{
 			free = freeSlots;
@@ -248,7 +269,7 @@ public final class GatherRun
 		}
 
 		// (3) success
-		String xpSkill = pickSkill(drops);
+		String xpSkill = pickSkill(drops, tick);
 		boolean success = xpSkill != null;
 		if (success)
 		{
@@ -342,7 +363,8 @@ public final class GatherRun
 		MutablePill latest = null;
 		for (int i = history.size() - 1; i >= 0 && latest == null; i--)
 		{
-			if (history.get(i).rolls > 0)
+			// The newest pill that settled in (2+ rolls): a fresh tree's first roll doesn't drop the view for a tick.
+			if (history.get(i).rolls >= 2)
 			{
 				latest = history.get(i);
 			}
@@ -464,6 +486,7 @@ public final class GatherRun
 		prevDec = new HashMap<>();
 		prevTick = -1;
 		pendingTick = -1;
+		lastSalvageTick = Integer.MIN_VALUE / 2;
 		open = null;
 		skill = null;
 		successes = 0;
@@ -505,7 +528,7 @@ public final class GatherRun
 		open = null;
 	}
 
-	private String pickSkill(List<XpDrop> drops)
+	private String pickSkill(List<XpDrop> drops, int tick)
 	{
 		if (drops == null)
 		{
@@ -513,6 +536,11 @@ public final class GatherRun
 		}
 		for (XpDrop d : drops)
 		{
+			if (SAILING.equals(d.skill) && (salvageOut || tick - lastSalvageTick > SALVAGE_WINDOW))
+			{
+				// Sailing XP from anything but the salvage hook (sorting, courier tasks, the boat itself).
+				continue;
+			}
 			if (open != null ? d.skill.equals(open.skill) : SKILLS.contains(d.skill))
 			{
 				return d.skill;
@@ -596,5 +624,27 @@ public final class GatherRun
 		Arrays.fill(succeeded, false);
 		windowPos = 0;
 		lastEntryTick = -1;
+	}
+
+	/** Item ids in RuneLite's ItemID whose name ends in SHIPWRECK_SALVAGE. */
+	private static Set<Integer> salvageIds()
+	{
+		Set<Integer> out = new HashSet<>();
+		try
+		{
+			for (java.lang.reflect.Field f : Class.forName("net.runelite.api.gameval.ItemID").getFields())
+			{
+				if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) && f.getType() == int.class
+					&& f.getName().endsWith("SHIPWRECK_SALVAGE"))
+				{
+					out.add(f.getInt(null));
+				}
+			}
+		}
+		catch (ReflectiveOperationException e)
+		{
+			// No item table (never in the client): no salvage.
+		}
+		return Collections.unmodifiableSet(out);
 	}
 }

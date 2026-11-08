@@ -7,7 +7,6 @@ import com.superhistogram.model.ModeSetting;
 import com.superhistogram.model.RightSide;
 import com.superhistogram.model.XpDrops;
 import com.superhistogram.model.skill.AlchTopRow;
-import com.superhistogram.model.skill.LapCompare;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.PrayerMode;
 import java.awt.event.KeyEvent;
@@ -19,6 +18,7 @@ import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
 import net.runelite.client.config.Keybind;
 import net.runelite.client.config.Range;
+import net.runelite.client.config.Units;
 
 @ConfigGroup("superhistogram")
 public interface SuperHistogramConfig extends Config
@@ -31,10 +31,70 @@ public interface SuperHistogramConfig extends Config
 
 	enum Metronome
 	{
-		OFF,
-		EVERY_TICK,
-		/** Bright pulse on beat ticks only. */
-		CUE_TICK
+		OFF("Off"),
+		EVERY_TICK("Every tick"),
+		/** A bright pulse on your beat (Beat hotkey and Beat every). */
+		CUE_TICK("On beat");
+
+		private final String label;
+
+		Metronome(String label)
+		{
+			this.label = label;
+		}
+
+		@Override
+		public String toString()
+		{
+			return label;
+		}
+	}
+
+	enum BeatRuns
+	{
+		IN_COMBAT("Only in combat"),
+		ALWAYS("Always");
+
+		private final String label;
+
+		BeatRuns(String label)
+		{
+			this.label = label;
+		}
+
+		@Override
+		public String toString()
+		{
+			return label;
+		}
+	}
+
+	enum PingShift
+	{
+		AUTO("Auto (measured)"),
+		FIXED("Fixed"),
+		OFF("Off");
+
+		private final String label;
+
+		PingShift(String label)
+		{
+			this.label = label;
+		}
+
+		@Override
+		public String toString()
+		{
+			return label;
+		}
+	}
+
+	enum MetronomeStyle
+	{
+		/** The outline flashes white on each beat and fades. */
+		FLASH,
+		/** The outline stays lit and swaps between two colours on each beat (tick, tock). */
+		ALTERNATE
 	}
 
 	@ConfigSection(
@@ -92,16 +152,19 @@ public interface SuperHistogramConfig extends Config
 		return BarPosition.REPLACE_CHAT;
 	}
 
+	@Range(min = 22, max = 160)
+	@Units(Units.PIXELS)
 	@ConfigItem(
 		position = 2,
-		keyName = "size",
-		name = "Size",
-		description = "Bar height: small 40, normal 62, large 80. Resizing by hand wins until you change this again",
+		keyName = "barHeight",
+		name = "Height",
+		description = "Bar height in pixels; text, pills and icons all scale with it. 62 is normal, 40 small, 80 large."
+			+ " Resizing by hand wins until you change this again",
 		section = BAR
 	)
-	default BarSize size()
+	default int barHeight()
 	{
-		return BarSize.NORMAL;
+		return BarSize.NORMAL.height();
 	}
 
 	@ConfigItem(
@@ -153,16 +216,19 @@ public interface SuperHistogramConfig extends Config
 		return true;
 	}
 
+	@Range(min = 10, max = 100)
+	@Units(Units.PERCENT)
 	@ConfigItem(
 		position = 7,
-		keyName = "showRunEnergy",
-		name = "Show run energy",
-		description = "Show the run energy gauge in the left readout",
+		keyName = "nowLinePercent",
+		name = "Now line position",
+		description = "How far across the timeline the current-tick line sits: 50 is the middle, 100 the right edge."
+			+ " Room to its right shows what's coming (like a cooking run's finish)",
 		section = BAR
 	)
-	default boolean showRunEnergy()
+	default int nowLinePercent()
 	{
-		return true;
+		return 80;
 	}
 
 	@ConfigItem(
@@ -179,9 +245,49 @@ public interface SuperHistogramConfig extends Config
 
 	@ConfigItem(
 		position = 9,
+		keyName = "smoothScroll",
+		name = "Smooth scrolling",
+		description = "Glide the timeline continuously. Off: it steps once per game tick",
+		section = BAR
+	)
+	default boolean smoothScroll()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		position = 10,
+		keyName = "pingShift",
+		name = "Shift clicks by ping",
+		description = "A click made just before a tick ends reaches the server on the next tick. Auto measures your"
+			+ " ping to the world and moves such clicks to the tick the server got them (a faint mark stays where"
+			+ " you clicked). Fixed uses the delay below",
+		section = BAR
+	)
+	default PingShift pingShift()
+	{
+		return PingShift.AUTO;
+	}
+
+	@Range(min = 0, max = 500)
+	@Units(Units.MILLISECONDS)
+	@ConfigItem(
+		position = 11,
+		keyName = "pingFixedMs",
+		name = "Fixed ping",
+		description = "The delay used when Shift clicks by ping is Fixed",
+		section = BAR
+	)
+	default int pingFixedMs()
+	{
+		return 50;
+	}
+
+	@ConfigItem(
+		position = 12,
 		keyName = "metronome",
 		name = "Metronome",
-		description = "Pulse the bar outline on game ticks",
+		description = "Pulse the bar outline on every game tick, or only on your beat (set with the Beat hotkey)",
 		section = FEEDBACK
 	)
 	default Metronome metronome()
@@ -190,7 +296,20 @@ public interface SuperHistogramConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 10,
+		position = 13,
+		keyName = "metronomeStyle",
+		name = "Metronome style",
+		description = "Flash: the outline flashes on each beat. Alternate: the outline stays lit and swaps colour"
+			+ " each beat, so you can tell beats apart without a flash",
+		section = FEEDBACK
+	)
+	default MetronomeStyle metronomeStyle()
+	{
+		return MetronomeStyle.FLASH;
+	}
+
+	@ConfigItem(
+		position = 14,
 		keyName = "blinkWhenDone",
 		name = "Blink when done",
 		description = "Flash the bar mint when an inventory finishes or fills, an agility lap ends, or the AFK logout warning fires",
@@ -202,7 +321,7 @@ public interface SuperHistogramConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 11,
+		position = 15,
 		keyName = "prayerMode",
 		name = "Prayer mode",
 		description = "How you protect in combat",
@@ -213,11 +332,40 @@ public interface SuperHistogramConfig extends Config
 		return PrayerMode.LAZY_FLICK;
 	}
 
+	@Range(min = 0, max = 300)
+	@Units(Units.MILLISECONDS)
 	@ConfigItem(
-		position = 12,
+		position = 16,
+		keyName = "clickWindowMs",
+		name = "Click window",
+		description = "1-tick flick: a faint band either side of each tick line showing where a flick lands clean."
+			+ " 0 hides it",
+		section = COMBAT
+	)
+	default int clickWindowMs()
+	{
+		return 80;
+	}
+
+	@Range(min = 0, max = 60)
+	@ConfigItem(
+		position = 17,
+		keyName = "combatHoldSeconds",
+		name = "Stay in combat view for",
+		description = "Seconds the combat view stays up after your last attack or hit, before switching back",
+		section = COMBAT
+	)
+	default int combatHoldSeconds()
+	{
+		return 10;
+	}
+
+	@ConfigItem(
+		position = 18,
 		keyName = "beatKey",
 		name = "Beat hotkey",
-		description = "Press during combat to start the beat metronome from your own attack rhythm",
+		description = "Press in a fight on the tick you want to track (say, when the enemy attacks): beat triangles"
+			+ " then repeat every 'Beat every' ticks",
 		section = COMBAT
 	)
 	default Keybind beatKey()
@@ -225,8 +373,35 @@ public interface SuperHistogramConfig extends Config
 		return new Keybind(KeyEvent.VK_F, 0);
 	}
 
+	@Range(min = 1, max = 20)
+	@Units(Units.TICKS)
 	@ConfigItem(
-		position = 13,
+		position = 19,
+		keyName = "beatTicks",
+		name = "Beat every",
+		description = "Ticks between your beat triangles, e.g. the enemy's attack speed",
+		section = COMBAT
+	)
+	default int beatTicks()
+	{
+		return 4;
+	}
+
+	@ConfigItem(
+		position = 20,
+		keyName = "beatRuns",
+		name = "Beat runs",
+		description = "Only in combat: the hotkey works in a fight and the beat stops when it ends."
+			+ " Always: the hotkey works anywhere and the beat keeps going (press again to line it up anew)",
+		section = COMBAT
+	)
+	default BeatRuns beatRuns()
+	{
+		return BeatRuns.IN_COMBAT;
+	}
+
+	@ConfigItem(
+		position = 21,
 		keyName = "actionsRow",
 		name = "Actions row",
 		description = "What the combat view shows about your own actions",
@@ -238,7 +413,7 @@ public interface SuperHistogramConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 14,
+		position = 22,
 		keyName = "showEatCosts",
 		name = "Show eat costs",
 		description = "Show how many attack ticks each eat cost you",
@@ -250,7 +425,7 @@ public interface SuperHistogramConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 15,
+		position = 23,
 		keyName = "hullFlash",
 		name = "Flash enemy on hit",
 		description = "Briefly outline the enemy whose hitsplat just landed on you",
@@ -262,7 +437,7 @@ public interface SuperHistogramConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 16,
+		position = 24,
 		keyName = "hullFlashAtBosses",
 		name = "Also at bosses",
 		description = "Also flash bosses",
@@ -274,7 +449,7 @@ public interface SuperHistogramConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 17,
+		position = 25,
 		keyName = "hullFlashMisses",
 		name = "Misses",
 		description = "Whether a 0 hit flashes the enemy faintly grey",
@@ -286,7 +461,20 @@ public interface SuperHistogramConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 18,
+		position = 26,
+		keyName = "ignoreEnemies",
+		name = "Ignore enemies",
+		description = "Monsters the bar ignores: no hits, no flash, never the fight. Names separated by commas,"
+			+ " * matches anything (Giant rat, *imp*). Shift-right-click a monster to add or remove it",
+		section = COMBAT
+	)
+	default String ignoreEnemies()
+	{
+		return "";
+	}
+
+	@ConfigItem(
+		position = 27,
 		keyName = "xpDrops",
 		name = "XP drops",
 		description = "Show XP drops as numbers, as dots only, or not at all",
@@ -298,7 +486,7 @@ public interface SuperHistogramConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 19,
+		position = 28,
 		keyName = "xpDots",
 		name = "Frequent skills as dots",
 		description = "Skills that drop XP on 5 of the last 10 ticks show as small dots instead of numbers",
@@ -310,7 +498,7 @@ public interface SuperHistogramConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 20,
+		position = 29,
 		keyName = "alchTopRow",
 		name = "Alch top row",
 		description = "What the top row shows for each high-alch cast: its coins, its Magic XP, or both",
@@ -322,7 +510,7 @@ public interface SuperHistogramConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 21,
+		position = 30,
 		keyName = "rightSide",
 		name = "Right side shows",
 		description = "Whether the right readout's big number is the hourly rate or the session total",
@@ -334,7 +522,7 @@ public interface SuperHistogramConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 22,
+		position = 31,
 		keyName = "timeToFinish",
 		name = "Time to finish",
 		description = "Show the finish flag and the time left while an inventory is being made",
@@ -346,7 +534,7 @@ public interface SuperHistogramConfig extends Config
 	}
 
 	@ConfigItem(
-		position = 23,
+		position = 32,
 		keyName = "wastedTicks",
 		name = "Wasted ticks (+N)",
 		description = "Show how many ticks passed between the last item and your bank click",
@@ -357,21 +545,9 @@ public interface SuperHistogramConfig extends Config
 		return true;
 	}
 
-	@ConfigItem(
-		position = 24,
-		keyName = "lapCompare",
-		name = "Agility: compare lap to",
-		description = "Compare this lap's time with your best lap or your last lap",
-		section = SKILLING
-	)
-	default LapCompare lapCompare()
-	{
-		return LapCompare.BEST;
-	}
-
 	@Alpha
 	@ConfigItem(
-		position = 25,
+		position = 33,
 		keyName = "damageColour",
 		name = "Damage",
 		description = "Damage hits, coins and the enemy flash",
@@ -384,7 +560,7 @@ public interface SuperHistogramConfig extends Config
 
 	@Alpha
 	@ConfigItem(
-		position = 26,
+		position = 34,
 		keyName = "mintColour",
 		name = "Good / done (mint)",
 		description = "Done blinks, good results and the AFK countdown",
@@ -397,10 +573,10 @@ public interface SuperHistogramConfig extends Config
 
 	@Alpha
 	@ConfigItem(
-		position = 27,
+		position = 35,
 		keyName = "runEnergyColour",
 		name = "Run energy",
-		description = "Run energy gauge and running pills",
+		description = "Colour of the running pills",
 		section = COLOURS
 	)
 	default Color runEnergyColour()
@@ -410,7 +586,7 @@ public interface SuperHistogramConfig extends Config
 
 	@Alpha
 	@ConfigItem(
-		position = 28,
+		position = 36,
 		keyName = "backgroundColour",
 		name = "Bar background",
 		description = "Bar background and its opacity",

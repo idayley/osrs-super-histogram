@@ -12,7 +12,12 @@ public enum ModeSetting
 	PRODUCTION(Mode.PRODUCTION),
 	ALCH(Mode.ALCH),
 	GATHERING(Mode.GATHERING),
-	AGILITY(Mode.AGILITY);
+	AGILITY(Mode.AGILITY),
+	THIEVING(Mode.THIEVING),
+	HUNTER(Mode.HUNTER),
+	CASTING(Mode.CASTING),
+	RUNS(Mode.RUNS),
+	ROUNDS(Mode.ROUNDS);
 
 	private final Mode mode;
 

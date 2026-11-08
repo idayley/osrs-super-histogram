@@ -70,7 +70,9 @@ public class GatherViewTest
 	{
 		assertEquals("~1:40", GatherView.eta(160));
 		assertEquals("~1:00", GatherView.eta(96));
-		assertEquals("~0:10", GatherView.eta(5));
+		assertEquals("~0:03", GatherView.eta(5));
+		assertEquals("~0:12", GatherView.eta(20));
+		assertEquals("~0:30", GatherView.eta(50));
 	}
 
 	@Test

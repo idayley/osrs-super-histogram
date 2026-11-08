@@ -4,142 +4,44 @@ import com.superhistogram.model.BarState;
 import com.superhistogram.model.TickRecord;
 import com.superhistogram.model.skill.GatherRun;
 import com.superhistogram.ui.BarLayout;
-import com.superhistogram.ui.ModeView;
+import com.superhistogram.ui.Lane;
+import com.superhistogram.ui.Lens;
 import com.superhistogram.ui.Palette;
 import com.superhistogram.ui.ReadoutPainter;
 import com.superhistogram.ui.SkillPainter;
 import com.superhistogram.ui.TimelinePainter;
-import java.awt.Color;
 import java.awt.Graphics2D;
-import java.awt.geom.RoundRectangle2D;
 
 /**
- * Gathering view (gathering.html): one pill per resource clicked with a notch per roll, the item and
- * XP of each success on top, a stump (or ring) where the resource ran out and the "+N" before the next
- * click below, and the inventory count with an estimated time to full on the right.
+ * Gathering lens (gathering.html): dims the prayer lane and adds the white "+N" re-click delay after each
+ * depleted resource; right = the inventory count with an estimated time to full.
  */
-public final class GatherView implements ModeView
+public final class GatherView implements Lens
 {
 	private static final String DOT = " · ";
 	private static final String WOODCUTTING = "Woodcutting", FIREMAKING = "Firemaking";
 
 	@Override
-	public void paintTimeline(Graphics2D g, BarLayout l, BarState s)
+	public float[] emphasis(BarState s)
 	{
-		if (s.timeline == null || s.nowTick < 0 || s.gather == null)
+		return Lens.full();
+	}
+
+	@Override
+	public void overlay(Graphics2D g, BarLayout l, BarState s)
+	{
+		if (s.timeline == null || s.nowTick < 0 || s.gather == null || l.rows < 3 || !s.wastedTicks)
 		{
 			return;
 		}
-		pills(g, l, s);
-		if (l.rows > 1)
-		{
-			items(g, l, s);
-		}
-		TimelinePainter.xp(g, l, s);
-		TimelinePainter.hits(g, l, s);
-		if (l.rows == 3)
-		{
-			actions(g, l, s);
-		}
-	}
-
-	private static void pills(Graphics2D g, BarLayout l, BarState s)
-	{
-		float u = l.u, y = TimelinePainter.pillY(l), h = TimelinePainter.pillH(l);
-		int oldest = TimelinePainter.oldestTick(l, s);
-		for (GatherRun.Pill p : s.gather.pills())
-		{
-			if (p.rolls == 0 || p.startTick > s.nowTick || (p.endTick != -1 && p.endTick < oldest))
-			{
-				continue;
-			}
-			boolean wood = WOODCUTTING.equals(p.skill);
-			float x0 = TimelinePainter.x(l, s, p.startTick);
-			float x1 = TimelinePainter.x(l, s, p.endTick == -1 ? s.nowTick + 1 : Math.min(p.endTick, s.nowTick + 1));
-			g.setColor(wood ? Palette.WC_PILL : Palette.skill(p.skill));
-			float px0 = Math.max(x0, l.timelineX);
-			g.fill(new RoundRectangle2D.Float(px0, y, Math.max(h, x1 - px0), h, h, h));
-			if (l.rows == 1)
-			{
-				continue;
-			}
-			float ix = Math.max(x0 + 10f * u, l.timelineX + 10f * u);
-			if (wood && ix < x1 - 8f * u)
-			{
-				SkillPainter.axe(g, ix, y + h / 2f, u, Palette.PILL_LABEL_SOLID);
-			}
-			g.setColor(Palette.NOTCH);
-			int from = Math.max(p.startTick, oldest), to = Math.min(p.endTick == -1 ? s.nowTick : p.endTick, s.nowTick);
-			for (int t = from; t <= to; t++)
-			{
-				TickRecord r = s.timeline.peek(t);
-				float x = TimelinePainter.x(l, s, t);
-				if (r != null && r.roll && x > ix + 6f * u && x < x1)
-				{
-					g.fill(new RoundRectangle2D.Float(x - 0.6f * u, y + 3f * u, 1.2f * u, h - 6f * u, 1.2f * u, 1.2f * u));
-				}
-			}
-		}
-	}
-
-	/** The item icon of every success, just left of its XP. */
-	private static void items(Graphics2D g, BarLayout l, BarState s)
-	{
-		String skill = s.gather.skill();
-		if (skill == null || FIREMAKING.equals(skill))
-		{
-			return;
-		}
-		float u = l.u, y = TimelinePainter.xpY(l) - 3.5f * u;
-		for (int t = TimelinePainter.oldestTick(l, s); t <= s.nowTick; t++)
-		{
-			TickRecord r = s.timeline.peek(t);
-			if (r == null || r.gathered <= 0)
-			{
-				continue;
-			}
-			float x = TimelinePainter.x(l, s, t) - 11f * u;
-			if (WOODCUTTING.equals(skill))
-			{
-				SkillPainter.log(g, x, y, u);
-			}
-			else
-			{
-				SkillPainter.item(g, x, y, u, Palette.skill(skill));
-			}
-		}
-	}
-
-	private static void actions(Graphics2D g, BarLayout l, BarState s)
-	{
 		float u = l.u;
-		boolean wood = WOODCUTTING.equals(s.gather.skill());
 		for (int t = TimelinePainter.oldestTick(l, s); t <= s.nowTick; t++)
 		{
 			TickRecord r = s.timeline.peek(t);
-			if (r == null)
+			if (r != null && r.reclick > 0)
 			{
-				continue;
-			}
-			float x = TimelinePainter.x(l, s, t);
-			if (r.depleted)
-			{
-				if (wood)
-				{
-					SkillPainter.stump(g, x + 6f * u, 45f * u, u);
-				}
-				else
-				{
-					SkillPainter.depleted(g, x + 6f * u, 45f * u, u);
-				}
-			}
-			if (r.reclick > 0 && s.wastedTicks)
-			{
-				SkillPainter.wasted(g, l, TimelinePainter.x(l, s, t - r.reclick) + 13f * u, x, r.reclick);
-			}
-			if (r.gatherBank)
-			{
-				SkillPainter.bank(g, x, 46f * u, u, Palette.TEXT);
+				SkillPainter.wasted(g, l, s, TimelinePainter.x(l, s, t - r.reclick) + 13f * u, TimelinePainter.x(l, s, t),
+					r.reclick);
 			}
 		}
 	}
@@ -179,7 +81,7 @@ public final class GatherView implements ModeView
 		int cap = run.capacity();
 		if (run.full())
 		{
-			return new String[]{"Full · bank", (cap > 0 ? count + "/" + cap : String.valueOf(count)) + " " + noun};
+			return new String[]{"Sailing".equals(skill) ? "Full · sort" : "Full · bank", (cap > 0 ? count + "/" + cap : String.valueOf(count)) + " " + noun};
 		}
 		return new String[]{cap > 0 ? count + "/" + cap : String.valueOf(count), small(s, "full in ", eta, perHour, noun)};
 	}
@@ -231,15 +133,18 @@ public final class GatherView implements ModeView
 				return "fish";
 			case FIREMAKING:
 				return "fires";
+			case "Sailing":
+				return "salvage";
 			default:
 				return "items";
 		}
 	}
 
-	/** "~1:40": the ticks in seconds, rounded to the nearest 10 s (at least 10 s). */
+	/** "~1:40": the ticks in seconds, rounded to 10 s; under 30 s to the second, so the last stretch counts down. */
 	public static String eta(int ticks)
 	{
-		int secs = Math.max(10, (int) Math.round(ticks * 0.6 / 10.0) * 10);
+		double raw = ticks * 0.6;
+		int secs = raw < 30 ? Math.max(1, (int) Math.round(raw)) : (int) Math.round(raw / 10.0) * 10;
 		return "~" + ReadoutPainter.minSec(secs);
 	}
 }

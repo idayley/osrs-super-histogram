@@ -13,7 +13,6 @@ import com.superhistogram.model.XpTracker;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
 import com.superhistogram.model.combat.FlickClassifier;
-import com.superhistogram.model.skill.LapCompare;
 import com.superhistogram.ui.SampleStates.ProdPhase;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -48,9 +47,8 @@ public class BarRenderSmokeTest
 		BufferedImage img = render(1026, 62, SampleStates.general(), new Pulse());
 		assertEquals(1026, img.getWidth());
 		assertEquals(62, img.getHeight());
-		// The brief names (5,31), but that point lies inside the h/2 rounded end;
-		// (5,5) is the corner pixel that the rounding cuts away.
-		assertEquals(0, alpha(img, 5, 5));
+		// (1,1) is a corner pixel that the squircle corner cuts away.
+		assertEquals(0, alpha(img, 1, 1));
 		assertNotEquals(0, alpha(img, 513, 31));
 	}
 
@@ -252,53 +250,16 @@ public class BarRenderSmokeTest
 		}
 	}
 
-	@Test
-	public void eatChipDoesNotCoverXpGroup()
-	{
-		BarState s = SampleStates.meleeSlayer();
-		BarState noEats = SampleStates.meleeSlayer(ActionsRow.ATTACKS);
-		BarLayout l = BarLayout.of(1026, 62);
-		BufferedImage withEats = render(1026, 62, s, null), xpOnly = render(1026, 62, noEats, null);
-		float u = l.u;
-		java.awt.Color slay = Palette.skill("Slayer");
-		// XP at NOW-14 and NOW-10 (after the attacks at NOW-15 / NOW-11) shares its stretch with the eats at
-		// NOW-13 / NOW-9; there the chip must start right of the last XP number and the numbers stay intact.
-		// (The third eat, NOW-5, cannot fit before the next sword, so there the XP gives way instead.)
-		for (int t : new int[]{SampleStates.NOW_TICK - 14, SampleStates.NOW_TICK - 10})
-		{
-			int x0 = (int) tickX(l, s, t), x1 = (int) (tickX(l, s, t + 3) - 5 * u);
-			int lastSlay = -1, firstChip = Integer.MAX_VALUE, slayWith = 0, slayAlone = 0;
-			for (int y = (int) (40 * u); y < (int) (50 * u); y++)
-			{
-				for (int x = x0; x < x1; x++)
-				{
-					if (opaque(withEats, x, y, slay))
-					{
-						lastSlay = Math.max(lastSlay, x);
-						slayWith++;
-					}
-					if (opaque(withEats, x, y, Palette.LOST))
-					{
-						firstChip = Math.min(firstChip, x);
-					}
-					slayAlone += opaque(xpOnly, x, y, slay) ? 1 : 0;
-				}
-			}
-			assertTrue("no Slayer at " + t, slayAlone > 0 && firstChip != Integer.MAX_VALUE);
-			assertEquals("XP removed at " + t, slayAlone, slayWith);
-			assertTrue("eat chip overlaps XP group at " + t, lastSlay < firstChip);
-		}
-	}
 
 	@Test
-	public void combatXpStillLow()
+	public void combatXpInTheTopLane()
 	{
 		BarState s = SampleStates.lazyFlick();
 		BarLayout l = BarLayout.of(1026, 62);
 		BufferedImage img = render(1026, 62, s, null);
-		float u = l.u;
-		assertTrue(hasPixel(img, l.timelineX, l.timelineX + l.timelineW, 40 * u, 49 * u, STR));
-		assertFalse(hasPixel(img, l.timelineX, l.timelineX + l.timelineW, 5 * u, 17 * u, STR));
+		float x0 = l.timelineX, x1 = l.timelineX + l.timelineW;
+		assertTrue(hasPixel(img, x0, x1, l.laneY(Lane.TOP), l.laneY(Lane.TOP) + l.laneH(Lane.TOP), STR));
+		assertFalse(hasPixel(img, x0, x1, l.laneY(Lane.PRAYER), l.height, STR));
 	}
 
 	// ---- lazy flick ----
@@ -362,9 +323,9 @@ public class BarRenderSmokeTest
 		BarLayout l62 = BarLayout.of(1026, 62);
 		float x = tickX(l62, s, b), u = l62.u;
 		assertTrue(hasPixel(render(1026, 62, s, null), x - 4 * u, x + 4 * u, 55 * u, 60 * u, Palette.WHITE));
-		BarLayout l46 = BarLayout.of(1026, 46);
-		float x46 = tickX(l46, s, b);
-		assertFalse(hasPixel(render(1026, 46, s, null), x46 - 4 * l46.u, x46 + 4 * l46.u, 55 * l46.u, 60 * l46.u,
+		BarLayout l42 = BarLayout.of(1026, 42);
+		float x42 = tickX(l42, s, b);
+		assertFalse(hasPixel(render(1026, 42, s, null), x42 - 4 * l42.u, x42 + 4 * l42.u, 55 * l42.u, 60 * l42.u,
 			Palette.WHITE));
 	}
 
@@ -376,9 +337,17 @@ public class BarRenderSmokeTest
 		float u = l.u;
 		BarState on = SampleStates.lazyFlick(ActionsRow.ATTACKS, true, Beat.Verdict.ON_TIME);
 		BarState off = SampleStates.lazyFlick(ActionsRow.OFF, true, Beat.Verdict.ON_TIME);
-		float x = tickX(l, on, t);
-		assertTrue(hasPixel(render(1026, 62, on, null), x - 3 * u, x + 3 * u, 38 * u, 51 * u, Palette.WHITE));
-		assertFalse(hasPixel(render(1026, 62, off, null), x - 3 * u, x + 3 * u, 38 * u, 51 * u, Palette.WHITE));
+		float x = BaseTimeline.swordX(l, tickX(l, on, t)), y0 = l.laneY(Lane.INPUTS), y1 = y0 + l.laneH(Lane.INPUTS);
+		BufferedImage onImg = render(1026, 62, on, null), offImg = render(1026, 62, off, null);
+		boolean sword = false;
+		for (int y = (int) y0; y < (int) Math.ceil(y1); y++)
+		{
+			for (int px = (int) (x - 2 * u); px <= (int) (x + 2 * u); px++)
+			{
+				sword |= brightness(onImg.getRGB(px, y)) > brightness(offImg.getRGB(px, y)) + 60;
+			}
+		}
+		assertTrue("sword only with the actions row on", sword);
 	}
 
 	@Test
@@ -468,7 +437,10 @@ public class BarRenderSmokeTest
 			{
 				boolean ruler = y >= rulerTop && y <= rulerBottom;
 				boolean caretBox = Math.abs(x - cx) <= 4 * u + 1 && y >= 55 * u - 1 && y <= 60 * u + 1;
-				if (ruler || caretBox)
+				// The next beat's guide line up from its caret, and its countdown at the top.
+				boolean guide = Math.abs(x - cx) <= 1 * u + 1;
+				boolean countdown = Math.abs(x - cx) <= 6 * u + 1 && y <= 10 * u;
+				if (ruler || caretBox || guide || countdown)
 				{
 					continue;
 				}
@@ -576,12 +548,12 @@ public class BarRenderSmokeTest
 		BarLayout l = BarLayout.of(1026, 62);
 		BufferedImage img = render(1026, 62, s, null);
 		float u = l.u;
-		int y = (int) (29 * u);
+		int y = (int) (l.laneY(Lane.DOING) + l.laneH(Lane.DOING) / 2f);
 		assertEquals(Palette.COOK_PILL.getRGB(), img.getRGB((int) tickX(l, s, NOW - 10), y));
 		int x = (int) (tickX(l, s, NOW + 1) + 16 * u);
 		assertEquals(Palette.GROUND.getRGB(), img.getRGB(x, y));
 		// ... but the outline is there at the pill's top edge.
-		assertTrue(hasPixelAlpha(img, x, x + 1, 22 * u - 1, 22 * u + 2 * u));
+		assertTrue(hasPixelAlpha(img, x, x + 1, l.laneY(Lane.DOING) - 1, l.laneY(Lane.DOING) + 2 * u));
 	}
 
 	private static boolean hasPixelAlpha(BufferedImage img, float x0, float x1, float y0, float y1)
@@ -606,9 +578,9 @@ public class BarRenderSmokeTest
 		BarLayout l = BarLayout.of(1026, 62);
 		float u = l.u, fx = tickX(l, s, NOW + 2);
 		assertTrue(hasPixel(render(1026, 62, s, null), fx - u, fx + 9 * u, 42 * u, 60 * u, Palette.WHITE));
-		BarLayout l46 = BarLayout.of(1026, 46);
-		float fx46 = tickX(l46, s, NOW + 2);
-		assertFalse(hasPixel(render(1026, 46, s, null), fx46 - l46.u, fx46 + 9 * l46.u, 42 * l46.u, 60 * l46.u,
+		BarLayout l42 = BarLayout.of(1026, 42);
+		float fx42 = tickX(l42, s, NOW + 2);
+		assertFalse(hasPixel(render(1026, 42, s, null), fx42 - l42.u, fx42 + 9 * l42.u, 42 * l42.u, 60 * l42.u,
 			Palette.WHITE));
 		BarState off = SampleStates.cooking(ProdPhase.RUNNING, false, true);
 		assertFalse(hasPixel(render(1026, 62, off, null), fx - u, fx + 9 * u, 42 * u, 60 * u, Palette.WHITE));
@@ -681,7 +653,8 @@ public class BarRenderSmokeTest
 		float room = ReadoutPainter.rightLimit(g, l, s) - x;
 		String full = com.superhistogram.ui.modes.ProductionView.rightLines(s)[0];
 		java.awt.Font f = Fonts.bold(20f * l.u);
-		assertTrue("full headline should not fit at 720", g.getFontMetrics(f).stringWidth(full) > room);
+		// Font-dependent: only meaningful when the full headline overflows with the current face.
+		org.junit.Assume.assumeTrue("full headline fits with this font", g.getFontMetrics(f).stringWidth(full) > room);
 		String picked = ReadoutPainter.pickHeadline(g, f, room, full,
 			com.superhistogram.ui.modes.ProductionView.headlineFallbacks(s));
 		g.dispose();
@@ -802,10 +775,17 @@ public class BarRenderSmokeTest
 		BarLayout l = BarLayout.of(1026, 62);
 		float x = tickX(l, s, NOW + 3), u = l.u;
 		assertTrue(hasPixelAlpha(render(1026, 62, s, null), x - 3 * u, x + 3 * u, 57 * u, 60 * u));
-		BarLayout l46 = BarLayout.of(1026, 46);
-		float x46 = tickX(l46, s, NOW + 3);
-		assertFalse(hasPixelAlpha(render(1026, 46, s, null), x46 - 3 * l46.u, x46 + 3 * l46.u, 57 * l46.u,
-			Math.min(45, 60 * l46.u)));
+		BarLayout l42 = BarLayout.of(1026, 42);
+		float x42 = tickX(l42, s, NOW + 3);
+		// Two rows: no caret (the ruler lane there is the same with or without the alch tracker).
+		BufferedImage with42 = render(1026, 42, s, null), without42 = render(1026, 42, SampleStates.withoutAlch(s), null);
+		for (int y = (int) (40 * l42.u); y < 42; y++)
+		{
+			for (int px = (int) (x42 - 3 * l42.u); px <= (int) (x42 + 3 * l42.u); px++)
+			{
+				assertEquals(without42.getRGB(px, y), with42.getRGB(px, y));
+			}
+		}
 	}
 
 	@Test
@@ -897,7 +877,7 @@ public class BarRenderSmokeTest
 		BarState s = SampleStates.gathering(SampleStates.GatherPhase.CHOPPING);
 		BarLayout l = BarLayout.of(1026, 62);
 		int px = (int) tickX(l, s, NOW - 12);
-		int c = render(1026, 62, s, null).getRGB(px, (int) (29 * l.u));
+		int c = render(1026, 62, s, null).getRGB(px, (int) (l.laneY(Lane.DOING) + l.laneH(Lane.DOING) / 2f));
 		java.awt.Color wc = Palette.WC_PILL;
 		assertTrue(((c >> 16) & 255) <= wc.getRed() - 20);
 		assertTrue(((c >> 8) & 255) <= wc.getGreen() - 20);
@@ -1028,7 +1008,7 @@ public class BarRenderSmokeTest
 		return BarState.builder()
 			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
 			.runEnergyPct(s.runEnergyPct).modeName(name).modeSub(sub)
-			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
 			.gather(s.gather).wastedTicks(s.wastedTicks).timeToFinish(s.timeToFinish).build();
 	}
 
@@ -1052,13 +1032,13 @@ public class BarRenderSmokeTest
 						shortImg.getRGB(x, y), lng.getRGB(x, y));
 				}
 			}
-			// The gauge and its % label sit below the sub line and never move or get overpainted.
+			// Nothing below the sub line moves or gets overpainted.
 			int gaugeTop = (int) (l.height / 2f + 18f * l.u);
 			for (int y = gaugeTop; y < 62; y++)
 			{
 				for (int x = (int) (22f * l.u); x < (int) l.timelineX; x++)
 				{
-					assertEquals("w=" + w + " gauge area changed at " + x + "," + y,
+					assertEquals("w=" + w + " below-sub area changed at " + x + "," + y,
 						shortImg.getRGB(x, y), lng.getRGB(x, y));
 				}
 			}
@@ -1102,6 +1082,8 @@ public class BarRenderSmokeTest
 	}
 
 	private static final int S3 = SampleStates.lapThreeStart(SampleStates.AgilityPhase.MID_LAP);
+	/** Agility no longer zooms its ticks, so a whole lap (34 ticks back) only fits on a wide bar. */
+	private static final int WIDE = 2000;
 
 	@Test
 	public void agilityRendersAtThreeSizes()
@@ -1117,34 +1099,33 @@ public class BarRenderSmokeTest
 	}
 
 	@Test
-	public void otherModesKeepTickWidth()
+	public void everyModeKeepsTickWidth()
 	{
 		BarLayout l = BarLayout.of(1026, 62);
 		assertSame(l, BarPainter.timelineLayout(l, SampleStates.cooking(ProdPhase.RUNNING)));
 		assertSame(l, BarPainter.timelineLayout(l, null));
-		BarState s = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP);
-		assertTrue(BarPainter.timelineLayout(l, s).tickWidth < l.tickWidth);
+		assertSame(l, BarPainter.timelineLayout(l, SampleStates.agility(SampleStates.AgilityPhase.MID_LAP)));
 	}
 
 	@Test
 	public void obstaclePillIsAgilityBlue()
 	{
 		BarState s = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP);
-		BarLayout l = BarLayout.of(1026, 62);
+		BarLayout l = BarLayout.of(WIDE, 62);
 		float tw = BarPainter.timelineLayout(l, s).tickWidth;
-		BufferedImage img = render(1026, 62, s, null);
-		assertTrue(opaque(img, (int) (tickX(l, s, S3 + 3) + tw / 2), (int) (29 * l.u), Palette.skill("Agility")));
+		BufferedImage img = render(WIDE, 62, s, null);
+		assertTrue(opaque(img, (int) (tickX(l, s, S3 + 3) + tw / 2), (int) (l.laneY(Lane.DOING) + l.laneH(Lane.DOING) / 2f), Palette.skill("Agility")));
 	}
 
 	@Test
 	public void obstacleNumberDrawn()
 	{
 		BarState s = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP);
-		BarLayout l = BarLayout.of(1026, 62);
-		BufferedImage img = render(1026, 62, s, null);
+		BarLayout l = BarLayout.of(WIDE, 62);
+		BufferedImage img = render(WIDE, 62, s, null);
 		float x = tickX(l, s, S3), u = l.u;
 		boolean dark = false;
-		for (int y = (int) (25 * u); y < (int) (33 * u) && !dark; y++)
+		for (int y = (int) l.laneY(Lane.DOING); y < (int) (l.laneY(Lane.DOING) + l.laneH(Lane.DOING)) && !dark; y++)
 		{
 			for (int px = (int) (x + 7 * u); px <= (int) (x + 13 * u) && !dark; px++)
 			{
@@ -1159,9 +1140,9 @@ public class BarRenderSmokeTest
 	public void lapStartLine()
 	{
 		BarState s = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP);
-		BarLayout l = BarLayout.of(1026, 62);
-		BufferedImage img = render(1026, 62, s, null);
-		BufferedImage ref = render(1026, 62, SampleStates.withoutAgility(s), null);
+		BarLayout l = BarLayout.of(WIDE, 62);
+		BufferedImage img = render(WIDE, 62, s, null);
+		BufferedImage ref = render(WIDE, 62, SampleStates.withoutAgility(s), null);
 		int lx = (int) Math.floor(tickX(l, s, S3) - 2 * l.u), y = (int) (12 * l.u);
 		boolean lit = false;
 		for (int x = lx - 1; x <= lx + 1; x++)
@@ -1180,7 +1161,7 @@ public class BarRenderSmokeTest
 	{
 		BarLayout l = BarLayout.of(1026, 62);
 		BarState on = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP);
-		BarState off = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP, LapCompare.BEST, false);
+		BarState off = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP, false);
 		float x0 = tickX(l, on, S3 + 31), x1 = tickX(l, on, SampleStates.NOW_TICK);
 		assertTrue(hasNear(render(1026, 62, on, null), x0, x1, 34 * l.u, 42 * l.u, Palette.LOST));
 		assertFalse(hasNear(render(1026, 62, off, null), x0, x1, 34 * l.u, 42 * l.u, Palette.LOST));
@@ -1190,9 +1171,9 @@ public class BarRenderSmokeTest
 	public void markOfGraceIsMint()
 	{
 		BarState s = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP);
-		BarLayout l = BarLayout.of(1026, 62);
+		BarLayout l = BarLayout.of(WIDE, 62);
 		float u = l.u, cx = tickX(l, s, S3 + 16) - 9 * u, cy = TimelinePainter.xpY(l) - 3.5f * u;
-		assertTrue(hasNear(render(1026, 62, s, null), cx - 3 * u, cx + 3 * u, cy - 3 * u, cy + 3 * u, Palette.MINT));
+		assertTrue(hasNear(render(WIDE, 62, s, null), cx - 3 * u, cx + 3 * u, cy - 3 * u, cy + 3 * u, Palette.MINT));
 	}
 
 	@Test

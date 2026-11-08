@@ -2,9 +2,15 @@ package com.superhistogram.model;
 
 import com.superhistogram.model.combat.PrayerMode;
 
-/** Picks the bar's view: AFK wins, then combat, then a skilling view; otherwise the baseline setting. */
+/**
+ * Picks the bar's view: combat wins, then AFK, then a skilling view; otherwise the last activity shown, or the
+ * baseline setting before there has been one.
+ */
 public final class ModeDetector
 {
+	/** The last activity shown (a skilling or combat view); the bar sticks to it until another starts. */
+	private Mode last;
+
 	public Mode detect(boolean afk, boolean inCombat, PrayerMode prayerMode, BaselineSetting baseline)
 	{
 		return detect(afk, inCombat, null, prayerMode, baseline);
@@ -18,7 +24,23 @@ public final class ModeDetector
 		{
 			return pinned.mode();
 		}
-		return detect(afk, inCombat, skilling, prayerMode, baseline);
+		Mode m = detect(afk, inCombat, skilling, prayerMode, baseline);
+		if (m == Mode.GENERAL || m == Mode.MINIMAL)
+		{
+			// Nothing going on right now (banking, walking, a pause): keep showing what you were last doing.
+			return last != null ? last : m;
+		}
+		if (m != Mode.AFK)
+		{
+			last = m;
+		}
+		return m;
+	}
+
+	/** Forget the last activity (a new login): the bar starts on the baseline again. */
+	public void reset()
+	{
+		last = null;
 	}
 
 	/**
@@ -27,13 +49,15 @@ public final class ModeDetector
 	 */
 	public Mode detect(boolean afk, boolean inCombat, Mode skilling, PrayerMode prayerMode, BaselineSetting baseline)
 	{
-		if (afk)
-		{
-			return Mode.AFK;
-		}
+		// Combat first: an auto-retaliate fight with no clicks is still a fight (and the game doesn't idle-log
+		// you out mid-combat either).
 		if (inCombat)
 		{
 			return prayerMode == PrayerMode.ONE_TICK ? Mode.ONE_TICK : Mode.LAZY_FLICK;
+		}
+		if (afk)
+		{
+			return Mode.AFK;
 		}
 		if (skilling != null)
 		{
@@ -57,8 +81,37 @@ public final class ModeDetector
 	/** High alch, then production, agility, gathering. */
 	public static Mode skilling(boolean alching, boolean producing, boolean agility, boolean gathering)
 	{
+		return skilling(alching, producing, agility, false, gathering);
+	}
+
+	/** High alch, then production, agility, thieving, gathering. */
+	public static Mode skilling(boolean alching, boolean producing, boolean agility, boolean thieving,
+		boolean gathering)
+	{
+		return skilling(alching, producing, agility, thieving, false, gathering);
+	}
+
+	/** High alch, then another skilling spell, then the rest as below. */
+	public static Mode skilling(boolean alching, boolean casting, boolean producing, boolean agility,
+		boolean thieving, boolean hunting, boolean gathering)
+	{
+		return skilling(alching, casting, producing, agility, false, thieving, hunting, gathering);
+	}
+
+	/** As above, with a loop (Runecraft trips, a farm or bird house run) right after agility. */
+	public static Mode skilling(boolean alching, boolean casting, boolean producing, boolean agility,
+		boolean runs, boolean thieving, boolean hunting, boolean gathering)
+	{
+		return alching ? Mode.ALCH : casting ? Mode.CASTING : producing ? Mode.PRODUCTION : agility ? Mode.AGILITY
+			: runs ? Mode.RUNS : skilling(false, false, false, thieving, hunting, gathering);
+	}
+
+	/** High alch, then production, agility, thieving, hunter traps, gathering. */
+	public static Mode skilling(boolean alching, boolean producing, boolean agility, boolean thieving,
+		boolean hunting, boolean gathering)
+	{
 		return alching ? Mode.ALCH : producing ? Mode.PRODUCTION : agility ? Mode.AGILITY
-			: gathering ? Mode.GATHERING : null;
+			: thieving ? Mode.THIEVING : hunting ? Mode.HUNTER : gathering ? Mode.GATHERING : null;
 	}
 
 	/** Ticks a hit on the target or an own attack keeps combat on. */
@@ -70,7 +123,19 @@ public final class ModeDetector
 	 */
 	public static boolean inCombat(boolean realTarget, int tick, int lastAttackTick)
 	{
-		return realTarget || tick - lastAttackTick <= COMBAT_WINDOW;
+		return inCombat(realTarget, tick, lastAttackTick, COMBAT_WINDOW);
+	}
+
+	/** As above, holding combat for {@code holdTicks} after the last combat activity (an attack or own hit). */
+	public static boolean inCombat(boolean realTarget, int tick, int lastActivityTick, int holdTicks)
+	{
+		return realTarget || tick - lastActivityTick <= holdTicks;
+	}
+
+	/** Seconds to whole game ticks (0.6 s each), rounded. */
+	public static int ticks(int seconds)
+	{
+		return Math.round(Math.max(0, seconds) / 0.6f);
 	}
 
 	/**

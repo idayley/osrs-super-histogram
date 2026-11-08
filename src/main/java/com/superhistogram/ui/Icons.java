@@ -29,7 +29,7 @@ public final class Icons
 	public enum Icon
 	{
 		POT, AXE, LOG, LOG_END, FOOD, SWORD, FLAG, COIN, COIN_RING, MARK, BANK, HIT, STUMP, STUMP_TOP,
-		DEPLETED, DOT, CARET, CHECK, CROSS
+		DEPLETED, DOT, CARET, CHECK, CROSS, SHIRT, BOLT, STEPS
 	}
 
 	private static final Map<Icon, Shape> SHAPES = new EnumMap<>(Icon.class);
@@ -54,6 +54,10 @@ public final class Icons
 		SHAPES.put(Icon.DOT, new Ellipse2D.Float(3, 6, 6, 6));
 		SHAPES.put(Icon.CARET, poly(2, 12, 6, 7, 10, 12));
 		SHAPES.put(Icon.CHECK, stroked(1.4f, new float[]{1.9f, 8.7f, 4.5f, 11.3f, 10.1f, 5.7f}));
+		SHAPES.put(Icon.SHIRT, poly(0, 3.6f, 3.6f, 0.6f, 4.8f, 0.6f, 6, 2, 7.2f, 0.6f, 8.4f, 0.6f, 12, 3.6f, 10, 6.2f,
+			9.2f, 5.6f, 9.2f, 12, 2.8f, 12, 2.8f, 5.6f, 2, 6.2f));
+		SHAPES.put(Icon.BOLT, poly(7.4f, 0, 1.8f, 7, 5.6f, 7, 4.2f, 12, 10.2f, 4.6f, 6.4f, 4.6f));
+		SHAPES.put(Icon.STEPS, steps());
 		SHAPES.put(Icon.CROSS, stroked(1.6f, new float[]{3, 5.2f, 9, 11.2f}, new float[]{9, 5.2f, 3, 11.2f}));
 	}
 
@@ -121,6 +125,15 @@ public final class Icons
 		AffineTransform fit = AffineTransform.getTranslateInstance(6 - k * b.getCenterX(), 12 - k * b.getMaxY());
 		fit.scale(k, k);
 		return fit.createTransformedShape(r);
+	}
+
+	/** Two footprints, the right one ahead. */
+	private static Shape steps()
+	{
+		Path2D p = new Path2D.Float();
+		p.append(new Ellipse2D.Float(1.2f, 5.8f, 3.6f, 6.2f), false);
+		p.append(new Ellipse2D.Float(7.2f, 1.2f, 3.6f, 6.2f), false);
+		return p;
 	}
 
 	private static Shape flag()

@@ -21,7 +21,7 @@ import java.util.Set;
 public final class InventoryRun
 {
 	public static final Set<String> SKILLS = Collections.unmodifiableSet(new LinkedHashSet<>(
-		Arrays.asList("Cooking", "Fletching", "Herblore", "Crafting", "Smithing", "Prayer")));
+		Arrays.asList("Cooking", "Fletching", "Herblore", "Crafting", "Smithing", "Prayer", "Sailing", "Construction")));
 	public static final int DETECT_WINDOW = 12;
 	public static final int LINGER = 20;
 	public static final int HISTORY = 8;
@@ -130,6 +130,11 @@ public final class InventoryRun
 		}
 		boolean haveBefore = before != null;
 		String xpSkill = pickSkill(drops);
+		if ("Sailing".equals(xpSkill) && !sorting(dec) && (pending == null || !sorting(pending.dec)))
+		{
+			// Sailing XP is production only when salvage is sorted (the boat, the hook, tasks give it too).
+			xpSkill = null;
+		}
 		Map<Integer, Integer> own = haveBefore && relevant(dec, xpSkill) ? dec : Collections.<Integer, Integer>emptyMap();
 
 		if (pending != null)
@@ -278,6 +283,19 @@ public final class InventoryRun
 		history.clear();
 	}
 
+	/** True when shipwreck salvage left the inventory: sorting it at a salvaging station. */
+	private static boolean sorting(Map<Integer, Integer> dec)
+	{
+		for (int id : dec.keySet())
+		{
+			if (GatherRun.SALVAGE.contains(id))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/** While running, only decreases that touch the run's inputs, or come with another skill's XP, count. */
 	private boolean relevant(Map<Integer, Integer> dec, String xpSkill)
 	{
@@ -336,38 +354,57 @@ public final class InventoryRun
 			}
 			endRun();
 		}
+		if (skill != null && xpSkill.equals(skill) && intersects(dec.keySet(), inputs))
+		{
+			// The same thing again (the next inventory): no need to wait for a second action to recognise it.
+			int gap = Math.max(1, ticksPerAction());
+			start(xpSkill, dec.keySet(), totalOf(dec, before), actionTick - gap, gap, 0);
+			candidate = null;
+			return step(actionTick);
+		}
 		Candidate c = candidate;
 		if (c != null && c.skill.equals(xpSkill) && actionTick > c.tick
 			&& actionTick - c.tick <= DETECT_WINDOW && intersects(dec.keySet(), c.inputs))
 		{
 			candidate = null;
-			int gap = actionTick - c.tick;
-			skill = xpSkill;
-			inputs = new HashSet<>(c.inputs);
-			total = c.total;
-			done = 1;
-			lastActionTick = c.tick;
-			gaps.clear();
-			bankTick = -1;
-			wasted = 0;
-			finished = false;
-			running = true;
-			span = timeline.openSpan(skill, Math.max(0, c.tick - gap));
-			history.add(span);
-			while (history.size() > HISTORY)
-			{
-				history.remove(0);
-			}
+			start(xpSkill, c.inputs, c.total, c.tick, actionTick - c.tick, 1);
 			return step(actionTick);
 		}
+		candidate = new Candidate(xpSkill, actionTick, new HashSet<>(dec.keySet()), totalOf(dec, before));
+		return false;
+	}
+
+	/** How many actions the inventory before this one holds inputs for. */
+	private static int totalOf(Map<Integer, Integer> dec, Map<Integer, Integer> before)
+	{
 		int tot = Integer.MAX_VALUE;
 		for (Map.Entry<Integer, Integer> e : dec.entrySet())
 		{
 			int had = before == null ? 0 : before.getOrDefault(e.getKey(), 0);
 			tot = Math.min(tot, had / e.getValue());
 		}
-		candidate = new Candidate(xpSkill, actionTick, new HashSet<>(dec.keySet()), Math.max(1, tot));
-		return false;
+		return Math.max(1, tot);
+	}
+
+	/** Starts a run whose last counted action was at {@code lastTick} ({@code done} so far). */
+	private void start(String xpSkill, Set<Integer> in, int tot, int lastTick, int gap, int doneSoFar)
+	{
+		skill = xpSkill;
+		inputs = new HashSet<>(in);
+		total = tot;
+		done = doneSoFar;
+		lastActionTick = lastTick;
+		gaps.clear();
+		bankTick = -1;
+		wasted = 0;
+		finished = false;
+		running = true;
+		span = timeline.openSpan(skill, Math.max(0, lastTick - (doneSoFar > 0 ? gap : 0)));
+		history.add(span);
+		while (history.size() > HISTORY)
+		{
+			history.remove(0);
+		}
 	}
 
 	/** Counts one action at actionTick. Returns true when it was the last item. */

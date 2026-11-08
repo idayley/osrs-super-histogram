@@ -4,12 +4,13 @@ import com.superhistogram.model.BarState;
 import com.superhistogram.model.TickRecord;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
-import com.superhistogram.model.combat.FoodKind;
 import com.superhistogram.ui.BarLayout;
+import com.superhistogram.ui.BaseTimeline;
 import com.superhistogram.ui.CombatPainter;
 import com.superhistogram.ui.Fonts;
 import com.superhistogram.ui.Icons;
-import com.superhistogram.ui.ModeView;
+import com.superhistogram.ui.Lane;
+import com.superhistogram.ui.Lens;
 import com.superhistogram.ui.Palette;
 import com.superhistogram.ui.ReadoutPainter;
 import com.superhistogram.ui.TimelinePainter;
@@ -17,171 +18,62 @@ import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Lazy-flick combat view: hits on you on top, your prayer in the middle, your own beat carets,
- * swords, eats and XP below; right = beat trail and the last verdict. Shows nothing ahead of
- * "now" except the next beat caret.
+ * Lazy-flick lens: adds the "+N late" by each late sword (the beat carets are on every bar); right = beat trail
+ * and the last verdict.
  */
-public final class LazyFlickView implements ModeView
+public final class LazyFlickView implements Lens
 {
 	@Override
-	public void paintTimeline(Graphics2D g, BarLayout l, BarState s)
+	public float[] emphasis(BarState s)
 	{
-		if (s.timeline == null || s.nowTick < 0)
+		return Lens.full();
+	}
+
+	@Override
+	public void overlay(Graphics2D g, BarLayout l, BarState s)
+	{
+		if (s.timeline == null || s.nowTick < 0 || l.rows < 3)
 		{
 			return;
 		}
-		float u = l.u;
-		if (l.rows == 3)
-		{
-			carets(g, l, s);
-		}
-		CombatPainter.prayerPills(g, l, s, l.rows == 3 ? 12f * u : TimelinePainter.pillH(l));
-		TimelinePainter.hits(g, l, s);
-		if (l.rows == 3)
-		{
-			CombatPainter.xpLow(g, l, s, actions(g, l, s));
-		}
+		late(g, l, s);
 	}
 
-	private static void carets(Graphics2D g, BarLayout l, BarState s)
+	/** "+N" ticks late just right of each late sword in the inputs lane (swords shown only). */
+	private static void late(Graphics2D g, BarLayout l, BarState s)
 	{
-		Beat b = s.beat;
-		if (b == null)
+		if (s.actionsRow == ActionsRow.OFF || !l.hasLane(Lane.INPUTS))
 		{
 			return;
 		}
-		float u = l.u;
-		for (int t = TimelinePainter.oldestTick(l, s); t <= s.nowTick; t++)
-		{
-			if (b.isBeat(t))
-			{
-				CombatPainter.caret(g, TimelinePainter.x(l, s, t), 55f * u, u, Palette.WHITE);
-			}
-		}
-		int next = b.nextBeat();
-		if (next > s.nowTick)
-		{
-			CombatPainter.caret(g, TimelinePainter.x(l, s, next), 55f * u, u, Palette.NEXT_BEAT);
-		}
-	}
-
-	/**
-	 * Swords and eat chips. A chip starts after the XP number group it would touch (plus a small gap);
-	 * if that pushes it past the next sword it stays put and the XP numbers give way instead.
-	 * Returns the x ranges where XP numbers must not paint.
-	 */
-	private static List<float[]> actions(Graphics2D g, BarLayout l, BarState s)
-	{
-		List<float[]> reserved = new ArrayList<>();
-		if (s.actionsRow == ActionsRow.OFF)
-		{
-			return reserved;
-		}
-		float u = l.u;
-		List<float[]> xpRanges = CombatPainter.xpLowRanges(g, l, s);
+		float u = l.u, baseline = l.laneY(Lane.INPUTS) + l.laneH(Lane.INPUTS) - 0.5f * u;
+		g.setFont(Fonts.bold(9f * u));
+		g.setColor(Palette.LOST);
 		for (int t = TimelinePainter.oldestTick(l, s); t <= s.nowTick; t++)
 		{
 			TickRecord r = s.timeline.peek(t);
-			if (r == null)
+			if (r != null && r.attackLate > 0)
 			{
-				continue;
-			}
-			float x = TimelinePainter.x(l, s, t);
-			if (r.attackLate >= 0)
-			{
-				CombatPainter.sword(g, x, 44f * u, u);
-				if (r.attackLate > 0)
-				{
-					g.setFont(Fonts.bold(9f * u));
-					g.setColor(Palette.LOST);
-					g.drawString("+" + r.attackLate, x + 6f * u, 48f * u);
-				}
-			}
-			if (s.actionsRow == ActionsRow.ATTACKS_EATS && r.eat != null)
-			{
-				float ex = x + l.tickWidth / 2f;
-				boolean cost = s.showEatCosts;
-				g.setFont(Fonts.bold(9f * u));
-				String label = r.eatCost <= 0 ? "free" : "+" + r.eatCost;
-				float tail = cost ? 9f * u + g.getFontMetrics().stringWidth(label) : 7.5f * u;
-				float shifted = shiftPastXp(xpRanges, ex, 6.5f * u, tail, 3f * u);
-				float limit = nextSwordX(s, l, t) - 4.5f * u;
-				if (shifted + tail <= limit)
-				{
-					ex = shifted;
-				}
-				else
-				{
-					reserved.add(new float[]{ex - 6.5f * u - 2f * u, ex + tail + 2f * u});
-				}
-				if (r.eat == FoodKind.COMBO)
-				{
-					CombatPainter.fish(g, ex - 1f * u, 41f * u, u);
-					CombatPainter.fish(g, ex + 1f * u, 47f * u, u);
-				}
-				else
-				{
-					CombatPainter.fish(g, ex, 44f * u, u);
-				}
-				if (s.showEatCosts)
-				{
-					g.setFont(Fonts.bold(9f * u));
-					boolean free = r.eatCost <= 0;
-					g.setColor(free ? Palette.mint() : Palette.LOST);
-					g.drawString(free ? "free" : "+" + r.eatCost, ex + 9f * u, 47.5f * u);
-				}
+				g.drawString("+" + r.attackLate, BaseTimeline.swordX(l, TimelinePainter.x(l, s, t)) + 5f * u, baseline);
 			}
 		}
-		return reserved;
-	}
-
-	/** Moves a chip centred at ex right until it clears every XP range, keeping a gap after the range. */
-	private static float shiftPastXp(List<float[]> ranges, float ex, float left, float tail, float gap)
-	{
-		boolean moved = true;
-		for (int guard = 0; moved && guard <= ranges.size(); guard++)
-		{
-			moved = false;
-			for (float[] r : ranges)
-			{
-				if (ex - left < r[1] + gap && ex + tail > r[0])
-				{
-					ex = r[1] + gap + left;
-					moved = true;
-				}
-			}
-		}
-		return ex;
-	}
-
-	/** x of the first sword after this tick; the right edge of the timeline when there is none. */
-	private static float nextSwordX(BarState s, BarLayout l, int tick)
-	{
-		for (int t = tick + 1; t <= s.nowTick; t++)
-		{
-			TickRecord r = s.timeline.peek(t);
-			if (r != null && r.attackLate >= 0)
-			{
-				return TimelinePainter.x(l, s, t);
-			}
-		}
-		return CombatPainter.rightX(l);
 	}
 
 	@Override
 	public void paintRight(Graphics2D g, BarLayout l, BarState s)
 	{
-		if (!l.showRight || s.beat == null)
+		if (!l.showRight)
 		{
 			return;
 		}
-		List<Beat.Verdict> trail = s.beat.trail();
+		List<Beat.Verdict> trail = s.beat == null ? java.util.Collections.<Beat.Verdict>emptyList() : s.beat.trail();
 		if (trail.isEmpty())
 		{
+			// No beat yet (the hotkey starts one): never a blank side.
+			CombatPainter.hitsReadout(g, l, s);
 			return;
 		}
 		float u = l.u;
@@ -189,6 +81,12 @@ public final class LazyFlickView implements ModeView
 		Beat.Verdict last = trail.get(trail.size() - 1);
 		boolean text = last != Beat.Verdict.ON_TIME;
 		String word = last == Beat.Verdict.LATE ? "Late" : "Early";
+		if (l.compact)
+		{
+			// Chat width: just the last beat's verdict, in the shared compact readout (no trail).
+			ReadoutPainter.right(g, l, s, text ? word : "On time", text ? Palette.WHITE : Palette.mint(), "last beat");
+			return;
+		}
 		Font vf = Fonts.bold(22f * u);
 		float vw = text ? (float) vf.getStringBounds(word, g.getFontRenderContext()).getWidth() : 22f * u + 2f;
 

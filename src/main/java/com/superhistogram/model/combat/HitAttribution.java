@@ -42,6 +42,39 @@ public final class HitAttribution
 		return found;
 	}
 
+	/**
+	 * The NPC that swung at you most recently within the window, or -1 when none or when two swung on that same
+	 * tick. Used to drop hits from ignored enemies, where several monsters are attacking at once.
+	 */
+	public int latest(int hitTick)
+	{
+		int found = -1, best = Integer.MIN_VALUE;
+		for (Map.Entry<Integer, Integer> e : lastSwing.entrySet())
+		{
+			int t = e.getValue();
+			if (t < hitTick - WINDOW_TICKS || t > hitTick || t < best)
+			{
+				continue;
+			}
+			found = t == best ? -1 : e.getKey();
+			best = t;
+		}
+		return found;
+	}
+
+	/** Any NPC swung at you within the window (one or several). */
+	public boolean anySwing(int hitTick)
+	{
+		for (int t : lastSwing.values())
+		{
+			if (t >= hitTick - WINDOW_TICKS && t <= hitTick)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public void reset()
 	{
 		lastSwing.clear();

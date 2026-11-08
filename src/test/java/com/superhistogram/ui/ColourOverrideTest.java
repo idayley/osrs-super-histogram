@@ -78,11 +78,21 @@ public class ColourOverrideTest
 	}
 
 	@Test
-	public void runEnergyOverrideChangesGauge()
+	public void runEnergyOverrideTintsTheRunningPill()
 	{
-		BufferedImage o = render(SampleStates.general(), OVERRIDE);
-		assertTrue(has(o, new Color(0, 255, 0)));
-		assertTrue(!has(o, Palette.RUN_ENERGY));
+		BufferedImage d = render(SampleStates.general(), null);
+		// Only the run-energy colour changes, so any difference comes from the running pill.
+		BufferedImage o = render(SampleStates.general(),
+			new Colours(Palette.GROUND, Palette.DAMAGE, Palette.MINT, new Color(0, 255, 0)));
+		boolean differs = false;
+		for (int x = 0; x < d.getWidth() && !differs; x++)
+		{
+			for (int y = 0; y < d.getHeight() && !differs; y++)
+			{
+				differs = d.getRGB(x, y) != o.getRGB(x, y);
+			}
+		}
+		assertTrue(differs);
 	}
 
 	@Test

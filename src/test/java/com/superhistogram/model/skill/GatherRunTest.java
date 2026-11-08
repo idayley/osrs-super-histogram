@@ -613,4 +613,48 @@ public class GatherRunTest
 		walk(133);
 		assertTrue(run.showing(133));
 	}
+
+	@Test
+	public void firstChopOnTheNextTreeKeepsShowing()
+	{
+		// Replay: the bar dropped to General for one tick on the new tree's first chop.
+		baseline();
+		click();
+		gatherTo(129);
+		run.onTargetGone(130, A);
+		roll(130);
+		walk(131);
+		run.onTargetClick(133, "Woodcutting", B, "Yew tree");
+		walk(133);
+		roll(134);
+		assertTrue(run.showing(134));
+		roll(135);
+		assertTrue(run.showing(135));
+	}
+
+	@Test
+	public void sailingXpCountsOnlyWithSalvageComingIn()
+	{
+		int salvage = net.runelite.api.gameval.ItemID.SAILING_LARGE_SHIPWRECK_SALVAGE;
+		baseline();
+		List<XpDrop> sail = Collections.singletonList(new XpDrop("Sailing", 180));
+		// Boat XP with nothing coming in: not salvaging.
+		tl.at(100);
+		run.onTick(100, true, sail, new HashMap<>(inv), free);
+		assertEquals(0, run.successes());
+		for (int t = 104, k = 1; t <= 108; t += 4, k++)
+		{
+			inv.put(salvage, k);
+			tl.at(t);
+			run.onTick(t, true, sail, new HashMap<>(inv), 28 - k);
+		}
+		assertEquals(2, run.successes());
+		assertEquals("Sailing", run.skill());
+		assertEquals(2, run.count());
+		// Sorting: salvage leaves with Sailing XP. Not a salvaging success.
+		inv.put(salvage, 1);
+		tl.at(110);
+		run.onTick(110, false, sail, new HashMap<>(inv), 27);
+		assertEquals(2, run.successes());
+	}
 }

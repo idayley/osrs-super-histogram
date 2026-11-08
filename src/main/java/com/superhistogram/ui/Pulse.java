@@ -23,11 +23,23 @@ public final class Pulse
 	private boolean tickCue;
 	private boolean tickSuppressed;
 	private long doneAt = NONE;
+	/** "Alternate" style: the rim stays lit and swaps colour each beat. */
+	private volatile boolean alternate;
+	private int beats;
+	/** An alternating rim goes dark this long after the last beat (metronome off, or logged out). */
+	public static final long ALTERNATE_HOLD_MS = 7000;
+	public static final float ALTERNATE_REST = 0.6f, ALTERNATE_PEAK = 0.95f;
+
+	public void setAlternate(boolean v)
+	{
+		alternate = v;
+	}
 
 	public void tick(long nowMs, boolean cue)
 	{
 		tickAt = nowMs;
 		tickCue = cue;
+		beats++;
 		tickSuppressed = doneAt == nowMs;
 	}
 
@@ -40,10 +52,30 @@ public final class Pulse
 		}
 	}
 
+	/** Alternate style with a recent beat: the rim is lit in {@link #phase()}'s colour at {@link #alternateAlpha}. */
+	public boolean alternating(long nowMs)
+	{
+		return alternate && tickAt != NONE && nowMs - tickAt >= 0 && nowMs - tickAt < ALTERNATE_HOLD_MS;
+	}
+
+	/** 0 or 1: which of the two colours the rim shows; flips on every beat. */
+	public int phase()
+	{
+		return beats & 1;
+	}
+
+	/** Steady at {@link #ALTERNATE_REST}, brighter just after the swap so the change catches the eye. */
+	public float alternateAlpha(long nowMs)
+	{
+		long age = nowMs - tickAt;
+		float boost = age >= 0 && age < OUTLINE_MS ? 1f - (float) age / OUTLINE_MS : 0f;
+		return ALTERNATE_REST + (ALTERNATE_PEAK - ALTERNATE_REST) * boost;
+	}
+
 	/** 0..1. */
 	public float outlineAlpha(long nowMs)
 	{
-		if (tickAt == NONE || tickSuppressed)
+		if (tickAt == NONE || tickSuppressed || alternate)
 		{
 			return 0f;
 		}

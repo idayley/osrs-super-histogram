@@ -15,7 +15,7 @@ public class ProductionViewTest
 	public void runningShowsTimeLeftAndCount()
 	{
 		BarState s = SampleStates.cooking(ProdPhase.RUNNING);
-		assertArrayEquals(new String[]{"0:01", "left · 27 of 28 cooked"}, ProductionView.rightLines(s));
+		assertArrayEquals(new String[]{"0:01", "27 of 28 cooked"}, ProductionView.rightLines(s));
 		assertEquals(Palette.WHITE, ProductionView.rightColor(s));
 	}
 
@@ -53,7 +53,7 @@ public class ProductionViewTest
 	@Test
 	public void otherSkillsSayDone()
 	{
-		assertArrayEquals(new String[]{"0:01", "left · 27 of 28 done"},
+		assertArrayEquals(new String[]{"0:01", "27 of 28 done"},
 			ProductionView.rightLines(SampleStates.fletching()));
 	}
 

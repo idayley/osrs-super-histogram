@@ -5,24 +5,23 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.font.TextAttribute;
-import java.awt.geom.RoundRectangle2D;
 import java.util.Collections;
 
-/** Left readout (name, sub line, run gauge), right readout and login time, plus number formatting. */
+/** Left readout (name, sub line), right readout and login time, plus number formatting. */
 public final class ReadoutPainter
 {
 	private ReadoutPainter()
 	{
 	}
 
-	/** Mode name, sub line and run-energy gauge at 22u from the left. */
+	/** Mode name (and, when wide, its sub line) at 22u from the left. */
 	public static void left(Graphics2D g, BarLayout l, BarState s)
 	{
 		if (!l.showLeft || s == null)
 		{
 			return;
 		}
-		float u = l.u, x = 22f * u, mid = l.height / 2f;
+		float u = l.u, x = (l.compact ? 16f : 22f) * u, mid = l.height / 2f;
 		float room = l.timelineX - x - 6f * u;
 		Font nf = Fonts.bold(Math.max(10f, 11f * u));
 		if (l.rows == 1)
@@ -30,21 +29,15 @@ public final class ReadoutPainter
 			text(g, fit(g, s.modeName, nf, room), nf, Palette.TEXT, x, mid + 4f * u);
 			return;
 		}
-		float subY = mid + 12f * u;
-		text(g, fit(g, s.modeName, nf, room), nf, Palette.TEXT, x, mid - 4f * u);
-		Font sf = Fonts.semiBold(11f * u);
-		text(g, fit(g, s.modeSub, sf, room), sf, Palette.DIM, x, subY);
-		if (!s.showRunEnergy)
+		if (l.compact)
 		{
+			// Chat width: just the name; the sub line is dropped.
+			text(g, fit(g, s.modeName, nf, room), nf, Palette.TEXT, x, mid + 4f * u);
 			return;
 		}
-		int pct = Math.max(0, Math.min(100, s.runEnergyPct));
-		float gy = subY + 6f * u, gw = 64f * u, gh = 3f * u;
-		g.setColor(Palette.GAUGE_TRACK);
-		g.fill(new RoundRectangle2D.Float(x, gy, gw, gh, gh, gh));
-		g.setColor(pct < 20 ? Palette.WHITE : Palette.runEnergy());
-		g.fill(new RoundRectangle2D.Float(x, gy, gw * pct / 100f, gh, gh, gh));
-		text(g, pct + "%", Fonts.bold(8.5f * u), Palette.DIM, x + 68f * u, gy + 3.5f * u);
+		text(g, fit(g, s.modeName, nf, room), nf, Palette.TEXT, x, mid - 2f * u);
+		Font sf = Fonts.semiBold(11f * u);
+		text(g, fit(g, s.modeSub, sf, room), sf, Palette.DIM, x, mid + 12f * u);
 	}
 
 	/** Marker that separates the optional "last:" part of the small line. */
@@ -100,6 +93,13 @@ public final class ReadoutPainter
 		right(g, l, s, big, bigColor, small, coin, fallbacks, new String[0], 10f);
 	}
 
+	/** With a coin before the headline and shorter small lines to try in order. */
+	public static void rightCoin(Graphics2D g, BarLayout l, BarState s, String big, Color bigColor, String small,
+		boolean coin, String[] smallFallbacks)
+	{
+		right(g, l, s, big, bigColor, small, coin, new String[0], smallFallbacks, 10f);
+	}
+
 	private static void right(Graphics2D g, BarLayout l, BarState s, String big, Color bigColor, String small,
 		boolean coin, String[] fallbacks, String[] smallFallbacks, float insetU)
 	{
@@ -107,7 +107,12 @@ public final class ReadoutPainter
 		{
 			return;
 		}
-		float u = l.u, x = l.timelineX + l.timelineW + insetU * u;
+		float u = l.u, x = l.timelineX + l.timelineW + (l.compact ? Math.min(insetU, 8f) : insetU) * u;
+		if (l.compact && l.rows > 1)
+		{
+			compactRight(g, l, s, x, big, bigColor, small, coin, fallbacks, smallFallbacks);
+			return;
+		}
 		float room = rightLimit(g, l, s) - x;
 		if (l.rows == 1)
 		{
@@ -141,6 +146,59 @@ public final class ReadoutPainter
 			}
 		}
 		text(g, fit(g, line, sf, room), sf, Palette.DIM, x, 48f * u);
+	}
+
+	/**
+	 * Chat-width right readout: a smaller headline across the whole readout, and under it the small line
+	 * with the login time at its right end (no "ONLINE" label).
+	 */
+	private static void compactRight(Graphics2D g, BarLayout l, BarState s, float x, String big, Color bigColor,
+		String small, boolean coin, String[] fallbacks, String[] smallFallbacks)
+	{
+		float u = l.u, edge = compactEdge(l);
+		float skip = 0f;
+		if (coin)
+		{
+			SkillPainter.coin(g, x + 5f * u, 25f * u, 5f * u);
+			skip = 13f * u;
+		}
+		Font bf = Fonts.bold(16f * u), sf = Fonts.semiBold(9f * u);
+		text(g, pickHeadline(g, bf, edge - x - skip, big, fallbacks), bf, bigColor, x + skip, 30f * u);
+		float room = edge - x;
+		if (loginVisible(l, s, s.nowMs))
+		{
+			room -= width(g, s.clock.format(s.nowMs), sf) + 6f * u;
+		}
+		text(g, wholeParts(g, pickSmall(g, sf, room, small, smallFallbacks), sf, room), sf, Palette.DIM, x, 45f * u);
+	}
+
+	/**
+	 * The line, or as many of its leading " · "-separated parts as fit whole in room; null when not even the
+	 * first part fits. Never cuts a word.
+	 */
+	static String wholeParts(Graphics2D g, String line, Font f, float room)
+	{
+		if (line == null)
+		{
+			return null;
+		}
+		String t = line;
+		while (width(g, t, f) > room)
+		{
+			int i = t.lastIndexOf(" \u00b7 ");
+			if (i < 0)
+			{
+				return null;
+			}
+			t = t.substring(0, i);
+		}
+		return t;
+	}
+
+	/** Right edge of compact readout text: clear of the rounded end. */
+	private static float compactEdge(BarLayout l)
+	{
+		return l.width - 20f * l.u;
 	}
 
 	/** The first of full, fallbacks... that fits in room; the full line when none does. */
@@ -181,6 +239,11 @@ public final class ReadoutPainter
 	public static float rightLimit(Graphics2D g, BarLayout l, BarState s)
 	{
 		float u = l.u, edge = l.width - 26f * u;
+		if (l.compact && l.rows > 1)
+		{
+			// The login time sits on the small-line row, so the headline may run to the edge.
+			return compactEdge(l);
+		}
 		if (loginVisible(l, s, s == null ? 0 : s.nowMs))
 		{
 			Font f = l.rows == 1 ? Fonts.semiBold(Math.max(9f, 11f * u)) : Fonts.semiBold(11f * u);
@@ -229,6 +292,11 @@ public final class ReadoutPainter
 		if (l.rows == 1)
 		{
 			rightAligned(g, time, Fonts.semiBold(Math.max(9f, 11f * u)), Palette.DIM, right, l.height / 2f + 4f * u);
+			return;
+		}
+		if (l.compact)
+		{
+			rightAligned(g, time, Fonts.semiBold(9f * u), Palette.DIM, compactEdge(l), 45f * u);
 			return;
 		}
 		rightAligned(g, time, Fonts.semiBold(11f * u), Palette.DIM, right, 28f * u);

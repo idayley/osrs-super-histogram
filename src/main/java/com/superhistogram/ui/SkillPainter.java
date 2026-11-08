@@ -50,21 +50,34 @@ public final class SkillPainter
 		g.fill(Icons.icon(Icons.Icon.COIN_RING, cx, cy + r, u));
 	}
 
-	/** The wasted-ticks mark: a line from x0 to x1 at 45.25u with "+n" centred above it. */
-	public static void wasted(Graphics2D g, BarLayout l, float x0, float x1, int n)
+	/**
+	 * The wasted-ticks mark: a line from x0 to x1 in the gap between the prayer and inputs lanes, with "+n"
+	 * centred above it in the prayer lane (which every lens that shows it dims).
+	 */
+	public static void wasted(Graphics2D g, BarLayout l, com.superhistogram.model.BarState s, float x0, float x1, int n)
 	{
 		if (x1 <= x0)
 		{
 			return;
 		}
 		float u = l.u;
+		float lineY = l.laneY(Lane.PRAYER) + l.laneH(Lane.PRAYER) + 0.25f * u;
 		g.setColor(Palette.WASTED_LINE);
-		g.fill(new Rectangle2D.Float(x0, 45.25f * u, x1 - x0, 1.5f * u));
+		g.fill(new Rectangle2D.Float(x0, lineY, x1 - x0, 1.5f * u));
 		String text = "+" + n;
 		g.setFont(Fonts.bold(9f * u));
 		g.setColor(Palette.LOST);
 		float w = g.getFontMetrics().stringWidth(text);
-		g.drawString(text, (x0 + x1) / 2f - w / 2f, 42f * u);
+		float tx = (x0 + x1) / 2f - w / 2f;
+		// The number sits in the (dimmed) prayer lane: leave out any that would print over a prayer label.
+		for (float[] r : BaseTimeline.prayerLabels(g, l, s))
+		{
+			if (tx < r[1] && tx + w > r[0])
+			{
+				return;
+			}
+		}
+		g.drawString(text, tx, lineY - 3.25f * u);
 	}
 
 	/** Axe: the handle is centred on x; the head extends to its right. */

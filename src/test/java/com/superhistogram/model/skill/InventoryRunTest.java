@@ -403,4 +403,30 @@ public class InventoryRunTest
 		assertNotNull(run.runs());
 		assertTrue(run.runs().isEmpty());
 	}
+
+	@Test
+	public void nextInventoryOfTheSameThingShowsFromItsFirstCook()
+	{
+		start(SHARK, 3);
+		cookFrom(10, 3);
+		assertTrue(run.finished());
+		run.onBankClick(25);
+		idleTo(27);
+		inv.put(SHARK, 28);
+		tick(28, Collections.emptyList(), new HashMap<>(inv));
+		cook(32);
+		assertTrue(run.running());
+		assertEquals(1, run.done());
+		assertEquals(28, run.total());
+		assertEquals(32 + 27 * 4, run.finishTick());
+	}
+
+	@Test
+	public void aOneOffOfSomethingNewStillWaitsForASecond()
+	{
+		start(SHARK, 3, LOGS, 5);
+		cookFrom(10, 3);
+		act(30, "Firemaking", 1, LOGS);
+		assertFalse(run.running());
+	}
 }

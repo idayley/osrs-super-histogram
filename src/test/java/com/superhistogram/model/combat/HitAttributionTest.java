@@ -60,4 +60,16 @@ public class HitAttributionTest
 		a.reset();
 		assertEquals(-1, a.attribute(100));
 	}
+
+	@Test
+	public void latestPicksTheMostRecentSwingerAndTiesAreUnknown()
+	{
+		HitAttribution a = new HitAttribution();
+		a.onSwing(1, 10);
+		a.onSwing(2, 12);
+		assertEquals(2, a.latest(13));
+		a.onSwing(3, 12);
+		assertEquals(-1, a.latest(13));
+		assertEquals(-1, a.latest(30));
+	}
 }

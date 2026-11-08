@@ -3,22 +3,23 @@ package com.superhistogram.ui.modes;
 import com.superhistogram.model.BarState;
 import com.superhistogram.model.XpDrop;
 import com.superhistogram.ui.BarLayout;
-import com.superhistogram.ui.ModeView;
+import com.superhistogram.ui.Lens;
 import com.superhistogram.ui.Palette;
 import com.superhistogram.ui.ReadoutPainter;
-import com.superhistogram.ui.TimelinePainter;
 import java.awt.Graphics2D;
 
-/** Baseline view: walk/run/action pills, XP and hits on top, clicks below; right = session XP. */
-public final class GeneralView implements ModeView
+/** Baseline lens: every lane at full strength, no helpers; right = session XP. */
+public final class GeneralView implements Lens
 {
 	@Override
-	public void paintTimeline(Graphics2D g, BarLayout l, BarState s)
+	public float[] emphasis(BarState s)
 	{
-		TimelinePainter.spans(g, l, s);
-		TimelinePainter.xp(g, l, s);
-		TimelinePainter.hits(g, l, s);
-		TimelinePainter.clicks(g, l, s);
+		return Lens.full();
+	}
+
+	@Override
+	public void overlay(Graphics2D g, BarLayout l, BarState s)
+	{
 	}
 
 	@Override

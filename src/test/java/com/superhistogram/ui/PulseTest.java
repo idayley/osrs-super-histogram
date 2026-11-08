@@ -97,4 +97,20 @@ public class PulseTest
 		assertEquals(0f, p.outlineAlpha(0), 0f);
 		assertEquals(0f, p.mintAlpha(0), 0f);
 	}
+
+	@Test
+	public void alternateRimStaysLitAndSwapsColourEachBeat()
+	{
+		Pulse p = new Pulse();
+		p.setAlternate(true);
+		p.tick(1000, true);
+		int first = p.phase();
+		assertEquals(0f, p.outlineAlpha(1000), 0f); // no white flash in this style
+		assertEquals(Pulse.ALTERNATE_PEAK, p.alternateAlpha(1000), 1e-4f);
+		assertEquals(Pulse.ALTERNATE_REST, p.alternateAlpha(3000), 1e-4f); // still lit between beats
+		assertEquals(true, p.alternating(3000));
+		p.tick(3400, true);
+		assertEquals(1 - first, p.phase());
+		assertEquals(false, p.alternating(3400 + Pulse.ALTERNATE_HOLD_MS)); // metronome stopped: goes dark
+	}
 }

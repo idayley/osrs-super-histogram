@@ -1,54 +1,88 @@
 package com.superhistogram.ui.modes;
 
 import com.superhistogram.model.BarState;
-import com.superhistogram.model.Span;
 import com.superhistogram.model.TickRecord;
 import com.superhistogram.model.combat.FlickClassifier;
 import com.superhistogram.model.combat.FlickClassifier.Kind;
 import com.superhistogram.ui.BarLayout;
+import com.superhistogram.ui.BaseTimeline;
 import com.superhistogram.ui.CombatPainter;
 import com.superhistogram.ui.Fonts;
 import com.superhistogram.ui.Icons;
-import com.superhistogram.ui.ModeView;
+import com.superhistogram.ui.Lane;
+import com.superhistogram.ui.Lens;
 import com.superhistogram.ui.Palette;
 import com.superhistogram.ui.ReadoutPainter;
 import com.superhistogram.ui.TimelinePainter;
 import java.awt.BasicStroke;
-import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Shape;
+import java.awt.geom.Ellipse2D;
 import java.awt.geom.RoundRectangle2D;
+import java.util.List;
 
 /**
- * 1-tick flick view (one-tick-flick.html): every tick is a beat, so no carets. Middle row = one
- * mark per tick (dot, hollow, x or a long drain pill); right = where in the tick your clicks land
- * over the last 40 ticks, then the clean-flick streak or the last verdict.
+ * 1-tick flick lens (one-tick-flick.html, one-timeline.html): every tick is a beat, so no carets. Dims the top,
+ * doing and inputs lanes (your clicks stay at full strength) and marks each flick on the prayer lane over the
+ * base's prayer pills: a mint dot = clean, an outline = split, a cross = skipped, an outlined run = draining.
+ * Right = where in the tick your clicks land over the last 40 ticks, then the clean-flick streak or the last
+ * verdict.
  */
-public final class OneTickView implements ModeView
+public final class OneTickView implements Lens
 {
 	private static final float HIST_W = 96f, GAP = 16f;
 
 	@Override
-	public void paintTimeline(Graphics2D g, BarLayout l, BarState s)
+	public float[] emphasis(BarState s)
 	{
-		if (s.timeline == null || s.nowTick < 0)
+		return Lens.full();
+	}
+
+	@Override
+	public void overlay(Graphics2D g, BarLayout l, BarState s)
+	{
+		if (s.timeline == null || s.nowTick < 0 || s.flicks == null)
 		{
 			return;
 		}
+		window(g, l, s);
+		// The inputs lane is dimmed, but the clicks are what you are flicking with.
+		BaseTimeline.clicks(g, l, s);
 		marks(g, l, s);
-		TimelinePainter.hits(g, l, s);
-		CombatPainter.xpLow(g, l, s);
-		TimelinePainter.clicks(g, l, s);
+	}
+
+	/** Faint mint bands either side of each tick line: where a flick click lands clean. */
+	private static void window(Graphics2D g, BarLayout l, BarState s)
+	{
+		float h = l.laneH(Lane.INPUTS);
+		if (s.clickWindowMs <= 0 || h <= 0f)
+		{
+			return;
+		}
+		float half = Math.min(0.5f, s.clickWindowMs / 600f) * l.tickWidth, y = l.laneY(Lane.INPUTS) - 0.5f * l.u;
+		g.setColor(Palette.withAlpha(Palette.mint(), 0.28f));
+		for (int t = TimelinePainter.oldestTick(l, s); t <= s.nowTick; t++)
+		{
+			float cx = TimelinePainter.x(l, s, t);
+			g.fill(new RoundRectangle2D.Float(cx - half, y, 2f * half, h + l.u, 2f * l.u, 2f * l.u));
+		}
 	}
 
 	private static void marks(Graphics2D g, BarLayout l, BarState s)
 	{
-		float ph = TimelinePainter.pillH(l) * 10f / 14f;
-		float q = ph / 10f, y = TimelinePainter.pillY(l), cy = y + ph / 2f;
+		float ph = l.laneH(Lane.PRAYER);
+		if (ph <= 0f)
+		{
+			return;
+		}
+		float u = l.u, q = ph / 10f, y = l.laneY(Lane.PRAYER), cy = y + ph / 2f;
+		float sw = Math.max(1f, Math.min(1.5f * q, 1f * u));
 		int from = TimelinePainter.oldestTick(l, s);
+		List<float[]> labels = BaseTimeline.prayerLabels(g, l, s);
 
-		// Drain pills first, one per run of consecutive DRAIN ticks.
+		// Drain outlines first, one per run of consecutive DRAIN ticks.
+		g.setStroke(new BasicStroke(sw));
 		for (int t = from; t <= s.nowTick; t++)
 		{
 			if (kind(s, t) != Kind.DRAIN)
@@ -60,9 +94,13 @@ public final class OneTickView implements ModeView
 			{
 				end++;
 			}
-			float x0 = TimelinePainter.x(l, s, t), x1 = TimelinePainter.x(l, s, end + 1);
-			g.setColor(colourAt(s, t));
-			g.fill(new RoundRectangle2D.Float(x0, y, x1 - x0, ph, ph, ph));
+			float x0 = TimelinePainter.x(l, s, t), x1 = Math.min(TimelinePainter.x(l, s, end + 1), TimelinePainter.liveX(l));
+			float ih = ph - 2f * sw;
+			if (x1 - x0 > 2f * sw && ih > 0)
+			{
+				g.setColor(Palette.WHITE);
+				g.draw(new RoundRectangle2D.Float(x0 + sw, y + sw, x1 - x0 - 2f * sw, ih, ih, ih));
+			}
 			t = end;
 		}
 		for (int t = from; t <= s.nowTick; t++)
@@ -76,13 +114,17 @@ public final class OneTickView implements ModeView
 			switch (r.flick)
 			{
 				case OK:
-					g.setColor(colourAt(s, t));
-					g.fill(new RoundRectangle2D.Float(cx - 5f * q, y, 10f * q, ph, ph, ph));
+					float d = Math.min(5f * u, ph - 2f), dx = cx + 4f * u;
+					if (clear(labels, dx - d / 2f - 1f * u, dx + d / 2f + 1f * u))
+					{
+						g.setColor(Palette.mint());
+						g.fill(new Ellipse2D.Float(dx - d / 2f, cy - d / 2f, d, d));
+					}
 					break;
 				case SPLIT:
 					g.setColor(Palette.WHITE);
-					g.setStroke(new BasicStroke(1.5f * q));
-					g.draw(new RoundRectangle2D.Float(cx - 5f * q, y + .75f * q, 14f * q, 8.5f * q, 8.5f * q, 8.5f * q));
+					float oh = ph - 2f * sw;
+					g.draw(new RoundRectangle2D.Float(cx - 5f * q, y + sw, 14f * q, oh, oh, oh));
 					break;
 				case SKIP:
 					float mx = x + l.tickWidth / 2f;
@@ -95,33 +137,37 @@ public final class OneTickView implements ModeView
 		}
 	}
 
+	/** Whether [x0, x1] touches none of the ranges (the prayer-points labels a dot would sit on). */
+	private static boolean clear(List<float[]> ranges, float x0, float x1)
+	{
+		for (float[] r : ranges)
+		{
+			if (x0 < r[1] && x1 > r[0])
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
 	private static Kind kind(BarState s, int tick)
 	{
 		TickRecord r = s.timeline.peek(tick);
 		return r == null ? null : r.flick;
 	}
 
-	/** Colour of the pray-* span covering the tick, PRAYER_OTHER when none. */
-	private static Color colourAt(BarState s, int tick)
-	{
-		Color c = null;
-		for (Span sp : s.timeline.spansBetween(tick, tick))
-		{
-			Color pc = CombatPainter.prayerColor(sp.kind);
-			if (pc != null)
-			{
-				c = pc;
-			}
-		}
-		return c == null ? Palette.PRAYER_OTHER : c;
-	}
-
 	@Override
 	public void paintRight(Graphics2D g, BarLayout l, BarState s)
 	{
 		FlickClassifier fc = s.flicks;
-		if (!l.showRight || fc == null || s.timeline == null || s.nowTick < 0)
+		if (!l.showRight || s.timeline == null || s.nowTick < 0)
 		{
+			return;
+		}
+		if (fc == null || fc.last() == null)
+		{
+			// No flick judged yet: never a blank side.
+			CombatPainter.hitsReadout(g, l, s);
 			return;
 		}
 		float u = l.u, f = l.height / 52f;
@@ -132,6 +178,12 @@ public final class OneTickView implements ModeView
 		boolean word = last == Kind.SPLIT || last == Kind.SKIP || last == Kind.DRAIN;
 		String main = word ? (last == Kind.SPLIT ? "Split" : last == Kind.SKIP ? "Skipped" : "Draining")
 			: Integer.toString(fc.streak());
+		if (l.compact)
+		{
+			// Chat width: the verdict or streak in the shared compact readout; the histogram is dropped.
+			ReadoutPainter.right(g, l, s, main, word ? Palette.WHITE : Palette.mint(), word ? "last tick" : "clean in a row");
+			return;
+		}
 		float size = 22f * u, avail = limit - hx;
 		float mw = width(g, main, Fonts.bold(size));
 		float gap = GAP * u;

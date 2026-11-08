@@ -7,7 +7,6 @@ import static org.junit.Assert.assertTrue;
 import com.superhistogram.model.BarState;
 import com.superhistogram.model.Timeline;
 import com.superhistogram.model.skill.AgilityCourse;
-import com.superhistogram.model.skill.LapCompare;
 import com.superhistogram.ui.BarLayout;
 import com.superhistogram.ui.Palette;
 import com.superhistogram.ui.SampleStates;
@@ -28,33 +27,28 @@ public class AgilityViewTest
 	@Test
 	public void rightLinesMidLap()
 	{
-		assertArrayEquals(new String[]{"0:20.4", "best 0:30.0 · \u22124t · slowest #4"},
+		assertArrayEquals(new String[]{"255 xp/hr", "2 laps \u00b7 \u22124t \u00b7 level 81 in 874 laps (753h 55m)"},
 			AgilityView.rightLines(SampleStates.agility(AgilityPhase.MID_LAP)));
-		assertArrayEquals(new String[]{"0:20.4", "last 0:31.8 · \u22124t · slowest #4"},
-			AgilityView.rightLines(SampleStates.agility(AgilityPhase.MID_LAP, LapCompare.LAST, true)));
-		assertArrayEquals(new String[]{"0:20.4", "best 0:30.0 · slowest #4"},
-			AgilityView.rightLines(SampleStates.agility(AgilityPhase.MID_LAP, LapCompare.BEST, false)));
 		assertEquals(Palette.WHITE, AgilityView.rightColor(SampleStates.agility(AgilityPhase.MID_LAP)));
 	}
 
 	@Test
-	public void rightLinesLapDone()
+	public void lapsCountFinishedLapsAndTicksLostCanBeOff()
 	{
-		BarState s = SampleStates.agility(AgilityPhase.LAP_DONE);
-		assertArrayEquals(new String[]{"0:31.2", "best 0:30.0 · \u22124t · slowest #4"},
-			AgilityView.rightLines(s));
-		assertEquals(Palette.WHITE, AgilityView.rightColor(s));
-		String[] last = AgilityView.rightLines(SampleStates.agility(AgilityPhase.LAP_DONE, LapCompare.LAST, true));
-		assertTrue(last[1], last[1].startsWith("last 0:31.8"));
+		assertArrayEquals(new String[]{"295 xp/hr", "3 laps \u00b7 \u22124t \u00b7 level 81 in 874 laps (651h 23m)"},
+			AgilityView.rightLines(SampleStates.agility(AgilityPhase.LAP_DONE)));
+		assertArrayEquals(new String[]{"255 xp/hr", "2 laps \u00b7 level 81 in 874 laps (753h 55m)"},
+			AgilityView.rightLines(SampleStates.agility(AgilityPhase.MID_LAP, false)));
 	}
 
 	@Test
-	public void rightLinesNewBest()
+	public void marksPickedUpJoinTheSmallLine()
 	{
-		BarState s = SampleStates.agility(AgilityPhase.NEW_BEST);
-		assertArrayEquals(new String[]{"0:31.2", "best 0:31.2 · \u22124t · slowest #4"},
-			AgilityView.rightLines(s));
-		assertEquals(Palette.MINT, AgilityView.rightColor(s));
+		BarState s = SampleStates.agility(AgilityPhase.MID_LAP);
+		s.agility.onMarksPickedUp(1);
+		assertArrayEquals(new String[]{"255 xp/hr", "2 laps \u00b7 1 mark \u00b7 \u22124t \u00b7 level 81 in 874 laps (753h 55m)"}, AgilityView.rightLines(s));
+		s.agility.onMarksPickedUp(2);
+		assertArrayEquals(new String[]{"255 xp/hr", "2 laps \u00b7 3 marks \u00b7 \u22124t \u00b7 level 81 in 874 laps (753h 55m)"}, AgilityView.rightLines(s));
 	}
 
 	@Test
@@ -66,37 +60,20 @@ public class AgilityViewTest
 	}
 
 	@Test
-	public void tickWidthWithoutLaps()
-	{
-		AgilityCourse fresh = new AgilityCourse(new Timeline(64));
-		fresh.onCourse("SEERS");
-		assertEquals(14f, AgilityView.tickWidth(BarLayout.of(1026, 62), fresh), 0.001f);
-		assertEquals(14f, AgilityView.tickWidth(BarLayout.of(1026, 62), null), 0.001f);
-		assertEquals(7f, AgilityView.tickWidth(BarLayout.of(1026, 31), fresh), 0.001f);
-	}
-
-	@Test
-	public void tickWidthFitsTheLap()
-	{
-		BarLayout l = BarLayout.of(1026, 62);
-		AgilityCourse ac = SampleStates.agility(AgilityPhase.MID_LAP).agility;
-		assertEquals(688f / 59f, AgilityView.tickWidth(l, ac), 0.01f);
-	}
-
-	@Test
-	public void tickWidthClamped()
-	{
-		AgilityCourse ac = new AgilityCourse(new Timeline(64));
-		ac.onCourse("SEERS");
-		ac.loadBest("SEERS", 200);
-		assertEquals(6f, AgilityView.tickWidth(BarLayout.of(1026, 62), ac), 0.001f);
-		assertTrue(AgilityView.tickWidth(BarLayout.of(1026, 22), ac) >= 4f);
-	}
-
-	@Test
-	public void smallLineFallbacksDropFacts()
+	public void smallLineFallbacksDropTheTimeThenTheLevelThenTheMarks()
 	{
 		BarState s = SampleStates.agility(AgilityPhase.MID_LAP);
-		assertArrayEquals(new String[]{"best 0:30.0 \u00b7 slowest #4", "best 0:30.0"}, AgilityView.smallFallbacks(s));
+		s.agility.onMarksPickedUp(3);
+		assertArrayEquals(new String[]{"2 laps \u00b7 3 marks \u00b7 \u22124t \u00b7 874 laps to 81", "2 laps \u00b7 3 marks \u00b7 874 laps to 81", "2 laps \u00b7 874 laps to 81", "874 laps to 81", "2 laps \u00b7 \u22124t"}, AgilityView.smallFallbacks(s));
+	}
+
+	@Test
+	public void levelInLapsUsesTheLastFullLapsXp()
+	{
+		BarState s = SampleStates.agility(AgilityPhase.MID_LAP);
+		assertEquals(220, s.agility.lapXp());
+		long left = com.superhistogram.model.Levels.xpForLevel(81) - s.xp.currentXp("Agility");
+		assertEquals("level 81 in " + (left + 219) / 220 + " laps", AgilityView.levelPart(s, false));
+		assertEquals((left + 219) / 220 + " laps to 81", AgilityView.shortLevel(s));
 	}
 }

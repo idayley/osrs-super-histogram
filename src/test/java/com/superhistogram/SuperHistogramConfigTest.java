@@ -7,7 +7,6 @@ import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 
 import com.superhistogram.model.BarPosition;
-import com.superhistogram.model.BarSize;
 import com.superhistogram.model.BaselineSetting;
 import com.superhistogram.model.ModeSetting;
 import com.superhistogram.model.RightSide;
@@ -15,7 +14,6 @@ import com.superhistogram.model.XpDrops;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.PrayerMode;
 import com.superhistogram.model.skill.AlchTopRow;
-import com.superhistogram.model.skill.LapCompare;
 import java.awt.Color;
 import java.awt.event.KeyEvent;
 import java.lang.reflect.Method;
@@ -36,12 +34,11 @@ public class SuperHistogramConfigTest
 	public void mockupDefaults()
 	{
 		assertEquals(BarPosition.REPLACE_CHAT, c.position());
-		assertEquals(BarSize.NORMAL, c.size());
+		assertEquals(62, c.barHeight());
 		assertEquals(ModeSetting.AUTO, c.mode());
 		assertEquals(BaselineSetting.GENERAL, c.baseline());
 		assertEquals(60, c.afkAfterSeconds());
 		assertTrue(c.afkWarning());
-		assertTrue(c.showRunEnergy());
 		assertTrue(c.showLoginTime());
 		assertEquals(SuperHistogramConfig.Metronome.OFF, c.metronome());
 		assertTrue(c.blinkWhenDone());
@@ -58,7 +55,6 @@ public class SuperHistogramConfigTest
 		assertEquals(RightSide.PER_HOUR, c.rightSide());
 		assertTrue(c.timeToFinish());
 		assertTrue(c.wastedTicks());
-		assertEquals(LapCompare.BEST, c.lapCompare());
 		assertEquals(new Color(0xffd23f), c.damageColour());
 		assertEquals(new Color(0x5ee0c8), c.mintColour());
 		assertEquals(new Color(0xe8c86a), c.runEnergyColour());
@@ -95,13 +91,13 @@ public class SuperHistogramConfigTest
 	@Test
 	public void itemsFollowTheMockupOrderPerSection()
 	{
-		assertEquals(Arrays.asList("position", "size", "mode", "baseline", "afkAfterSeconds", "afkWarning",
-			"showRunEnergy", "showLoginTime"), keysIn("bar"));
-		assertEquals(Arrays.asList("metronome", "blinkWhenDone"), keysIn("feedback"));
-		assertEquals(Arrays.asList("prayerMode", "beatKey", "actionsRow", "showEatCosts", "hullFlash",
-			"hullFlashAtBosses", "hullFlashMisses"), keysIn("combat"));
+		assertEquals(Arrays.asList("position", "barHeight", "mode", "baseline", "afkAfterSeconds", "afkWarning",
+			"nowLinePercent", "showLoginTime", "smoothScroll", "pingShift", "pingFixedMs"), keysIn("bar"));
+		assertEquals(Arrays.asList("metronome", "metronomeStyle", "blinkWhenDone"), keysIn("feedback"));
+		assertEquals(Arrays.asList("prayerMode", "clickWindowMs", "combatHoldSeconds", "beatKey", "beatTicks", "beatRuns", "actionsRow", "showEatCosts", "hullFlash",
+			"hullFlashAtBosses", "hullFlashMisses", "ignoreEnemies"), keysIn("combat"));
 		assertEquals(Arrays.asList("xpDrops", "xpDots", "alchTopRow", "rightSide"), keysIn("xpGold"));
-		assertEquals(Arrays.asList("timeToFinish", "wastedTicks", "lapCompare"), keysIn("skilling"));
+		assertEquals(Arrays.asList("timeToFinish", "wastedTicks"), keysIn("skilling"));
 		assertEquals(Arrays.asList("damageColour", "mintColour", "runEnergyColour", "backgroundColour"),
 			keysIn("colours"));
 	}
@@ -136,10 +132,10 @@ public class SuperHistogramConfigTest
 		{
 			keys.add(m.getAnnotation(ConfigItem.class).keyName());
 		}
-		for (String k : Arrays.asList("baseline", "afkAfterSeconds", "afkWarning", "showRunEnergy", "showLoginTime",
+		for (String k : Arrays.asList("baseline", "afkAfterSeconds", "afkWarning", "showLoginTime",
 			"metronome", "blinkWhenDone", "beatKey", "prayerMode", "actionsRow", "showEatCosts", "hullFlash",
 			"hullFlashAtBosses", "hullFlashMisses", "timeToFinish", "wastedTicks", "xpDrops", "xpDots",
-			"alchTopRow", "rightSide", "lapCompare"))
+			"alchTopRow", "rightSide"))
 		{
 			assertTrue(k, keys.contains(k));
 		}

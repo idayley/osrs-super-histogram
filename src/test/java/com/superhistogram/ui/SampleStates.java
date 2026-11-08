@@ -18,7 +18,6 @@ import com.superhistogram.model.skill.AlchTopRow;
 import com.superhistogram.model.skill.AlchTracker;
 import com.superhistogram.model.skill.GatherRun;
 import com.superhistogram.model.skill.InventoryRun;
-import com.superhistogram.model.skill.LapCompare;
 import com.superhistogram.model.RightSide;
 import java.util.HashMap;
 import java.util.Map;
@@ -71,7 +70,7 @@ public final class SampleStates
 		return BarState.builder()
 			.timeline(t).nowTick(NOW_TICK).xp(xp).idle(idle).clock(clock)
 			.runEnergyPct(64).modeName("General").modeSub("auto · questing")
-			.showRunEnergy(true).showLoginTime(true).mode(Mode.GENERAL).nowMs(NOW_MS)
+			.showLoginTime(true).mode(Mode.GENERAL).nowMs(NOW_MS)
 			.build();
 	}
 
@@ -101,7 +100,7 @@ public final class SampleStates
 		clock.onLoggedIn(NOW_MS - (2 * 3600 + 14 * 60 + 7) * 1000L);
 		return BarState.builder()
 			.timeline(t).nowTick(NOW_TICK).xp(xp).idle(new IdleTracker(60)).clock(clock)
-			.runEnergyPct(64).modeName("General").modeSub("auto").showRunEnergy(true).showLoginTime(true)
+			.runEnergyPct(64).modeName("General").modeSub("auto").showLoginTime(true)
 			.mode(Mode.GENERAL).nowMs(NOW_MS).xpDrops(d).xpDots(dots)
 			.build();
 	}
@@ -175,7 +174,7 @@ public final class SampleStates
 		clock.onLoggedIn(NOW_MS - (2 * 3600 + 14 * 60 + 7) * 1000L);
 		return BarState.builder()
 			.timeline(t).nowTick(NOW_TICK).xp(xp).idle(new IdleTracker(60)).clock(clock)
-			.runEnergyPct(64).modeName(name).modeSub("auto").showRunEnergy(true).showLoginTime(true)
+			.runEnergyPct(64).modeName(name).modeSub("auto").showLoginTime(true)
 			.mode(Mode.GENERAL).nowMs(NOW_MS)
 			.build();
 	}
@@ -189,7 +188,7 @@ public final class SampleStates
 		return BarState.builder()
 			.timeline(t).nowTick(NOW_TICK).xp(new XpTracker(t)).idle(new IdleTracker(60))
 			.clock(new SessionClock()).runEnergyPct(50).modeName("General").modeSub("auto")
-			.showRunEnergy(true).showLoginTime(true).mode(Mode.GENERAL).nowMs(NOW_MS)
+			.showLoginTime(true).mode(Mode.GENERAL).nowMs(NOW_MS)
 			.build();
 	}
 
@@ -199,7 +198,7 @@ public final class SampleStates
 		return BarState.builder()
 			.timeline(t).nowTick(-1).xp(new XpTracker(t)).idle(new IdleTracker(60))
 			.clock(new SessionClock()).runEnergyPct(0).modeName(null).modeSub(null)
-			.showRunEnergy(true).showLoginTime(true).mode(mode).nowMs(NOW_MS)
+			.showLoginTime(true).mode(mode).nowMs(NOW_MS)
 			.build();
 	}
 
@@ -211,7 +210,7 @@ public final class SampleStates
 		return BarState.builder()
 			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(idle).clock(s.clock)
 			.runEnergyPct(100).modeName("AFK").modeSub("auto · NMZ")
-			.showRunEnergy(true).showLoginTime(true).mode(Mode.AFK).nowMs(s.nowMs)
+			.showLoginTime(true).mode(Mode.AFK).nowMs(s.nowMs)
 			.build();
 	}
 
@@ -220,7 +219,9 @@ public final class SampleStates
 		return BarState.builder()
 			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
 			.runEnergyPct(s.runEnergyPct).modeName(name).modeSub(sub)
-			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(mode).nowMs(s.nowMs)
+			.showLoginTime(s.showLoginTime).mode(mode).nowMs(s.nowMs)
+			// Same facts in every lens: keep the combat settings and trackers.
+			.actionsRow(s.actionsRow).showEatCosts(s.showEatCosts).beat(s.beat).flicks(s.flicks)
 			.build();
 	}
 
@@ -313,7 +314,7 @@ public final class SampleStates
 		clock.onLoggedIn(NOW_MS - (2 * 3600 + 14 * 60 + 7) * 1000L);
 		return BarState.builder()
 			.timeline(t).nowTick(NOW_TICK).xp(xp).idle(new IdleTracker(60)).clock(clock)
-			.runEnergyPct(64).modeName("Lazy flick").modeSub("4t \u00b7 F").showRunEnergy(true)
+			.runEnergyPct(64).modeName("Lazy flick").modeSub("4t \u00b7 F")
 			.showLoginTime(true).mode(Mode.LAZY_FLICK).nowMs(NOW_MS)
 			.beat(beat).weaponSpeed(4).actionsRow(row).showEatCosts(showEatCosts)
 			.build();
@@ -377,7 +378,7 @@ public final class SampleStates
 		clock.onLoggedIn(NOW_MS - (2 * 3600 + 14 * 60 + 7) * 1000L);
 		return BarState.builder()
 			.timeline(t).nowTick(NOW_TICK).xp(new XpTracker(t)).idle(new IdleTracker(60)).clock(clock)
-			.runEnergyPct(64).modeName("1-tick flick").modeSub("every tick").showRunEnergy(true)
+			.runEnergyPct(64).modeName("1-tick flick").modeSub("every tick")
 			.showLoginTime(true).mode(Mode.ONE_TICK).nowMs(NOW_MS)
 			.flicks(fc).actionsRow(ActionsRow.ATTACKS)
 			.build();
@@ -385,7 +386,11 @@ public final class SampleStates
 
 	private static void pray(Timeline t, String kind, int from, int to)
 	{
-		t.openSpan(kind, from).endTick = to;
+		com.superhistogram.model.Span sp = t.openSpan(kind, from);
+		sp.endTick = to;
+		// Roughly one point every three ticks, as a protection prayer drains at low prayer bonus.
+		int used = (to - from + 1) / 3;
+		sp.label = used > 0 ? com.superhistogram.collect.PrayerCollector.label(used) : null;
 	}
 
 	// ---- production (cooking.html) ----
@@ -490,7 +495,7 @@ public final class SampleStates
 		clock.onLoggedIn(NOW_MS - (2 * 3600 + 14 * 60 + 7) * 1000L);
 		return BarState.builder()
 			.timeline(t).nowTick(NOW_TICK).xp(xp).idle(new IdleTracker(60)).clock(clock)
-			.runEnergyPct(64).modeName(skill).modeSub("auto").showRunEnergy(true)
+			.runEnergyPct(64).modeName(skill).modeSub("auto")
 			.showLoginTime(true).mode(Mode.PRODUCTION).nowMs(NOW_MS)
 			.run(run).timeToFinish(timeToFinish).wastedTicks(wastedTicks)
 			.build();
@@ -588,7 +593,7 @@ public final class SampleStates
 			clock.onLoggedIn(NOW_MS - (2 * 3600 + 14 * 60 + 7) * 1000L);
 			return BarState.builder()
 				.timeline(t).nowTick(NOW_TICK).xp(xp).idle(new IdleTracker(60)).clock(clock)
-				.runEnergyPct(64).modeName(name).modeSub(sub).showRunEnergy(true)
+				.runEnergyPct(64).modeName(name).modeSub(sub)
 				.showLoginTime(true).mode(Mode.GATHERING).nowMs(NOW_MS)
 				.gather(run).timeToFinish(timeToFinish).wastedTicks(wastedTicks)
 				.build();
@@ -695,7 +700,7 @@ public final class SampleStates
 		return BarState.builder()
 			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
 			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
-			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
 			.build();
 	}
 
@@ -705,7 +710,7 @@ public final class SampleStates
 		return BarState.builder()
 			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
 			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
-			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
 			.build();
 	}
 
@@ -715,7 +720,7 @@ public final class SampleStates
 		return BarState.builder()
 			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
 			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
-			.showRunEnergy(s.showRunEnergy).showLoginTime(false).mode(s.mode).nowMs(s.nowMs)
+			.showLoginTime(false).mode(s.mode).nowMs(s.nowMs)
 			.beat(s.beat).flicks(s.flicks).weaponSpeed(s.weaponSpeed).actionsRow(s.actionsRow)
 			.showEatCosts(s.showEatCosts)
 			.build();
@@ -727,7 +732,7 @@ public final class SampleStates
 		return BarState.builder()
 			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
 			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
-			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
 			.weaponSpeed(s.weaponSpeed).actionsRow(s.actionsRow).showEatCosts(s.showEatCosts)
 			.build();
 	}
@@ -738,7 +743,7 @@ public final class SampleStates
 		return BarState.builder()
 			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
 			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
-			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
 			.weaponSpeed(s.weaponSpeed).actionsRow(s.actionsRow).showEatCosts(s.showEatCosts)
 			.build();
 	}
@@ -825,9 +830,21 @@ public final class SampleStates
 		clock.onLoggedIn(NOW_MS - 3_600_000L);
 		return BarState.builder()
 			.timeline(t).nowTick(NOW_TICK).xp(xp).idle(new IdleTracker(60)).clock(clock)
-			.runEnergyPct(64).modeName("High alch").modeSub("auto \u00b7 5t").showRunEnergy(true)
+			.runEnergyPct(64).modeName("High alch").modeSub("auto \u00b7 5t")
 			.showLoginTime(true).mode(Mode.ALCH).nowMs(NOW_MS)
 			.alch(alch).alchTopRow(top).rightSide(side).wastedTicks(wastedTicks)
+			.build();
+	}
+
+	/** The same alch state with today's alch total set. */
+	public static BarState withAlchToday(BarState s, long today)
+	{
+		return BarState.builder()
+			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
+			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
+			.showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.alch(s.alch).alchTopRow(s.alchTopRow).rightSide(s.rightSide).wastedTicks(s.wastedTicks)
+			.alchToday(today)
 			.build();
 	}
 
@@ -837,7 +854,7 @@ public final class SampleStates
 		return BarState.builder()
 			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
 			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
-			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
 			.alchTopRow(s.alchTopRow)
 			.build();
 	}
@@ -867,11 +884,11 @@ public final class SampleStates
 
 	public static BarState agility(AgilityPhase p)
 	{
-		return agility(p, LapCompare.BEST, true);
+		return agility(p, true);
 	}
 
 	/** Real AgilityCourse and XpTracker driven the way the plugin does (onTick before that tick's click). */
-	public static BarState agility(AgilityPhase p, LapCompare compare, boolean wastedTicks)
+	public static BarState agility(AgilityPhase p, boolean wastedTicks)
 	{
 		Timeline t = new Timeline(512);
 		XpTracker xp = new XpTracker(t);
@@ -927,9 +944,9 @@ public final class SampleStates
 		clock.onLoggedIn(NOW_MS - (2 * 3600 + 14 * 60 + 7) * 1000L);
 		return BarState.builder()
 			.timeline(t).nowTick(NOW_TICK).xp(xp).idle(new IdleTracker(60)).clock(clock)
-			.runEnergyPct(64).modeName("Agility").modeSub("auto \u00b7 Seers'").showRunEnergy(true)
+			.runEnergyPct(64).modeName("Agility").modeSub("auto \u00b7 Seers'")
 			.showLoginTime(true).mode(Mode.AGILITY).nowMs(NOW_MS)
-			.agility(ac).lapCompare(compare).wastedTicks(wastedTicks)
+			.agility(ac).wastedTicks(wastedTicks)
 			.build();
 	}
 
@@ -939,7 +956,7 @@ public final class SampleStates
 		return BarState.builder()
 			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
 			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
-			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
 			.wastedTicks(s.wastedTicks).build();
 	}
 }

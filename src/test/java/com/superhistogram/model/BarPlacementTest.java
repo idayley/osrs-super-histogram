@@ -1,44 +1,59 @@
 package com.superhistogram.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import org.junit.Test;
 
 public class BarPlacementTest
 {
+	// Fixed-mode chat text area: 519 x 142 at (0, 338) on a 765 x 503 canvas.
+	private static final BarPlacement.Rect CHAT = new BarPlacement.Rect(0, 338, 519, 142);
+
 	@Test
-	public void replaceChatAndFloatingAreNotLifted()
+	public void replaceChatSitsAtTheBottomOfTheChatAreaAtItsWidth()
 	{
-		assertEquals(0, BarPlacement.lift(BarPosition.REPLACE_CHAT, 142));
-		assertEquals(0, BarPlacement.lift(BarPosition.FLOATING, 142));
+		BarPlacement.Rect r = BarPlacement.place(BarPosition.REPLACE_CHAT, CHAT, 62);
+		assertEquals(new BarPlacement.Rect(0, 338 + 142 - 62, 519, 62), r);
 	}
 
 	@Test
-	public void aboveChatLiftsByChatboxHeight()
+	public void aboveChatSitsJustAboveTheChatArea()
 	{
-		assertEquals(142, BarPlacement.lift(BarPosition.ABOVE_CHAT, 142));
-		assertEquals(142 + 62, BarPlacement.blockHeight(BarPosition.ABOVE_CHAT, 62, 142));
+		BarPlacement.Rect r = BarPlacement.place(BarPosition.ABOVE_CHAT, CHAT, 62);
+		assertEquals(new BarPlacement.Rect(0, 338 - 62, 519, 62), r);
 	}
 
 	@Test
-	public void unknownChatboxHeightFallsBackTo165()
+	public void floatingIsLeftToRuneLite()
 	{
-		assertEquals(165, BarPlacement.lift(BarPosition.ABOVE_CHAT, 0));
-		assertEquals(165, BarPlacement.lift(BarPosition.ABOVE_CHAT, -3));
+		assertNull(BarPlacement.place(BarPosition.FLOATING, CHAT, 62));
 	}
 
 	@Test
-	public void nullPositionIsReplaceChat()
+	public void heightFollowsTheSizePreset()
 	{
-		assertEquals(62, BarPlacement.blockHeight(null, 62, 142));
+		assertEquals(40, BarPlacement.place(BarPosition.REPLACE_CHAT, CHAT, BarSize.SMALL.height()).h);
+		assertEquals(338 + 142 - 80, BarPlacement.place(BarPosition.REPLACE_CHAT, CHAT, BarSize.LARGE.height()).y);
 	}
 
 	@Test
-	public void sizeHeights()
+	public void wideResizableChatIsMatched()
 	{
-		assertEquals(40, BarSize.SMALL.height());
-		assertEquals(62, BarSize.NORMAL.height());
-		assertEquals(80, BarSize.LARGE.height());
-		assertEquals(1026, BarSize.WIDTH);
+		BarPlacement.Rect wide = new BarPlacement.Rect(0, 600, 640, 120);
+		assertEquals(640, BarPlacement.place(BarPosition.REPLACE_CHAT, wide, 62).w);
+	}
+
+	@Test
+	public void unknownChatFallsBackToTheClassicChatSpotOnTheCanvas()
+	{
+		BarPlacement.Rect f = BarPlacement.fallbackChat(503);
+		assertEquals(new BarPlacement.Rect(0, 503 - 165, 519, 142), f);
+	}
+
+	@Test
+	public void defaultWidthIsTheChatWidth()
+	{
+		assertEquals(519, BarSize.WIDTH);
 	}
 }

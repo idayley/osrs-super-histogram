@@ -2,6 +2,7 @@ package com.superhistogram;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -51,10 +52,11 @@ public class SuperHistogramPluginHandlersTest
 		client = mock(Client.class);
 		me = mock(Player.class);
 		config = mock(SuperHistogramConfig.class);
+		when(config.combatHoldSeconds()).thenReturn(10);
 		when(config.afkAfterSeconds()).thenReturn(60);
 		when(config.baseline()).thenReturn(com.superhistogram.model.BaselineSetting.GENERAL);
 		when(config.metronome()).thenReturn(SuperHistogramConfig.Metronome.OFF);
-		when(config.showRunEnergy()).thenReturn(true);
+		when(config.beatTicks()).thenReturn(4);
 		when(config.showLoginTime()).thenReturn(true);
 		when(config.afkWarning()).thenReturn(true);
 		when(config.blinkWhenDone()).thenReturn(true);
@@ -81,11 +83,75 @@ public class SuperHistogramPluginHandlersTest
 	}
 
 	@Test
+	public void gearSpecWalkAndDrinkClicksBecomeInputMarks()
+	{
+		assertEquals(com.superhistogram.model.InputMark.Kind.GEAR,
+			SuperHistogramPlugin.inputKind(MenuAction.CC_OP, "Wield"));
+		assertEquals(com.superhistogram.model.InputMark.Kind.SPEC,
+			SuperHistogramPlugin.inputKind(MenuAction.CC_OP, "Use <col=ff9040>Special Attack"));
+		assertEquals(com.superhistogram.model.InputMark.Kind.WALK,
+			SuperHistogramPlugin.inputKind(MenuAction.WALK, "Walk here"));
+		assertEquals(com.superhistogram.model.InputMark.Kind.DRINK,
+			SuperHistogramPlugin.inputKind(MenuAction.CC_OP, "Drink"));
+		assertNull(SuperHistogramPlugin.inputKind(MenuAction.CC_OP, "Eat"));
+		plugin.handleTick(1000);
+		plugin.handleInput(1300, com.superhistogram.model.InputMark.Kind.GEAR);
+		assertEquals(com.superhistogram.model.InputMark.Kind.GEAR, plugin.timeline.peek(0).inputs.get(0).kind);
+	}
+
+	@Test
+	public void unknownWeaponLearnsItsSpeedFromYourSwings()
+	{
+		when(me.getInteracting()).thenReturn(npc);
+		when(npc.getCombatLevel()).thenReturn(2);
+		when(me.getAnimation()).thenReturn(390);
+		plugin.weaponSpeedKnown = false;
+		long ms = 1000;
+		for (int swing = 0; swing < 3; swing++)
+		{
+			plugin.handleHit(npc, HitsplatID.DAMAGE_ME, 2);
+			plugin.handleAnimation(me);
+			for (int i = 0; i < 3; i++)
+			{
+				plugin.handleTick(ms);
+				ms += 600;
+			}
+		}
+		assertEquals(3, plugin.learnedSpeed);
+		assertTrue(plugin.buildState().nextAttackLearned);
+	}
+
+	@Test
+	public void eachTickRemembersHowLongItRan()
+	{
+		plugin.handleTick(1000);
+		plugin.handleTick(1600);
+		plugin.handleTick(2530);
+		assertEquals(600, plugin.timeline.peek(0).lengthMs);
+		assertEquals(930, plugin.timeline.peek(1).lengthMs);
+	}
+
+	@Test
+	public void clickTooLateForThePingMovesToTheNextTick()
+	{
+		when(config.pingShift()).thenReturn(SuperHistogramConfig.PingShift.FIXED);
+		when(config.pingFixedMs()).thenReturn(100);
+		plugin.handleTick(1000);
+		// 550 ms into the tick + 100 ms ping: the server gets it after the next tick.
+		plugin.handleClick(1550);
+		plugin.handleClick(1200);
+		plugin.handleTick(1600);
+		assertEquals(1, plugin.timeline.peek(0).clicks.size());
+		assertEquals(1, plugin.timeline.peek(0).clickGhosts.size());
+		assertEquals(1, plugin.timeline.peek(1).clicks.size());
+	}
+
+	@Test
 	public void hitsplatOnLocalPlayerBecomesHit()
 	{
 		plugin.handleTick(1000);
 		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 4);
-		TickRecord r = plugin.buildState().timeline.peek(0);
+		TickRecord r = plugin.buildState().timeline.peek(1);
 		assertEquals(1, r.hits.size());
 		assertEquals(4, r.hits.get(0).amount);
 		assertEquals(false, r.hits.get(0).blocked);
@@ -96,7 +162,7 @@ public class SuperHistogramPluginHandlersTest
 	{
 		plugin.handleTick(1000);
 		plugin.handleHit(me, HitsplatID.BLOCK_ME, 0);
-		assertTrue(plugin.buildState().timeline.peek(0).hits.get(0).blocked);
+		assertTrue(plugin.buildState().timeline.peek(1).hits.get(0).blocked);
 	}
 
 	@Test
@@ -236,9 +302,9 @@ public class SuperHistogramPluginHandlersTest
 		plugin.handleHit(me, HitsplatID.POISON, 2);
 		plugin.handleHit(me, HitsplatID.VENOM, 6);
 		plugin.handleHit(me, HitsplatID.DISEASE, 1);
-		assertTrue(plugin.buildState().timeline.peek(0).hits.isEmpty());
+		assertTrue(plugin.buildState().timeline.peek(1).hits.isEmpty());
 		plugin.handleHit(me, HitsplatID.DAMAGE_MAX_ME, 11);
-		assertEquals(1, plugin.buildState().timeline.peek(0).hits.size());
+		assertEquals(1, plugin.buildState().timeline.peek(1).hits.size());
 	}
 
 	@Test
@@ -285,7 +351,7 @@ public class SuperHistogramPluginHandlersTest
 		plugin.handleStat("Attack", 5000);
 		plugin.handleStat("Attack", 5050);
 		assertEquals(150, plugin.buildState().xp.sessionXp());
-		assertEquals(1, plugin.buildState().timeline.peek(0).xp.size());
+		assertEquals(1, plugin.buildState().timeline.peek(1).xp.size());
 	}
 
 	@Test
@@ -296,7 +362,7 @@ public class SuperHistogramPluginHandlersTest
 		plugin.handleStat("Attack", 1100);
 		plugin.handleGameState(GameState.HOPPING, 2000);
 		plugin.handleGameState(GameState.LOGGED_IN, 2500);
-		assertEquals(1, plugin.buildState().timeline.peek(0).xp.size());
+		assertEquals(1, plugin.buildState().timeline.peek(1).xp.size());
 		assertEquals(100, plugin.buildState().xp.sessionXp());
 	}
 
@@ -309,7 +375,33 @@ public class SuperHistogramPluginHandlersTest
 		plugin.handleTick(1000);
 		plugin.handleHit(npc, HitsplatID.DAMAGE_ME, 2);
 		plugin.handleAnimation(me);
-		assertEquals(0, plugin.timeline.peek(0).attackLate);
+		assertEquals(0, plugin.timeline.peek(1).attackLate);
+	}
+
+	@Test
+	public void firstSwingAfterAttackClickCounts()
+	{
+		when(me.getInteracting()).thenReturn(npc);
+		when(npc.getIndex()).thenReturn(7);
+		when(npc.getCombatLevel()).thenReturn(2);
+		when(me.getAnimation()).thenReturn(390);
+		plugin.handleTick(1000);
+		plugin.handleAttackClick(7);
+		plugin.handleAnimation(me);
+		assertTrue(plugin.timeline.peek(1).attackLate >= 0);
+	}
+
+	@Test
+	public void swingWithNoClickNoHitNoAggroIgnored()
+	{
+		when(me.getInteracting()).thenReturn(npc);
+		when(npc.getIndex()).thenReturn(7);
+		when(npc.getCombatLevel()).thenReturn(2);
+		when(npc.getInteracting()).thenReturn(null);
+		when(me.getAnimation()).thenReturn(390);
+		plugin.handleTick(1000);
+		plugin.handleAnimation(me);
+		assertEquals(-1, plugin.timeline.peek(0).attackLate);
 	}
 
 	@Test
@@ -387,6 +479,84 @@ public class SuperHistogramPluginHandlersTest
 	}
 
 	@Test
+	public void eventsBeforeTheirGameTickLandOnThatTick()
+	{
+		// RuneLite posts a tick's hitsplats and animations before its GameTick: they belong to that tick, not the last.
+		plugin.handleTick(0);
+		plugin.handleTick(600);
+		int before = plugin.buildState().nowTick;
+		plugin.openServerTick();
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 5, 1150);
+		plugin.openServerTick(); // a second event in the same batch doesn't open another tick
+		plugin.handleTick(1200);
+		BarState st = plugin.buildState();
+		assertEquals(before + 1, st.nowTick);
+		assertEquals(1, st.timeline.peek(st.nowTick).hits.size());
+		assertTrue(st.timeline.peek(before).hits.isEmpty());
+		// A tick with no events still moves on by one.
+		plugin.handleTick(1800);
+		assertEquals(before + 2, plugin.buildState().nowTick);
+	}
+
+	@Test
+	public void beatFollowsYourBeatEverySettingNotYourWeapon()
+	{
+		// The triangles track the enemy: 6 ticks apart because you set 6, whatever you wield.
+		when(config.beatTicks()).thenReturn(6);
+		fight();
+		plugin.handleTick(0);
+		plugin.handleBeatKey();
+		assertEquals(plugin.buildState().nowTick + 6, plugin.buildState().beat.nextBeat());
+	}
+
+	@Test
+	public void beatSetToAlwaysWorksOutOfCombatAndKeepsGoing()
+	{
+		when(config.beatRuns()).thenReturn(SuperHistogramConfig.BeatRuns.ALWAYS);
+		when(client.getVarcStrValue(net.runelite.api.VarClientStr.CHATBOX_TYPED_TEXT)).thenReturn("");
+		plugin.handleTick(0);
+		plugin.handleBeatKey();
+		for (int i = 1; i <= 40; i++)
+		{
+			plugin.handleTick(i * 600L);
+		}
+		assertTrue(plugin.buildState().beat.active());
+	}
+
+	@Test
+	public void beatOnlyInCombatIgnoresTheHotkeyOutOfCombat()
+	{
+		when(config.beatRuns()).thenReturn(SuperHistogramConfig.BeatRuns.IN_COMBAT);
+		when(client.getVarcStrValue(net.runelite.api.VarClientStr.CHATBOX_TYPED_TEXT)).thenReturn("");
+		plugin.handleTick(0);
+		plugin.handleBeatKey();
+		assertFalse(plugin.buildState().beat.active());
+	}
+
+	@Test
+	public void beatKeepsGoingWhileYouAreOnlyBeingAttacked()
+	{
+		when(config.combatHoldSeconds()).thenReturn(10);
+		fight();
+		when(npc.getIndex()).thenReturn(7);
+		when(npc.getInteracting()).thenReturn(me);
+		when(npc.getAnimation()).thenReturn(422);
+		plugin.handleTick(0);
+		plugin.handleBeatKey();
+		for (int i = 1; i <= 30; i++)
+		{
+			plugin.handleTick(i * 600L);
+			if (i % 4 == 0)
+			{
+				// The monster swings and misses; you never attack.
+				plugin.handleAnimation(npc);
+				plugin.handleHit(me, HitsplatID.BLOCK_ME, 0, i * 600L + 100);
+			}
+		}
+		assertTrue(plugin.buildState().beat.active());
+	}
+
+	@Test
 	public void cueTickPulsesOnlyOnBeat()
 	{
 		when(config.metronome()).thenReturn(SuperHistogramConfig.Metronome.CUE_TICK);
@@ -452,7 +622,8 @@ public class SuperHistogramPluginHandlersTest
 		List<Span> spans = plugin.buildState().timeline.spansBetween(0, 10);
 		assertEquals(1, spans.size());
 		assertEquals("pray-magic", spans.get(0).kind);
-		assertEquals(0, spans.get(0).startTick);
+		// On from the tick the game reports it on.
+		assertEquals(1, spans.get(0).startTick);
 	}
 
 	@Test
@@ -479,6 +650,139 @@ public class SuperHistogramPluginHandlersTest
 		when(npc.getInteracting()).thenReturn(me);
 		when(npc.getAnimation()).thenReturn(422);
 		when(npc.getName()).thenReturn(name);
+	}
+
+	@Test
+	public void ignoredMonsterHittingYouLeavesNoHitNoFlashAndNoFight()
+	{
+		// Scurrius's rats: on the ignore list, their hits on you vanish from the bar.
+		hullSetup("<col=ffff00>Giant rat</col>");
+		when(config.ignoreEnemies()).thenReturn("giant rat");
+		when(npc.getCombatLevel()).thenReturn(3);
+		plugin.handleTick(900);
+		plugin.handleAnimation(npc);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 2, 1000);
+		assertNull(plugin.flashTarget());
+		assertTrue(plugin.timeline.peek(1).hits.isEmpty());
+		assertEquals(Mode.GENERAL, plugin.buildState(1100).mode);
+	}
+
+	@Test
+	public void ratHitsVanishWhileTheBossHitsStillShow()
+	{
+		// Scurrius and a rat both attacking: each hit belongs to whoever swung last.
+		hullSetup("Scurrius");
+		when(config.ignoreEnemies()).thenReturn("Giant rat");
+		NPC rat = mock(NPC.class);
+		when(rat.getIndex()).thenReturn(9);
+		when(rat.getName()).thenReturn("Giant rat");
+		when(rat.getInteracting()).thenReturn(me);
+		when(rat.getAnimation()).thenReturn(4933);
+		plugin.handleTick(900);
+		plugin.handleAnimation(npc);
+		plugin.handleTick(1500);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 7, 1600);
+		plugin.handleAnimation(rat);
+		plugin.handleTick(2100);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 2, 2200);
+		assertEquals(1, plugin.timeline.peek(2).hits.size());
+		assertTrue(plugin.timeline.peek(3).hits.isEmpty());
+	}
+
+	@Test
+	public void hitFromAMonsterNotOnTheListStillShows()
+	{
+		hullSetup("Hill Giant");
+		when(config.ignoreEnemies()).thenReturn("Giant rat, *imp*");
+		plugin.handleTick(900);
+		plugin.handleAnimation(npc);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 2, 1000);
+		assertTrue(plugin.flashTarget().npc == npc);
+		assertEquals(1, plugin.timeline.peek(1).hits.size());
+	}
+
+	@Test
+	public void yourSwingsAtAnIgnoredMonsterDontCount()
+	{
+		when(config.ignoreEnemies()).thenReturn("Giant*");
+		when(me.getInteracting()).thenReturn(npc);
+		when(npc.getName()).thenReturn("Giant rat");
+		when(npc.getCombatLevel()).thenReturn(3);
+		when(me.getAnimation()).thenReturn(390);
+		plugin.handleTick(1000);
+		plugin.handleHit(npc, HitsplatID.DAMAGE_ME, 2);
+		plugin.handleAnimation(me);
+		assertEquals(-1, plugin.timeline.peek(1).attackLate);
+		assertEquals(Mode.GENERAL, plugin.buildState(1100).mode);
+	}
+
+	@Test
+	public void shiftMenuOffersIgnoreThenUnignore()
+	{
+		when(npc.getName()).thenReturn("<col=ffff00>Giant rat</col>");
+		when(npc.getCombatLevel()).thenReturn(3);
+		when(config.ignoreEnemies()).thenReturn("Imp");
+		assertEquals("Ignore", plugin.ignoreMenuOption(npc));
+		plugin.toggleIgnore("Giant rat");
+		verify(configManager).setConfiguration(SuperHistogramPlugin.CONFIG_GROUP, "ignoreEnemies", "Imp, Giant rat");
+		when(config.ignoreEnemies()).thenReturn("Imp, Giant rat");
+		assertEquals("Un-ignore", plugin.ignoreMenuOption(npc));
+		// Covered only by a wildcard: nothing to offer; and no menu line for non-combat NPCs.
+		when(config.ignoreEnemies()).thenReturn("*rat");
+		assertNull(plugin.ignoreMenuOption(npc));
+		when(npc.getCombatLevel()).thenReturn(0);
+		when(config.ignoreEnemies()).thenReturn("");
+		assertNull(plugin.ignoreMenuOption(npc));
+	}
+
+	@Test
+	public void pickpocketStunDoesNotFlashOrStartAFight()
+	{
+		hullSetup("Man");
+		plugin.handleTick(900);
+		plugin.handlePickpocketClick(7);
+		plugin.handleAnimation(npc);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 1, 1000);
+		assertNull(plugin.flashTarget());
+		assertEquals(Mode.GENERAL, plugin.buildState(1100).mode);
+	}
+
+	@Test
+	public void missFromAMonsterYouNeverAttackedFlashes()
+	{
+		// In-game: an aggressive monster's misses didn't flash it because you hadn't swung at it.
+		hullSetup("Hill Giant");
+		plugin.handleTick(900);
+		plugin.handleAnimation(npc);
+		plugin.handleHit(me, HitsplatID.BLOCK_ME, 0, 1000);
+		assertTrue(plugin.flashTarget().npc == npc);
+		assertTrue(plugin.flashTarget().miss);
+	}
+
+	@Test
+	public void beingAttackedWithoutSwingingBackStaysAFight()
+	{
+		// In-game: being attacked (mostly misses) while not attacking went back to General.
+		hullSetup("Hill Giant");
+		when(config.combatHoldSeconds()).thenReturn(10);
+		when(npc.getCombatLevel()).thenReturn(28);
+		long ms = 900;
+		for (int i = 0; i < 6; i++)
+		{
+			plugin.handleTick(ms);
+			plugin.handleAnimation(npc);
+			plugin.handleHit(me, HitsplatID.BLOCK_ME, 0, ms + 100);
+			for (int k = 0; k < 4; k++)
+			{
+				ms += 600;
+				plugin.handleTick(ms);
+			}
+		}
+		BarState st = plugin.buildState(ms + 100);
+		assertNotEquals(Mode.GENERAL, st.mode);
+		assertEquals("Hill Giant", st.modeName);
+		// The taken miss is on the timeline.
+		assertTrue(st.timeline.peek(st.nowTick - 3).hits.get(0).blocked);
 	}
 
 	@Test
@@ -680,12 +984,14 @@ public class SuperHistogramPluginHandlersTest
 	public void bankClickRecordsWasted()
 	{
 		cookRun(28);
-		assertEquals(28, plugin.run.finishTick());
+		assertEquals(29, plugin.run.finishTick());
 		tickOnly();
+		tickOnly();
+		// The game banks on the tick after the click.
+		plugin.handleBankClick();
 		tickOnly();
 		int now = ticks - 1;
-		assertEquals(31, now);
-		plugin.handleBankClick();
+		assertEquals(32, now);
 		assertEquals(3, plugin.timeline.peek(now).wasted);
 	}
 
@@ -934,6 +1240,7 @@ public class SuperHistogramPluginHandlersTest
 		when(config.metronome()).thenReturn(SuperHistogramConfig.Metronome.CUE_TICK);
 		detectChopping(3);
 		plugin.handleObjectDespawned(50, 50);
+		tickOnly();
 		long now = ticks * 600L;
 		tickOnly();
 		assertTrue(plugin.pulse.outlineAlpha(now) > 0.9f);
@@ -1021,6 +1328,7 @@ public class SuperHistogramPluginHandlersTest
 		detectChopping(3);
 		assertTrue(plugin.gather.active());
 		plugin.handleBankClick();
+		tickOnly();
 		assertFalse(plugin.gather.active());
 	}
 
@@ -1125,6 +1433,39 @@ public class SuperHistogramPluginHandlersTest
 	}
 
 	@Test
+	public void marksOfGracePickedUpOnACourseAreCounted()
+	{
+		int grace = net.runelite.api.gameval.ItemID.GRACE;
+		onCourse();
+		// The first inventory after login is the baseline: the 5 marks you already carry don't count.
+		plugin.handleInventory(java.util.Collections.singletonMap(grace, 5), 20);
+		assertEquals(0, plugin.agility.marks());
+		plugin.handleInventory(java.util.Collections.singletonMap(grace, 6), 20);
+		plugin.handleInventory(java.util.Collections.singletonMap(grace, 7), 20);
+		assertEquals(2, plugin.agility.marks());
+		// Off the course (at the bank, say) marks moving in or out don't count.
+		at(3200, 3200);
+		tickOnly();
+		plugin.handleInventory(java.util.Collections.singletonMap(grace, 30), 20);
+		assertEquals(2, plugin.agility.marks());
+	}
+
+	@Test
+	public void lapsFinishedAreCountedForTheSession()
+	{
+		onCourse();
+		for (int k = 0; k < 6; k++)
+		{
+			if (k == 5)
+			{
+				at(2704, 3464);
+			}
+			obstacle(k);
+		}
+		assertEquals(1, plugin.agility.laps());
+	}
+
+	@Test
 	public void obstacleClickIgnoredOffCourse()
 	{
 		at(3200, 3200);
@@ -1191,9 +1532,10 @@ public class SuperHistogramPluginHandlersTest
 		}
 		agTotal += SEERS_XP[1];
 		plugin.handleStat("Agility", agTotal);
-		lastLanding = ticks - 1;
+		lastLanding = ticks;
 		tickOnly();
 		assertEquals(lastLanding + 1, plugin.agility.readyTick());
+		tickOnly();
 		assertTrue(plugin.pulse.outlineAlpha((ticks - 1) * 600L) > 0.9f);
 	}
 
@@ -1278,7 +1620,7 @@ public class SuperHistogramPluginHandlersTest
 			tickOnly();
 		}
 		plugin.handleStat("Agility", agTotal + 40);
-		int landing = ticks - 1;
+		int landing = ticks;
 		plugin.handleItemSpawned(net.runelite.api.gameval.ItemID.GRACE, new WorldPoint(2706, 3466, 2));
 		tickOnly();
 		assertTrue(plugin.timeline.peek(landing).mark);
@@ -1484,19 +1826,121 @@ public class SuperHistogramPluginHandlersTest
 		com.superhistogram.ui.BarOverlay o = new com.superhistogram.ui.BarOverlay(plugin::buildState, null);
 		plugin.overlay = o;
 		plugin.overlayManager = mock(net.runelite.client.ui.overlay.OverlayManager.class);
-		when(config.size()).thenReturn(com.superhistogram.model.BarSize.LARGE);
+		when(config.barHeight()).thenReturn(80);
 		when(config.position()).thenReturn(com.superhistogram.model.BarPosition.FLOATING);
 		when(config.damageColour()).thenReturn(java.awt.Color.RED);
-		plugin.handleConfigChanged(SuperHistogramPlugin.CONFIG_GROUP, "size");
-		assertEquals(new java.awt.Dimension(1026, 80), o.getPreferredSize());
+		plugin.handleConfigChanged(SuperHistogramPlugin.CONFIG_GROUP, "barHeight");
+		assertEquals(new java.awt.Dimension(519, 80), o.getPreferredSize());
 		plugin.handleConfigChanged(SuperHistogramPlugin.CONFIG_GROUP, "position");
 		assertTrue(o.isMovable());
 		plugin.handleConfigChanged(SuperHistogramPlugin.CONFIG_GROUP, "damageColour");
 		assertEquals(java.awt.Color.RED, o.colours().damage);
 		// Other groups are ignored.
-		when(config.size()).thenReturn(com.superhistogram.model.BarSize.SMALL);
-		plugin.handleConfigChanged("other", "size");
-		assertEquals(new java.awt.Dimension(1026, 80), o.getPreferredSize());
+		when(config.barHeight()).thenReturn(40);
+		plugin.handleConfigChanged("other", "barHeight");
+		assertEquals(new java.awt.Dimension(519, 80), o.getPreferredSize());
+	}
+
+	@Test
+	public void autoRetaliateFirstSwingCountsOnceItsHitsplatLands()
+	{
+		// Replay finding 8: no Attack click; the NPC swings first and you hit back automatically.
+		when(npc.getIndex()).thenReturn(7);
+		when(npc.getCombatLevel()).thenReturn(28);
+		when(me.getInteracting()).thenReturn(npc);
+		for (int i = 0; i < 3; i++)
+		{
+			plugin.handleTick(1000 + 600 * i);
+		}
+		when(me.getAnimation()).thenReturn(422);
+		plugin.handleAnimation(me);
+		int swing = plugin.buildState().nowTick;
+		assertTrue(plugin.buildState().timeline.peek(swing).attackLate < 0);
+		plugin.handleTick(3000);
+		plugin.handleTick(3600);
+		plugin.handleHit(npc, HitsplatID.BLOCK_ME, 0, 3600, true);
+		assertTrue(plugin.buildState().timeline.peek(swing).attackLate >= 0);
+		assertTrue(plugin.buildState(3700).mode == Mode.LAZY_FLICK || plugin.buildState(3700).mode == Mode.ONE_TICK);
+	}
+
+	@Test
+	public void yourHitsAndMissesLandOnTheSwingThatCausedThem()
+	{
+		// Replay finding 4: a miss streak must be visible, so each swing carries its splat.
+		when(npc.getIndex()).thenReturn(7);
+		when(npc.getCombatLevel()).thenReturn(28);
+		when(me.getInteracting()).thenReturn(npc);
+		plugin.handleTick(1000);
+		plugin.handleAttackClick(7);
+		when(me.getAnimation()).thenReturn(422);
+		plugin.handleAnimation(me);
+		int first = plugin.buildState().nowTick;
+		plugin.handleTick(1600);
+		plugin.handleHit(npc, HitsplatID.DAMAGE_ME, 12, 1600, true);
+		for (int i = 0; i < 4; i++)
+		{
+			plugin.handleTick(2200 + 600 * i);
+		}
+		plugin.handleAnimation(me);
+		int second = plugin.buildState().nowTick;
+		plugin.handleTick(5000);
+		plugin.handleHit(npc, HitsplatID.BLOCK_ME, 0, 5000, true);
+		assertEquals(12, plugin.buildState().timeline.peek(first).swingHit);
+		assertEquals(0, plugin.buildState().timeline.peek(second).swingHit);
+		assertEquals(1, com.superhistogram.ui.CombatPainter.swingCounts(plugin.buildState())[0]);
+		assertEquals(2, com.superhistogram.ui.CombatPainter.swingCounts(plugin.buildState())[1]);
+	}
+
+	@Test
+	public void combatEndsWhenTheMonsterYouFoughtDies()
+	{
+		// Replay finding: after a kill you went back to chopping but the bar said "Hill Giant" for 10 s more.
+		when(config.combatHoldSeconds()).thenReturn(10);
+		when(npc.getIndex()).thenReturn(7);
+		when(npc.getCombatLevel()).thenReturn(28);
+		when(me.getInteracting()).thenReturn(npc);
+		plugin.handleTick(1000);
+		plugin.handleAttackClick(7);
+		when(me.getAnimation()).thenReturn(422);
+		plugin.handleAnimation(me);
+		plugin.handleTick(1600);
+		plugin.handleHit(npc, HitsplatID.DAMAGE_ME, 12, 1600, true);
+		plugin.handleTick(2200);
+		when(me.getInteracting()).thenReturn(null);
+		plugin.handleNpcDespawned(npc);
+		plugin.handleTick(2800);
+		assertEquals(Mode.GENERAL, plugin.buildState(2900).mode);
+	}
+
+	@Test
+	public void pickpocketAnimationNeverBecomesAnAttack()
+	{
+		when(npc.getIndex()).thenReturn(7);
+		when(npc.getCombatLevel()).thenReturn(2);
+		when(me.getInteracting()).thenReturn(npc);
+		plugin.handleTick(1000);
+		when(me.getAnimation()).thenReturn(881);
+		plugin.handleAnimation(me);
+		int t = plugin.buildState().nowTick;
+		plugin.handleTick(1600);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 1, 1600, true);
+		assertTrue(plugin.buildState().timeline.peek(t).attackLate < 0);
+	}
+
+	@Test
+	public void heightSettingFollowsARestoredBarSize()
+	{
+		com.superhistogram.ui.BarOverlay o = new com.superhistogram.ui.BarOverlay(plugin::buildState, null);
+		plugin.overlay = o;
+		plugin.configManager = mock(net.runelite.client.config.ConfigManager.class);
+		when(config.barHeight()).thenReturn(62);
+		// RuneLite restored a 583x40 bar (the old Small preset): the setting is updated to say 40.
+		o.setPreferredSize(new java.awt.Dimension(583, 40));
+		plugin.syncHeightSetting();
+		verify(plugin.configManager).setConfiguration(SuperHistogramPlugin.CONFIG_GROUP, "barHeight", 40);
+		// Changing the height keeps the dragged width.
+		o.applySize(62);
+		assertEquals(new java.awt.Dimension(583, 62), o.getPreferredSize());
 	}
 
 	// ---- real combat: an NPC target with a combat level that took a hitsplat (final review C1, I3) ----
@@ -1580,7 +2024,7 @@ public class SuperHistogramPluginHandlersTest
 		tickOnly();
 		assertEquals(Mode.GENERAL, plugin.buildState().mode);
 		assertFalse(anyAttackRecorded());
-		assertEquals(1, plugin.timeline.peek(1).hits.size());
+		assertEquals(1, plugin.timeline.peek(2).hits.size());
 	}
 
 	@Test
@@ -1627,7 +2071,8 @@ public class SuperHistogramPluginHandlersTest
 		target("Goblin", 2);
 		tickOnly();
 		plugin.handleHit(npc, HitsplatID.DAMAGE_ME, 3);
-		for (int i = 0; i < 11; i++)
+		// Past the 10 s combat hold (17 ticks) that follows my last hit.
+		for (int i = 0; i < com.superhistogram.model.ModeDetector.ticks(10) + 2; i++)
 		{
 			tickOnly();
 		}
@@ -1644,8 +2089,8 @@ public class SuperHistogramPluginHandlersTest
 		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 4);
 		BarState s = plugin.buildState();
 		assertEquals(Mode.GATHERING, s.mode);
-		assertEquals(1, s.timeline.peek(ticks - 2).hits.size());
 		assertEquals(1, s.timeline.peek(ticks - 1).hits.size());
+		assertEquals(1, s.timeline.peek(ticks).hits.size());
 	}
 
 	// ---- session rates over accumulated logged-in time (final review I2) ----
@@ -1698,4 +2143,28 @@ public class SuperHistogramPluginHandlersTest
 		assertEquals("Magic \u00b7 level 74", com.superhistogram.ui.modes.MinimalView.smallLine(plugin.buildState(30_000)));
 		assertEquals("30k/hr", com.superhistogram.ui.modes.MinimalView.headline(plugin.buildState(60_000)));
 	}
+
+	@Test
+	public void overheadClicksNameThePrayerTheyTurnOn()
+	{
+		org.junit.Assert.assertEquals("melee", SuperHistogramPlugin.overheadClick("Activate", "<col=ff9040>Protect from Melee</col>")[0]);
+		org.junit.Assert.assertNull(SuperHistogramPlugin.overheadClick("Deactivate", "<col=ff9040>Protect from Magic</col>")[0]);
+		org.junit.Assert.assertNull(SuperHistogramPlugin.overheadClick("Activate", "<col=ff9040>Piety</col>"));
+	}
+
+	@Test
+	public void skillingSpellsAreReadFromTheCastMenu()
+	{
+		assertEquals("Plank Make", SuperHistogramPlugin.skillingSpell(MenuAction.WIDGET_TARGET_ON_WIDGET, "Cast",
+			"<col=00ff00>Plank Make</col><col=ffffff> -> <col=ff9040>Mahogany logs", 149));
+		assertEquals("Spin Flax", SuperHistogramPlugin.skillingSpell(MenuAction.CC_OP, "Cast",
+			"<col=00ff00>Spin Flax</col>", SuperHistogramPlugin.SPELLBOOK_GROUP));
+		assertEquals(null, SuperHistogramPlugin.skillingSpell(MenuAction.WIDGET_TARGET_ON_WIDGET, "Cast",
+			"<col=00ff00>High Level Alchemy</col> -> Rune platebody", 149));
+		assertEquals(null, SuperHistogramPlugin.skillingSpell(MenuAction.WIDGET_TARGET_ON_NPC, "Cast",
+			"<col=00ff00>Fire Surge</col> -> Hill Giant", 0));
+		assertEquals(null, SuperHistogramPlugin.skillingSpell(MenuAction.WIDGET_TARGET_ON_WIDGET, "Use",
+			"Knife -> Logs", 149));
+	}
 }
+

@@ -235,8 +235,7 @@ public class BarRenderSamples
 				rows.add(new Object[]{wh[0], wh[1], SampleStates.agility(p)});
 			}
 		}
-		rows.add(new Object[]{1026, 62, SampleStates.agility(SampleStates.AgilityPhase.MID_LAP,
-			com.superhistogram.model.skill.LapCompare.LAST, false)});
+		rows.add(new Object[]{1026, 62, SampleStates.agility(SampleStates.AgilityPhase.MID_LAP, false)});
 		sheet(new File(dir, "task19b-contact.png"), rows);
 	}
 
@@ -282,6 +281,51 @@ public class BarRenderSamples
 		ImageIO.write(img, "png", new File(dir, "icons-contact.png"));
 	}
 
+	/** Every mode at the real chat size (519 wide; 62, 40 and 80 tall). Needs -PrenderDir=dir; writes chat-size-contact.png. */
+	@Test
+	public void writeChatSizeContactSheet() throws IOException
+	{
+		String dir = System.getProperty("superhistogram.renderDir");
+		assumeTrue(dir != null && !dir.isEmpty());
+		BarState general = SampleStates.general();
+		java.util.List<Object[]> rows = new java.util.ArrayList<>();
+		BarState[] modes = {
+			general,
+			SampleStates.afk(general),
+			SampleStates.withMode(general, Mode.MINIMAL, "XP", "minimal"),
+			SampleStates.lazyFlick(),
+			SampleStates.oneTick(com.superhistogram.model.combat.FlickClassifier.Kind.values()[0]),
+			SampleStates.cooking(SampleStates.ProdPhase.RUNNING),
+			SampleStates.alch(com.superhistogram.model.skill.AlchTopRow.GOLD, com.superhistogram.model.RightSide.PER_HOUR),
+			SampleStates.gathering(SampleStates.GatherPhase.CHOPPING),
+			SampleStates.agility(SampleStates.AgilityPhase.MID_LAP),
+		};
+		for (BarState m : modes)
+		{
+			rows.add(new Object[]{519, 62, m});
+		}
+		rows.add(new Object[]{519, 40, general});
+		rows.add(new Object[]{519, 80, general});
+		sheet(new File(dir, "chat-size-contact.png"), rows);
+	}
+
+	/** One fight through every combat-relevant lens, plus short and tall bars. Needs -PrenderDir; writes one-timeline.png. */
+	@Test
+	public void writeOneTimelineSheet() throws IOException
+	{
+		String dir = System.getProperty("superhistogram.renderDir");
+		assumeTrue(dir != null && !dir.isEmpty());
+		BarState fight = SampleStates.lazyFlick();
+		java.util.List<Object[]> rows = new java.util.ArrayList<>();
+		rows.add(new Object[]{519, 62, SampleStates.withMode(fight, Mode.GENERAL, "General", "auto")});
+		rows.add(new Object[]{519, 62, fight});
+		rows.add(new Object[]{519, 62, SampleStates.withMode(fight, Mode.ONE_TICK, "1-tick flick", "")});
+		rows.add(new Object[]{519, 62, SampleStates.withMode(fight, Mode.MINIMAL, "XP", "minimal")});
+		rows.add(new Object[]{1026, 40, fight});
+		rows.add(new Object[]{1026, 80, fight});
+		sheet(new File(dir, "one-timeline.png"), rows);
+	}
+
 	private static void sheet(File file, java.util.List<Object[]> rows) throws IOException
 	{
 		int pad = 8, total = pad;
@@ -289,7 +333,7 @@ public class BarRenderSamples
 		{
 			total += ((Integer) r[1] + pad) * 2;
 		}
-		java.awt.image.BufferedImage sheet = new java.awt.image.BufferedImage(1026 * 2 + 2 * pad, total,
+		java.awt.image.BufferedImage sheet = new java.awt.image.BufferedImage(maxW(rows) * 2 + 2 * pad, total,
 			java.awt.image.BufferedImage.TYPE_INT_RGB);
 		java.awt.Graphics2D g = sheet.createGraphics();
 		g.setColor(new java.awt.Color(0x2b3521));
@@ -303,6 +347,16 @@ public class BarRenderSamples
 		}
 		g.dispose();
 		ImageIO.write(sheet, "png", file);
+	}
+
+	private static int maxW(java.util.List<Object[]> rows)
+	{
+		int w = 0;
+		for (Object[] r : rows)
+		{
+			w = Math.max(w, (Integer) r[0]);
+		}
+		return w;
 	}
 
 	private static void write(String dir, String name, int w, int h, BarState s) throws IOException

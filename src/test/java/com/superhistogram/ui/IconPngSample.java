@@ -40,7 +40,7 @@ public class IconPngSample
 		t.at(now);
 		BarState s = BarState.builder()
 			.timeline(t).nowTick(now).xp(new XpTracker(t)).idle(new IdleTracker(60)).clock(new SessionClock())
-			.runEnergyPct(64).modeName("Lazy flick").modeSub("").showRunEnergy(false).showLoginTime(false)
+			.runEnergyPct(64).modeName("Lazy flick").modeSub("").showLoginTime(false)
 			.mode(Mode.LAZY_FLICK).nowMs(SampleStates.NOW_MS).build();
 		BarLayout l = BarLayout.of(1026, 62);
 		BufferedImage bar = BarRenderSmokeTest.render(1026, 62, s, null);

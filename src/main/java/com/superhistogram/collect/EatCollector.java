@@ -87,9 +87,11 @@ public final class EatCollector
 		}
 		for (Click c : confirmed)
 		{
+			// The game eats on the tick the food leaves your inventory, a tick after your click: that is the tick
+			// that counts against your attack timer.
 			FoodKind kind = Foods.kindOf(c.itemId);
-			int cost = timer.onEat(c.tick, kind);
-			TickRecord r = timeline.at(c.tick);
+			int cost = timer.onEat(tick, kind);
+			TickRecord r = timeline.at(tick);
 			if (r != null)
 			{
 				r.eat = r.eat == null ? kind : FoodKind.merge(r.eat, kind);

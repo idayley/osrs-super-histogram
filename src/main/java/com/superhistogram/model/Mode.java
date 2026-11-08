@@ -11,5 +11,12 @@ public enum Mode
 	PRODUCTION,
 	ALCH,
 	GATHERING,
-	AGILITY
+	AGILITY,
+	THIEVING,
+	HUNTER,
+	CASTING,
+	/** Runecraft trips, farm runs, bird house runs. */
+	RUNS,
+	/** Minigame rounds: Wintertodt, Tempoross, Guardians of the Rift, Zalcano, Volcanic Mine. */
+	ROUNDS
 }

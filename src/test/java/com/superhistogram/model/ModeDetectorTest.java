@@ -39,9 +39,11 @@ public class ModeDetectorTest
 	}
 
 	@Test
-	public void afkBeatsCombat()
+	public void combatBeatsAfk()
 	{
-		assertEquals(Mode.AFK, detector.detect(true, true, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
+		// Replay finding 1: an auto-retaliate fight with no input for 60 s stayed a fight.
+		assertEquals(Mode.LAZY_FLICK, detector.detect(true, true, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
+		assertEquals(Mode.AFK, detector.detect(true, false, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
 	}
 
 	@Test

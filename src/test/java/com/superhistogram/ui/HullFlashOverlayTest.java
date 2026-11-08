@@ -21,7 +21,7 @@ public class HullFlashOverlayTest
 	{
 		assertEquals(1f, HullFlashOverlay.opacity(false, 0), 1e-6);
 		assertEquals(HullFlashOverlay.MISS_PEAK, HullFlashOverlay.opacity(true, 0), 1e-6);
-		assertEquals(0.25f, HullFlashOverlay.opacity(true, 250), 1e-3);
+		assertEquals(HullFlashOverlay.MISS_PEAK / 2f, HullFlashOverlay.opacity(true, 250), 1e-3);
 		assertEquals(0f, HullFlashOverlay.opacity(true, 500), 1e-6);
 	}
 }

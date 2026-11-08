@@ -18,13 +18,13 @@ public class PrayerCollectorTest
 	}
 
 	@Test
-	public void spanStartsTickBeforeObservation()
+	public void spanStartsOnTheTickTheGameReportsIt()
 	{
 		prayers.onTick(10, null);
 		prayers.onTick(11, "melee");
 		assertEquals(1, spans().size());
 		assertEquals("pray-melee", spans().get(0).kind);
-		assertEquals(10, spans().get(0).startTick);
+		assertEquals(11, spans().get(0).startTick);
 		assertEquals(-1, spans().get(0).endTick);
 	}
 
@@ -35,7 +35,7 @@ public class PrayerCollectorTest
 		prayers.onTick(12, "melee");
 		prayers.onTick(13, null);
 		assertEquals(1, spans().size());
-		assertEquals(11, spans().get(0).endTick);
+		assertEquals(12, spans().get(0).endTick);
 	}
 
 	@Test
@@ -45,10 +45,10 @@ public class PrayerCollectorTest
 		prayers.onTick(12, "melee");
 		prayers.onTick(13, "magic");
 		assertEquals(2, spans().size());
-		assertEquals(10, spans().get(0).startTick);
-		assertEquals(11, spans().get(0).endTick);
+		assertEquals(11, spans().get(0).startTick);
+		assertEquals(12, spans().get(0).endTick);
 		assertEquals("pray-magic", spans().get(1).kind);
-		assertEquals(12, spans().get(1).startTick);
+		assertEquals(13, spans().get(1).startTick);
 		assertEquals(-1, spans().get(1).endTick);
 	}
 
@@ -57,7 +57,31 @@ public class PrayerCollectorTest
 	{
 		prayers.onTick(11, "ranged");
 		prayers.onTick(12, null);
-		assertEquals(10, spans().get(0).startTick);
-		assertEquals(10, spans().get(0).endTick);
+		assertEquals(11, spans().get(0).startTick);
+		assertEquals(11, spans().get(0).endTick);
+	}
+
+	@Test
+	public void countsPointsUsedWhileOn()
+	{
+		prayers.onTick(10, null, 50);
+		prayers.onTick(11, "melee", 50);
+		prayers.onTick(12, "melee", 49);
+		prayers.onTick(13, "melee", 47);
+		assertEquals("3 pts", spans().get(0).label);
+		// A restore mid-prayer doesn't count against it.
+		prayers.onTick(14, "melee", 60);
+		prayers.onTick(15, "melee", 59);
+		assertEquals("4 pts", spans().get(0).label);
+	}
+
+	@Test
+	public void nextPrayerStartsItsOwnCount()
+	{
+		prayers.onTick(10, "melee", 50);
+		prayers.onTick(11, "melee", 48);
+		prayers.onTick(12, "magic", 47);
+		assertEquals("2 pts", spans().get(0).label);
+		assertEquals("1 pt", spans().get(1).label);
 	}
 }

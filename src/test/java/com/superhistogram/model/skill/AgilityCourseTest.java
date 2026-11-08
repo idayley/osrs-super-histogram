@@ -501,4 +501,25 @@ public class AgilityCourseTest
 		ac.onCourse("GNOME");
 		assertEquals(40, ac.courseSinceTick());
 	}
+
+	@Test
+	public void lapsMarksAndLapXpAreKeptForTheSession()
+	{
+		assertEquals(0, ac.lapXp());
+		twoLaps();
+		assertEquals(2, ac.laps());
+		assertEquals(220, ac.lapXp());
+		ac.onMarksPickedUp(1);
+		ac.onMarksPickedUp(0);
+		assertEquals(1, ac.marks());
+		ac.rebind(tl);
+		assertEquals(2, ac.laps());
+		assertEquals(1, ac.marks());
+		ac.onCourse("CANIFIS");
+		assertEquals(2, ac.laps());
+		assertEquals(0, ac.lapXp());
+		ac.reset();
+		assertEquals(0, ac.laps());
+		assertEquals(0, ac.marks());
+	}
 }

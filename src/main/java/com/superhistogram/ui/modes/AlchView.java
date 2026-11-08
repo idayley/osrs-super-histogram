@@ -7,7 +7,8 @@ import com.superhistogram.model.skill.AlchTopRow;
 import com.superhistogram.model.skill.AlchTracker;
 import com.superhistogram.ui.BarLayout;
 import com.superhistogram.ui.CombatPainter;
-import com.superhistogram.ui.ModeView;
+import com.superhistogram.ui.Lane;
+import com.superhistogram.ui.Lens;
 import com.superhistogram.ui.Palette;
 import com.superhistogram.ui.ReadoutPainter;
 import com.superhistogram.ui.SkillPainter;
@@ -16,49 +17,26 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 
 /**
- * High-alch view (high-alch.html): one 5-tick pill per cast (touching when you cast on time), the
- * coins and/or XP of each cast on top, lost ticks and the next-cast caret below, and the session
- * gold or XP on the right.
+ * High-alch lens (high-alch.html): dims the prayer lane and adds the white "+N" ticks lost before each late
+ * cast and the next-cast caret on the ruler; right = the session gold or XP.
  */
-public final class AlchView implements ModeView
+public final class AlchView implements Lens
 {
 	private static final String DOT = " · ";
 
 	@Override
-	public void paintTimeline(Graphics2D g, BarLayout l, BarState s)
+	public float[] emphasis(BarState s)
 	{
-		if (s.timeline == null || s.nowTick < 0)
+		return Lens.full();
+	}
+
+	@Override
+	public void overlay(Graphics2D g, BarLayout l, BarState s)
+	{
+		if (s.timeline == null || s.nowTick < 0 || s.alch == null || l.rows < 3)
 		{
 			return;
 		}
-		if (s.alch != null)
-		{
-			pills(g, l, s);
-		}
-		TimelinePainter.xp(g, l, s);
-		TimelinePainter.hits(g, l, s);
-		if (s.alch != null && l.rows == 3)
-		{
-			actions(g, l, s);
-		}
-	}
-
-	private static void pills(Graphics2D g, BarLayout l, BarState s)
-	{
-		for (int t = TimelinePainter.oldestTick(l, s) - AlchTracker.CAST_TICKS; t <= s.nowTick; t++)
-		{
-			TickRecord r = s.timeline.peek(t);
-			if (r != null && r.cast)
-			{
-				TimelinePainter.pill(g, l, TimelinePainter.x(l, s, t),
-					TimelinePainter.x(l, s, Math.min(t + AlchTracker.CAST_TICKS, s.nowTick + 1)),
-					Palette.PRAYER_MAGIC, false, null);
-			}
-		}
-	}
-
-	private static void actions(Graphics2D g, BarLayout l, BarState s)
-	{
 		float u = l.u;
 		if (s.wastedTicks)
 		{
@@ -67,7 +45,7 @@ public final class AlchView implements ModeView
 				TickRecord r = s.timeline.peek(t);
 				if (r != null && r.cast && r.castLost > 0)
 				{
-					SkillPainter.wasted(g, l, TimelinePainter.x(l, s, t - r.castLost) + 1,
+					SkillPainter.wasted(g, l, s, TimelinePainter.x(l, s, t - r.castLost) + 1,
 						TimelinePainter.x(l, s, t) - 1, r.castLost);
 				}
 			}
@@ -75,7 +53,7 @@ public final class AlchView implements ModeView
 		int next = s.alch.nextReadyTick();
 		if (next > s.nowTick && s.alch.showing(s.nowTick))
 		{
-			CombatPainter.caret(g, TimelinePainter.x(l, s, next), 55f * u, u, Palette.NEXT_BEAT);
+			CombatPainter.caret(g, TimelinePainter.x(l, s, next), l.laneY(Lane.RULER) + 1f * u, u, Palette.NEXT_BEAT);
 		}
 	}
 
@@ -87,7 +65,8 @@ public final class AlchView implements ModeView
 			return;
 		}
 		String[] lines = rightLines(s);
-		ReadoutPainter.right(g, l, s, lines[0], rightColor(s), lines[1], showsGold(s));
+		String hour = lines[1].contains(" last hr") ? lines[1].substring(0, lines[1].indexOf(" last hr") + 8) : "";
+		ReadoutPainter.rightCoin(g, l, s, lines[0], rightColor(s), lines[1], showsGold(s), new String[]{hour, ""});
 	}
 
 	private static boolean showsGold(BarState s)
@@ -137,13 +116,10 @@ public final class AlchView implements ModeView
 		boolean ready = ReadoutPainter.ratesReady(s);
 		long ms = ReadoutPainter.sessionMs(s);
 		boolean perHour = s.rightSide != RightSide.SESSION;
-		long gold = a.sessionGold(), goldRate = ready ? a.goldPerHour(ms) : 0;
+		long gold = a.sessionGold();
 		long xp = s.xp == null ? 0 : s.xp.sessionXp("Magic");
 		long xpRate = s.xp == null || !ready ? 0 : s.xp.xpPerHour("Magic", ms);
-		String goldRateText = ready ? formatCoins(goldRate) : ReadoutPainter.NO_RATE;
 		String xpRateText = ready ? ReadoutPainter.compact(xpRate) : ReadoutPainter.NO_RATE;
-		String goldHead = perHour ? goldRateText + "/hr" : formatCoins(gold);
-		String goldRest = perHour ? formatCoins(gold) + " this session" : goldRateText + "/hr";
 		String xpHead = perHour ? xpRateText + " xp/hr" : ReadoutPainter.compact(xp) + " xp";
 		String xpRest = perHour ? ReadoutPainter.compact(xp) + " xp" : xpRateText + "/hr";
 		String level = MinimalView.levelPart(s, "Magic", xpRate);
@@ -155,7 +131,15 @@ public final class AlchView implements ModeView
 		{
 			return new String[]{xpHead, xpRest};
 		}
-		String small = goldRest;
+		// Gold is a total, not a rate: alching is often mixed with other things (salvaging), so a per-hour
+		// figure over the session says little. Big = this run (since the last other activity); small = the
+		// last hour and today.
+		String goldHead = formatCoins(a.runGold());
+		String small = formatCoins(a.goldLastHour(s.nowTick)) + " last hr";
+		if (s.alchToday >= 0)
+		{
+			small += DOT + formatCoins(Math.max(s.alchToday, gold)) + " today";
+		}
 		if (s.alchTopRow == AlchTopRow.BOTH)
 		{
 			small += DOT + xpHead;

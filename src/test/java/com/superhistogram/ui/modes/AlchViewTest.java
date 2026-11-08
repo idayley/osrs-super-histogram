@@ -37,9 +37,10 @@ public class AlchViewTest
 	@Test
 	public void goldLines()
 	{
-		assertArrayEquals(new String[]{"+240/hr", "+240 this session"},
+		// Gold is always this session's total (alching mixes with other things); the small line is the last hour.
+		assertArrayEquals(new String[]{"+240", "+240 last hr"},
 			lines(AlchTopRow.GOLD, RightSide.PER_HOUR, 200L, 40L));
-		assertArrayEquals(new String[]{"+240", "+240/hr"},
+		assertArrayEquals(new String[]{"+240", "+240 last hr"},
 			lines(AlchTopRow.GOLD, RightSide.SESSION, 200L, 40L));
 	}
 
@@ -55,9 +56,9 @@ public class AlchViewTest
 	@Test
 	public void bothLines()
 	{
-		assertArrayEquals(new String[]{"+240/hr", "+240 this session · 130 xp/hr"},
+		assertArrayEquals(new String[]{"+240", "+240 last hr · 130 xp/hr"},
 			lines(AlchTopRow.BOTH, RightSide.PER_HOUR, 200L, 40L));
-		assertArrayEquals(new String[]{"+240", "+240/hr · 130 xp"},
+		assertArrayEquals(new String[]{"+240", "+240 last hr · 130 xp"},
 			lines(AlchTopRow.BOTH, RightSide.SESSION, 200L, 40L));
 	}
 
@@ -87,9 +88,17 @@ public class AlchViewTest
 	{
 		com.superhistogram.model.BarState s = SampleStates.alchText(AlchTopRow.BOTH, RightSide.PER_HOUR, 200L, 40L);
 		s.clock.resetSession(s.nowMs - 30_000);
-		assertArrayEquals(new String[]{"\u2014/hr", "+240 this session · \u2014 xp/hr"}, AlchView.rightLines(s));
+		assertArrayEquals(new String[]{"+240", "+240 last hr · \u2014 xp/hr"}, AlchView.rightLines(s));
 		s = SampleStates.alchText(AlchTopRow.XP, RightSide.SESSION, 200L, 40L);
 		s.clock.resetSession(s.nowMs - 30_000);
 		assertArrayEquals(new String[]{"130 xp", "\u2014/hr · level 99"}, AlchView.rightLines(s));
+	}
+
+	@Test
+	public void todaysTotalJoinsTheSmallLine()
+	{
+		com.superhistogram.model.BarState s = SampleStates.alchText(AlchTopRow.GOLD, RightSide.PER_HOUR, 200L, 40L);
+		com.superhistogram.model.BarState withToday = SampleStates.withAlchToday(s, 9_200_000L);
+		assertArrayEquals(new String[]{"+240", "+240 last hr · +9.2M today"}, AlchView.rightLines(withToday));
 	}
 }

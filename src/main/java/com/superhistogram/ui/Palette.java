@@ -19,6 +19,16 @@ public final class Palette
 
 	public static final Color DAMAGE = hex(0xffd23f);
 	public static final Color BLOCKED = hex(0x5c636b);
+	/** Hull flash for a miss on you: the light blue of the game's 0 splat. */
+	public static final Color MISS_FLASH = hex(0x6cc4ff);
+	/** "Alternate" metronome rim: the two colours it swaps between, beat by beat. */
+	public static final Color RIM_TICK = hex(0xf0b24a), RIM_TOCK = hex(0xb48cff);
+	/** The guide line up from the next attack beat. */
+	/** Where you clicked, when ping moved the click to the next tick. */
+	public static final Color CLICK_GHOST = new Color(255, 255, 255, Math.round(0.3f * 255));
+	/** The thin line along a lag tick's stretch of ruler. */
+	public static final Color LAG_LINE = new Color(255, 255, 255, Math.round(0.22f * 255));
+	public static final Color NEXT_BEAT_GUIDE = new Color(255, 255, 255, Math.round(0.28f * 255));
 	public static final Color MINT = hex(0x5ee0c8);
 	public static final Color RUN_ENERGY = hex(0xe8c86a);
 
@@ -28,9 +38,10 @@ public final class Palette
 	public static final Color ONLINE_LABEL = hex(0x545b63);
 	/** Solid pill for an animation whose kind is unknown (the mockup's "talk" colour). */
 	public static final Color ACTION = hex(0x9fb4d9);
-	public static final Color RULER = new Color(255, 255, 255, Math.round(0.14f * 255));
+	/** Solid pill for a fight: dark maroon, well clear of Protect from Melee's bright red and the blue actions. */
+	public static final Color FIGHT = hex(0x6b1f2c);
+	public static final Color RULER = new Color(255, 255, 255, Math.round(0.38f * 255));
 	public static final Color NOW_LINE = new Color(233, 236, 239, Math.round(0.5f * 255));
-	public static final Color GAUGE_TRACK = new Color(255, 255, 255, Math.round(0.12f * 255));
 
 	/** The lazy-flick mockup's .lost: "+N" labels and food icons. */
 	public static final Color LOST = hex(0xc9ced4);
@@ -146,6 +157,12 @@ public final class Palette
 	{
 		Color c = name == null ? null : SKILLS.get(name.toLowerCase());
 		return c == null ? TEXT : c;
+	}
+
+	/** A dark fill, which needs light text on it. */
+	public static boolean isDark(Color c)
+	{
+		return 0.299 * c.getRed() + 0.587 * c.getGreen() + 0.114 * c.getBlue() < 100;
 	}
 
 	public static Color withAlpha(Color c, float alpha)

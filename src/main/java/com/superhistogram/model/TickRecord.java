@@ -12,13 +12,25 @@ public final class TickRecord
 	public final List<Hit> hits = new ArrayList<>();
 	/** In-tick click fraction 0..1 when known, else 0. */
 	public final List<Float> clicks = new ArrayList<>();
+	/** Where you clicked, for clicks that reached the server after the next tick and were moved there. */
+	public final List<Float> clickGhosts = new ArrayList<>();
+	/** Gear switches, spec, walks and drinks, at their in-tick position. */
+	public final List<InputMark> inputs = new ArrayList<>();
+	/** How long this tick ran until the next one, as the client saw it (ms); 0 until the next tick. */
+	public int lengthMs;
 	/** In-tick fractions of prayer-toggle clicks. */
 	public final List<Float> prayerClicks = new ArrayList<>();
+	/** In-tick fractions of clicks on an overhead prayer (protect, retribution, redemption, smite). */
+	public final List<Float> overheadClicks = new ArrayList<>();
+	/** Overhead kind the last of those clicks turned on ("melee", ...); null when it turned one off. */
+	public String overheadClickKind;
 	/** 1-tick flick verdict for this tick; null until classified. */
 	public FlickClassifier.Kind flick;
 	public float flickPhase;
 	/** Late ticks of an attack this tick; -1 when no attack. */
 	public int attackLate = -1;
+	/** On an attack tick: the damage that swing did once its hitsplat landed (0 = a miss); -1 until then. */
+	public int swingHit = -1;
 	public FoodKind eat;
 	public int eatCost;
 	/** Production input used with no matching XP (e.g. a burnt fish). */
@@ -33,6 +45,8 @@ public final class TickRecord
 	public Long castCoins;
 	/** Ticks lost since the previous cast was ready (0 when on time or after a pause). */
 	public int castLost;
+	/** Ticks this skilling-spell cast came later than the spell's own pace. */
+	public int spellLost;
 
 	/** The player animated while a gathering pill was open. */
 	public boolean roll;
@@ -49,6 +63,11 @@ public final class TickRecord
 	public boolean mark;
 	/** Ticks lost before an agility obstacle click (+N); 0 when none. */
 	public int agilityLost;
+
+	/** A pickpocket or stall attempt succeeded this tick. */
+	public boolean stolen;
+	/** A hunter trap was checked with a catch in it this tick. */
+	public boolean caught;
 
 	public TickRecord(int tick)
 	{

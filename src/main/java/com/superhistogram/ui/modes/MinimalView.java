@@ -3,19 +3,31 @@ package com.superhistogram.ui.modes;
 import com.superhistogram.model.BarState;
 import com.superhistogram.model.Levels;
 import com.superhistogram.ui.BarLayout;
-import com.superhistogram.ui.ModeView;
+import com.superhistogram.ui.Lane;
+import com.superhistogram.ui.Lens;
 import com.superhistogram.ui.Palette;
 import com.superhistogram.ui.ReadoutPainter;
-import com.superhistogram.ui.TimelinePainter;
 import java.awt.Graphics2D;
+import java.util.Arrays;
 
-/** Minimal view: XP drops only; right = XP/hr of the top skill and time to its next level. */
-public final class MinimalView implements ModeView
+/**
+ * Minimal lens: only the top lane (XP drops; hits on you there too) is shown, every other lane is off;
+ * right = XP/hr of the top skill and time to its next level.
+ */
+public final class MinimalView implements Lens
 {
 	@Override
-	public void paintTimeline(Graphics2D g, BarLayout l, BarState s)
+	public float[] emphasis(BarState s)
 	{
-		TimelinePainter.xp(g, l, s);
+		float[] a = new float[Lane.values().length];
+		Arrays.fill(a, 0f);
+		a[Lane.TOP.ordinal()] = 1f;
+		return a;
+	}
+
+	@Override
+	public void overlay(Graphics2D g, BarLayout l, BarState s)
+	{
 	}
 
 	@Override

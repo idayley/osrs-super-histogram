@@ -36,6 +36,16 @@ public final class AlchTracker
 	private int lastCast = -1, prevCast = -1;
 	private int casts, unpriced;
 	private long gold;
+	/** Coins of this run: the casts since you last did something else. */
+	private long runGold;
+	/** Something else was done since the last cast: the next cast starts a new run. */
+	private boolean runBroken;
+	/** Coins of the newest cast (0 when unpriced). */
+	private long lastCoins;
+	/** Priced casts of the last hour, oldest first: {tick, coins}. */
+	private final java.util.ArrayDeque<long[]> hour = new java.util.ArrayDeque<>();
+	/** An hour in ticks. */
+	public static final int HOUR_TICKS = 6000;
 
 	public AlchTracker(Timeline timeline)
 	{
@@ -103,6 +113,13 @@ public final class AlchTracker
 		prevCast = lastCast;
 		lastCast = tick;
 		casts++;
+		if (runBroken)
+		{
+			// The bar shows alching only from the second close cast, so the first one belongs to this run too.
+			runGold = prevCast >= 0 && tick - prevCast <= SHOW_GAP ? lastCoins : 0;
+			runBroken = false;
+		}
+		lastCoins = coins == null ? 0 : coins;
 		if (coins == null)
 		{
 			unpriced++;
@@ -110,6 +127,8 @@ public final class AlchTracker
 		else
 		{
 			gold += coins;
+			runGold += coins;
+			hour.addLast(new long[]{tick, coins});
 		}
 	}
 
@@ -142,6 +161,33 @@ public final class AlchTracker
 		return gold;
 	}
 
+	/** Coins of this run: the priced casts since another activity last took over the bar. */
+	public long runGold()
+	{
+		return runGold;
+	}
+
+	/** Another activity (salvaging, a fight, ...) took over: the next cast starts a new run. */
+	public void breakRun()
+	{
+		runBroken = true;
+	}
+
+	/** Coins from the casts of the last hour (rolling), up to {@code tick}. */
+	public long goldLastHour(int tick)
+	{
+		while (!hour.isEmpty() && hour.peekFirst()[0] <= tick - HOUR_TICKS)
+		{
+			hour.pollFirst();
+		}
+		long sum = 0;
+		for (long[] c : hour)
+		{
+			sum += c[1];
+		}
+		return sum;
+	}
+
 	/** Casts whose coins was unknown (not counted in the gold). */
 	public int unpricedCasts()
 	{
@@ -169,5 +215,9 @@ public final class AlchTracker
 		casts = 0;
 		unpriced = 0;
 		gold = 0;
+		runGold = 0;
+		runBroken = false;
+		lastCoins = 0;
+		hour.clear();
 	}
 }

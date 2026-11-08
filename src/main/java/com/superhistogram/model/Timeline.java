@@ -75,6 +75,7 @@ public final class Timeline
 			if (s.endTick == -1 && s.kind.equals(kind))
 			{
 				s.endTick = endTick;
+				s.closedAt = newest;
 				return;
 			}
 		}

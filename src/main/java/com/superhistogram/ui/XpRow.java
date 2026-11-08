@@ -1,12 +1,10 @@
 package com.superhistogram.ui;
 
 import com.superhistogram.model.BarState;
-import com.superhistogram.model.Mode;
 import com.superhistogram.model.TickRecord;
 import com.superhistogram.model.Timeline;
 import com.superhistogram.model.XpDrop;
 import com.superhistogram.model.XpDrops;
-import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.skill.AlchTopRow;
 import com.superhistogram.ui.modes.AlchView;
 import java.awt.Graphics2D;
@@ -24,12 +22,6 @@ import java.util.Set;
  */
 final class XpRow
 {
-	enum Row
-	{
-		TOP,
-		LOW
-	}
-
 	/** A skill is frequent with drops on at least FREQUENT_MIN distinct ticks of the last FREQUENT_WINDOW. */
 	static final int FREQUENT_WINDOW = 10, FREQUENT_MIN = 5;
 
@@ -64,47 +56,41 @@ final class XpRow
 		return out;
 	}
 
-	static void paint(Graphics2D g, BarLayout l, BarState s, Row row)
+	/** Paints the row with each listed tick's numbers moved right by its shift (px), e.g. past a hit number. */
+	static void paintShifted(Graphics2D g, BarLayout l, BarState s, Map<Integer, Float> shift)
 	{
-		layout(g, l, s, row, true, null, null);
-	}
-
-	/** Paints the row, dropping any number that would touch a reserved x range (and the rest of its tick). */
-	static void paint(Graphics2D g, BarLayout l, BarState s, Row row, List<float[]> reserved)
-	{
-		layout(g, l, s, row, true, reserved, null);
+		layout(g, l, s, true, null, shift);
 	}
 
 	/** x ranges {left, right} of each tick's number group, without painting. */
-	static List<float[]> numberRanges(Graphics2D g, BarLayout l, BarState s, Row row)
+	static List<float[]> numberRanges(Graphics2D g, BarLayout l, BarState s)
 	{
 		List<float[]> out = new ArrayList<>();
-		layout(g, l, s, row, false, null, out);
+		layout(g, l, s, false, out, null);
 		return out;
 	}
 
-	private static void layout(Graphics2D g, BarLayout l, BarState s, Row row, boolean draw,
-		List<float[]> reserved, List<float[]> ranges)
+	private static void layout(Graphics2D g, BarLayout l, BarState s, boolean draw, List<float[]> ranges,
+		Map<Integer, Float> shift)
 	{
 		if (s == null || s.timeline == null || s.nowTick < 0)
 		{
 			return;
 		}
-		// High alch puts each cast's coins in the top row; that stays even when XP drops are off.
-		boolean alch = row == Row.TOP && s.mode == Mode.ALCH && s.alch != null;
+		// Each alch cast's coins ride the top lane in every mode; they stay even when XP drops are off.
+		boolean alch = s.alch != null;
 		boolean xpOff = s.xpDrops == XpDrops.OFF;
 		if (xpOff && !alch)
 		{
 			return;
 		}
-		if (row == Row.TOP ? l.rows == 1 : l.rows < 3)
+		if (l.rows == 1)
 		{
 			return;
 		}
 		float u = l.u;
-		float baseline = row == Row.TOP ? TimelinePainter.xpY(l) : 48f * u;
-		float dotY = row == Row.TOP ? baseline - 3f * u : 44f * u;
-		boolean swords = s.actionsRow != ActionsRow.OFF;
+		float baseline = TimelinePainter.xpY(l);
+		float dotY = baseline - 3f * u;
 		Set<String> frequent = s.xpDots ? frequentSkills(s.timeline, s.nowTick) : new HashSet<>();
 		g.setFont(Fonts.bold(10f * u));
 		float busyTo = -Float.MAX_VALUE;
@@ -116,9 +102,18 @@ final class XpRow
 			{
 				continue;
 			}
-			float x = TimelinePainter.x(l, s, t) + (row == Row.LOW && swords && r.attackLate >= 0 ? 8f : -4f) * u;
+			float x = TimelinePainter.x(l, s, t) + -4f * u;
+			Float moved = shift == null ? null : shift.get(t);
+			if (moved != null)
+			{
+				x += moved;
+			}
+			if (x < l.timelineX)
+			{
+				// Scrolling off the left edge: drop the whole label rather than leave a fragment ("400").
+				continue;
+			}
 			float groupLeft = x, groupRight = -1;
-			boolean dropNumbers = false;
 			if (gold)
 			{
 				String text = AlchView.formatCastCoins(r.castCoins);
@@ -155,11 +150,6 @@ final class XpRow
 				}
 				String text = "+" + d.amount;
 				int w = g.getFontMetrics().stringWidth(text);
-				if (dropNumbers || overlaps(reserved, x, x + w))
-				{
-					dropNumbers = true;
-					continue;
-				}
 				if (draw)
 				{
 					g.drawString(text, x, baseline);
@@ -173,20 +163,5 @@ final class XpRow
 				ranges.add(new float[]{groupLeft, groupRight});
 			}
 		}
-	}
-
-	private static boolean overlaps(List<float[]> ranges, float x0, float x1)
-	{
-		if (ranges != null)
-		{
-			for (float[] r : ranges)
-			{
-				if (x0 < r[1] && x1 > r[0])
-				{
-					return true;
-				}
-			}
-		}
-		return false;
 	}
 }

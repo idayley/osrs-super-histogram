@@ -4,11 +4,13 @@ import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
 import com.superhistogram.model.combat.FlickClassifier;
 import com.superhistogram.model.skill.AgilityCourse;
+import com.superhistogram.model.skill.ThieveRun;
+import com.superhistogram.model.skill.TrapTracker;
+import com.superhistogram.model.skill.SpellRun;
 import com.superhistogram.model.skill.AlchTopRow;
 import com.superhistogram.model.skill.AlchTracker;
 import com.superhistogram.model.skill.GatherRun;
 import com.superhistogram.model.skill.InventoryRun;
-import com.superhistogram.model.skill.LapCompare;
 
 /**
  * Read-only snapshot of everything the painters need for one frame. Any
@@ -25,15 +27,29 @@ public final class BarState
 	public final SessionClock clock;
 	public final int runEnergyPct;
 	public final String modeName, modeSub;
-	public final boolean showRunEnergy, showLoginTime;
+	public final boolean showLoginTime;
 	public final Mode mode;
 	/** Wall-clock time the snapshot was taken, for time-based readouts. */
 	public final long nowMs;
+	/** Wall-clock time the newest tick arrived; 0 when unknown. */
+	public final long tickMs;
+	/** Glide the timeline between ticks instead of stepping once per tick. */
+	public final boolean smooth;
+	/** Where the "now" line sits across the timeline, 10-100 %; 0 = the default spot. */
+	public final int nowLinePct;
 	/** Lazy-flick metronome; null when none. */
 	public final Beat beat;
 	/** 1-tick flick classifier; null when none. */
 	public final FlickClassifier flicks;
 	public final int weaponSpeed;
+	/** The tick your weapon is ready to attack again (in a fight, ahead of now); -1 when none. */
+	public final int nextAttackTick;
+	/** The next-attack tick comes from your swing rhythm, not a known weapon speed. */
+	public final boolean nextAttackLearned;
+	/** 1-tick flick: half-width of the clean-click band either side of each tick line, in ms; 0 hides it. */
+	public final int clickWindowMs;
+	/** Coins alched today (kept across logins); -1 when unknown. */
+	public final long alchToday;
 	public final ActionsRow actionsRow;
 	public final boolean showEatCosts;
 	/** Production run; null when none. */
@@ -50,7 +66,18 @@ public final class BarState
 	public final RightSide rightSide;
 	/** Agility course; null when none. */
 	public final AgilityCourse agility;
-	public final LapCompare lapCompare;
+	/** Pickpocketing or stall thieving; null when none. */
+	public final ThieveRun thieve;
+	/** The loop on show (Runecraft, farm run, bird houses); null when none. */
+	public final com.superhistogram.model.skill.LoopRun loop;
+	/** Minigame rounds; null before startUp. */
+	public final com.superhistogram.model.skill.RoundTracker rounds;
+	/** Your slayer task; null before startUp. */
+	public final com.superhistogram.model.skill.SlayerTask slayer;
+	/** Hunter traps; null when none. */
+	public final TrapTracker hunt;
+	/** A skilling spell other than high alch; null when none. */
+	public final SpellRun spell;
 
 	private BarState(Builder b)
 	{
@@ -62,13 +89,19 @@ public final class BarState
 		runEnergyPct = b.runEnergyPct;
 		modeName = b.modeName;
 		modeSub = b.modeSub;
-		showRunEnergy = b.showRunEnergy;
 		showLoginTime = b.showLoginTime;
 		mode = b.mode;
 		nowMs = b.nowMs;
+		tickMs = b.tickMs;
+		smooth = b.smooth;
+		nowLinePct = b.nowLinePct;
 		beat = b.beat;
 		flicks = b.flicks;
 		weaponSpeed = b.weaponSpeed;
+		nextAttackTick = b.nextAttackTick;
+		nextAttackLearned = b.nextAttackLearned;
+		clickWindowMs = b.clickWindowMs;
+		alchToday = b.alchToday;
 		actionsRow = b.actionsRow;
 		showEatCosts = b.showEatCosts;
 		run = b.run;
@@ -81,7 +114,12 @@ public final class BarState
 		gather = b.gather;
 		rightSide = b.rightSide;
 		agility = b.agility;
-		lapCompare = b.lapCompare;
+		thieve = b.thieve;
+		loop = b.loop;
+		rounds = b.rounds;
+		slayer = b.slayer;
+		hunt = b.hunt;
+		spell = b.spell;
 	}
 
 	public static Builder builder()
@@ -98,12 +136,18 @@ public final class BarState
 		private SessionClock clock;
 		private int runEnergyPct;
 		private String modeName, modeSub;
-		private boolean showRunEnergy = true, showLoginTime = true;
+		private boolean showLoginTime = true;
 		private Mode mode = Mode.GENERAL;
-		private long nowMs;
+		private long nowMs, tickMs;
+		private boolean smooth;
+		private int nowLinePct;
 		private Beat beat;
 		private FlickClassifier flicks;
 		private int weaponSpeed = 4;
+		private int nextAttackTick = -1;
+		private boolean nextAttackLearned;
+		private int clickWindowMs;
+		private long alchToday = -1;
 		private ActionsRow actionsRow = ActionsRow.ATTACKS;
 		private boolean showEatCosts = true;
 		private InventoryRun run;
@@ -115,7 +159,12 @@ public final class BarState
 		private GatherRun gather;
 		private RightSide rightSide = RightSide.PER_HOUR;
 		private AgilityCourse agility;
-		private LapCompare lapCompare = LapCompare.BEST;
+		private ThieveRun thieve;
+		private com.superhistogram.model.skill.LoopRun loop;
+		private com.superhistogram.model.skill.RoundTracker rounds;
+		private com.superhistogram.model.skill.SlayerTask slayer;
+		private TrapTracker hunt;
+		private SpellRun spell;
 
 		public Builder timeline(Timeline v)
 		{
@@ -165,11 +214,6 @@ public final class BarState
 			return this;
 		}
 
-		public Builder showRunEnergy(boolean v)
-		{
-			showRunEnergy = v;
-			return this;
-		}
 
 		public Builder showLoginTime(boolean v)
 		{
@@ -186,6 +230,48 @@ public final class BarState
 		public Builder nowMs(long v)
 		{
 			nowMs = v;
+			return this;
+		}
+
+		public Builder tickMs(long v)
+		{
+			tickMs = v;
+			return this;
+		}
+
+		public Builder smooth(boolean v)
+		{
+			smooth = v;
+			return this;
+		}
+
+		public Builder nextAttackTick(int v)
+		{
+			nextAttackTick = v;
+			return this;
+		}
+
+		public Builder nextAttackLearned(boolean v)
+		{
+			nextAttackLearned = v;
+			return this;
+		}
+
+		public Builder alchToday(long v)
+		{
+			alchToday = v;
+			return this;
+		}
+
+		public Builder clickWindowMs(int v)
+		{
+			clickWindowMs = v;
+			return this;
+		}
+
+		public Builder nowLinePct(int v)
+		{
+			nowLinePct = v;
 			return this;
 		}
 
@@ -287,16 +373,43 @@ public final class BarState
 			return this;
 		}
 
-		/** A null keeps the default (BEST). */
-		public Builder lapCompare(LapCompare v)
+		public Builder slayer(com.superhistogram.model.skill.SlayerTask v)
 		{
-			if (v != null)
-			{
-				lapCompare = v;
-			}
+			slayer = v;
 			return this;
 		}
 
+		public Builder rounds(com.superhistogram.model.skill.RoundTracker v)
+		{
+			rounds = v;
+			return this;
+		}
+
+		public Builder loop(com.superhistogram.model.skill.LoopRun v)
+		{
+			loop = v;
+			return this;
+		}
+
+		public Builder thieve(ThieveRun v)
+		{
+			thieve = v;
+			return this;
+		}
+
+		public Builder hunt(TrapTracker v)
+		{
+			hunt = v;
+			return this;
+		}
+
+		public Builder spell(SpellRun v)
+		{
+			spell = v;
+			return this;
+		}
+
+		/** A null keeps the default (BEST). */
 		public BarState build()
 		{
 			return new BarState(this);

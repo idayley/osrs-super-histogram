@@ -48,13 +48,38 @@ public class ModeSettingTest
 	@Test
 	public void autoAndNullAreUnchanged()
 	{
-		assertEquals(Mode.AFK,
+		// Combat beats AFK (replay finding 1).
+		assertEquals(Mode.LAZY_FLICK,
 			d.detect(ModeSetting.AUTO, true, true, Mode.ALCH, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
 		assertEquals(Mode.ONE_TICK,
 			d.detect(null, false, true, null, PrayerMode.ONE_TICK, BaselineSetting.GENERAL));
 		assertEquals(Mode.ALCH,
 			d.detect(ModeSetting.AUTO, false, false, Mode.ALCH, PrayerMode.LAZY_FLICK, BaselineSetting.MINIMAL));
+		d.reset();
 		assertEquals(Mode.MINIMAL,
 			d.detect(ModeSetting.AUTO, false, false, null, PrayerMode.LAZY_FLICK, BaselineSetting.MINIMAL));
+	}
+
+	@Test
+	public void barSticksToTheLastActivityUntilAnotherStarts()
+	{
+		assertEquals(Mode.GENERAL, d.detect(ModeSetting.AUTO, false, false, null, PrayerMode.LAZY_FLICK,
+			BaselineSetting.GENERAL));
+		d.detect(ModeSetting.AUTO, false, false, Mode.GATHERING, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL);
+		// Banking: nothing going on, still woodcutting.
+		assertEquals(Mode.GATHERING, d.detect(ModeSetting.AUTO, false, false, null, PrayerMode.LAZY_FLICK,
+			BaselineSetting.GENERAL));
+		// AFK still shows its logout countdown, then back to woodcutting.
+		assertEquals(Mode.AFK, d.detect(ModeSetting.AUTO, true, false, null, PrayerMode.LAZY_FLICK,
+			BaselineSetting.GENERAL));
+		assertEquals(Mode.GATHERING, d.detect(ModeSetting.AUTO, false, false, null, PrayerMode.LAZY_FLICK,
+			BaselineSetting.GENERAL));
+		// A fight, then it sticks to the fight.
+		d.detect(ModeSetting.AUTO, false, true, null, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL);
+		assertEquals(Mode.LAZY_FLICK, d.detect(ModeSetting.AUTO, false, false, null, PrayerMode.LAZY_FLICK,
+			BaselineSetting.GENERAL));
+		d.reset();
+		assertEquals(Mode.GENERAL, d.detect(ModeSetting.AUTO, false, false, null, PrayerMode.LAZY_FLICK,
+			BaselineSetting.GENERAL));
 	}
 }
