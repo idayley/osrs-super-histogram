@@ -45,6 +45,11 @@ public final class TickRecord
 	/** Bank click while the inventory was full of gathered items. */
 	public boolean gatherBank;
 
+	/** A mark of grace spawned right after an agility obstacle landing. */
+	public boolean mark;
+	/** Ticks lost before an agility obstacle click (+N); 0 when none. */
+	public int agilityLost;
+
 	public TickRecord(int tick)
 	{
 		this.tick = tick;
