@@ -100,6 +100,7 @@ public final class AgilityCourse
 	private boolean lastLandingWasEnd;
 	private int landings;
 	private int lastTick = -1;
+	private int courseSince = -1;
 	private int pendingMark = -1;
 
 	private int lapStart = -1;
@@ -158,6 +159,7 @@ public final class AgilityCourse
 			return;
 		}
 		course = courseId;
+		courseSince = lastTick;
 		clearSession();
 	}
 
@@ -168,6 +170,7 @@ public final class AgilityCourse
 		done.clear();
 		lapStarts.clear();
 		lastTick = -1;
+		courseSince = -1;
 	}
 
 	public synchronized void reset()
@@ -179,6 +182,7 @@ public final class AgilityCourse
 		course = null;
 		bestChanged = false;
 		lastTick = -1;
+		courseSince = -1;
 	}
 
 	public synchronized void loadBest(String courseId, int ticks)
@@ -501,6 +505,12 @@ public final class AgilityCourse
 	public synchronized String course()
 	{
 		return course;
+	}
+
+	/** The newest tick seen when the current course was entered; obstacles starting after it belong to it. */
+	public synchronized int courseSinceTick()
+	{
+		return courseSince;
 	}
 
 	public synchronized boolean showing(int tick)

@@ -16,6 +16,7 @@ import com.superhistogram.model.Span;
 import com.superhistogram.model.TickRecord;
 import com.superhistogram.ui.BarLayout;
 import com.superhistogram.ui.BarPainter;
+import com.superhistogram.ui.SampleStates;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.List;
@@ -26,6 +27,7 @@ import net.runelite.api.GameState;
 import net.runelite.api.HitsplatID;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemEquipmentStats;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStats;
@@ -41,6 +43,7 @@ public class SuperHistogramPluginHandlersTest
 	private SuperHistogramPlugin plugin;
 	private ItemManager itemManager;
 	private NPC npc;
+	private ConfigManager configManager;
 
 	@Before
 	public void setUp()
@@ -66,6 +69,8 @@ public class SuperHistogramPluginHandlersTest
 		npc = mock(NPC.class);
 		plugin.itemManager = itemManager;
 		plugin.config = config;
+		configManager = mock(ConfigManager.class);
+		plugin.configManager = configManager;
 		plugin.initModel();
 		plugin.handleGameState(GameState.LOGGED_IN, 0);
 	}
@@ -1056,5 +1061,398 @@ public class SuperHistogramPluginHandlersTest
 		plugin.handleObjectDespawned(50, 50);
 		tickOnly();
 		assertTrue(plugin.gather.pills().get(0).depleted);
+	}
+
+	// ---- agility ----
+
+	private static final int[] SEERS_IDS = SampleStates.SEERS_IDS, SEERS_DUR = SampleStates.SEERS_DUR;
+	private static final int[] SEERS_XP = {30, 40, 25, 35, 60, 30};
+	private static final String GROUP = "superhistogram";
+	private int agTotal;
+	private int lastLanding;
+
+	private void onCourse()
+	{
+		ticks = 0;
+		at(2710, 3470);
+		agTotal = 1_000_000;
+		plugin.handleStat("Agility", agTotal);
+		tickOnly();
+	}
+
+	/** Click, DUR ticks, the XP, then the tick that processes the landing. */
+	private void obstacle(int k)
+	{
+		plugin.handleObstacleClick(SEERS_IDS[k]);
+		for (int i = 0; i < SEERS_DUR[k]; i++)
+		{
+			tickOnly();
+		}
+		agTotal += SEERS_XP[k];
+		plugin.handleStat("Agility", agTotal);
+		lastLanding = ticks - 1;
+		tickOnly();
+	}
+
+	@Test
+	public void isObstacleActionMatches()
+	{
+		assertTrue(SuperHistogramPlugin.isObstacleAction(MenuAction.GAME_OBJECT_FIRST_OPTION));
+		assertTrue(SuperHistogramPlugin.isObstacleAction(MenuAction.GAME_OBJECT_THIRD_OPTION));
+		assertTrue(SuperHistogramPlugin.isObstacleAction(MenuAction.GAME_OBJECT_FIFTH_OPTION));
+		assertFalse(SuperHistogramPlugin.isObstacleAction(MenuAction.NPC_FIRST_OPTION));
+		assertFalse(SuperHistogramPlugin.isObstacleAction(MenuAction.WALK));
+		assertFalse(SuperHistogramPlugin.isObstacleAction(null));
+	}
+
+	@Test
+	public void agilityDetectedOnCourse()
+	{
+		onCourse();
+		obstacle(0);
+		assertEquals(Mode.GENERAL, plugin.buildState().mode);
+		obstacle(1);
+		BarState s = plugin.buildState();
+		assertEquals(Mode.AGILITY, s.mode);
+		assertEquals("Agility", s.modeName);
+		assertEquals("auto \u00b7 Seers'", s.modeSub);
+		assertTrue(s.agility == plugin.agility);
+	}
+
+	@Test
+	public void obstacleClickIgnoredOffCourse()
+	{
+		at(3200, 3200);
+		tickOnly();
+		plugin.handleObstacleClick(14927);
+		tickOnly();
+		tickOnly();
+		assertTrue(plugin.agility.obstacles().isEmpty());
+		assertEquals(null, plugin.regionCourse);
+	}
+
+	@Test
+	public void lapEndBlinksOnlyAtEndTile()
+	{
+		onCourse();
+		for (int k = 0; k < 5; k++)
+		{
+			obstacle(k);
+			assertEquals(0f, plugin.pulse.mintAlpha((ticks - 1) * 600L), 0f);
+		}
+		plugin.handleObstacleClick(SEERS_IDS[5]);
+		for (int i = 0; i < SEERS_DUR[5]; i++)
+		{
+			tickOnly();
+		}
+		at(2704, 3464);
+		agTotal += SEERS_XP[5];
+		plugin.handleStat("Agility", agTotal);
+		tickOnly();
+		assertTrue(plugin.pulse.mintAlpha((ticks - 1) * 600L) > 0f);
+	}
+
+	@Test
+	public void lapEndDoesNotBlinkWhenDisabled()
+	{
+		when(config.blinkWhenDone()).thenReturn(false);
+		onCourse();
+		for (int k = 0; k < 5; k++)
+		{
+			obstacle(k);
+		}
+		plugin.handleObstacleClick(SEERS_IDS[5]);
+		for (int i = 0; i < SEERS_DUR[5]; i++)
+		{
+			tickOnly();
+		}
+		at(2704, 3464);
+		plugin.handleStat("Agility", agTotal + 30);
+		tickOnly();
+		assertEquals(0f, plugin.pulse.mintAlpha((ticks - 1) * 600L), 0f);
+	}
+
+	@Test
+	public void cueOnReadyTick()
+	{
+		when(config.metronome()).thenReturn(SuperHistogramConfig.Metronome.CUE_TICK);
+		onCourse();
+		obstacle(0);
+		assertEquals(0f, plugin.pulse.outlineAlpha((ticks - 1) * 600L), 0f);
+		plugin.handleObstacleClick(SEERS_IDS[1]);
+		for (int i = 0; i < SEERS_DUR[1]; i++)
+		{
+			tickOnly();
+		}
+		agTotal += SEERS_XP[1];
+		plugin.handleStat("Agility", agTotal);
+		lastLanding = ticks - 1;
+		tickOnly();
+		assertEquals(lastLanding + 1, plugin.agility.readyTick());
+		assertTrue(plugin.pulse.outlineAlpha((ticks - 1) * 600L) > 0.9f);
+	}
+
+	@Test
+	public void fallDamageIsNotCombat()
+	{
+		onCourse();
+		obstacle(0);
+		obstacle(1);
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 3);
+		assertEquals(Mode.AGILITY, plugin.buildState().mode);
+	}
+
+	@Test
+	public void hitIsCombatWhenAgilityNotShowing()
+	{
+		onCourse();
+		plugin.handleHit(me, HitsplatID.DAMAGE_ME, 3);
+		assertEquals(Mode.LAZY_FLICK, plugin.buildState().mode);
+	}
+
+	@Test
+	public void bestLapLoadedFromProfile()
+	{
+		when(configManager.getRSProfileConfiguration(GROUP, "bestLap.SEERS", Integer.class)).thenReturn(80);
+		onCourse();
+		assertEquals(80, plugin.agility.bestTicks());
+	}
+
+	@Test
+	public void missingBestLeavesMinusOne()
+	{
+		onCourse();
+		assertEquals(-1, plugin.agility.bestTicks());
+		assertEquals("SEERS", plugin.regionCourse);
+	}
+
+	@Test
+	public void noConfigManagerIsFine()
+	{
+		plugin.configManager = null;
+		onCourse();
+		for (int k = 0; k < 6; k++)
+		{
+			obstacle(k);
+		}
+		assertEquals("SEERS", plugin.agility.course());
+	}
+
+	@Test
+	public void newBestSavedToProfile()
+	{
+		onCourse();
+		int start = ticks - 1;
+		for (int k = 0; k < 5; k++)
+		{
+			obstacle(k);
+		}
+		plugin.handleObstacleClick(SEERS_IDS[5]);
+		for (int i = 0; i < SEERS_DUR[5]; i++)
+		{
+			tickOnly();
+		}
+		at(2704, 3464);
+		plugin.handleStat("Agility", agTotal + 30);
+		int landing = ticks - 1;
+		tickOnly();
+		int lap1 = landing - start;
+		plugin.handleObstacleClick(SEERS_IDS[0]);
+		tickOnly();
+		verify(configManager).setRSProfileConfiguration(GROUP, "bestLap.SEERS", lap1);
+	}
+
+	@Test
+	public void markSpawnOnCourse()
+	{
+		onCourse();
+		obstacle(0);
+		plugin.handleObstacleClick(SEERS_IDS[1]);
+		for (int i = 0; i < SEERS_DUR[1]; i++)
+		{
+			tickOnly();
+		}
+		plugin.handleStat("Agility", agTotal + 40);
+		int landing = ticks - 1;
+		plugin.handleItemSpawned(net.runelite.api.gameval.ItemID.GRACE, new WorldPoint(2706, 3466, 2));
+		tickOnly();
+		assertTrue(plugin.timeline.peek(landing).mark);
+	}
+
+	@Test
+	public void markSpawnIgnoredOffCourseOtherItemOrLoading()
+	{
+		onCourse();
+		obstacle(0);
+		for (int variant = 0; variant < 3; variant++)
+		{
+			plugin.handleObstacleClick(SEERS_IDS[1]);
+			for (int i = 0; i < SEERS_DUR[1]; i++)
+			{
+				tickOnly();
+			}
+			agTotal += 40;
+			plugin.handleStat("Agility", agTotal);
+			int landing = ticks - 1;
+			if (variant == 0)
+			{
+				plugin.handleItemSpawned(net.runelite.api.gameval.ItemID.GRACE, new WorldPoint(3200, 3200, 0));
+			}
+			else if (variant == 1)
+			{
+				plugin.handleItemSpawned(1515, new WorldPoint(2706, 3466, 2));
+			}
+			else
+			{
+				plugin.handleGameState(GameState.LOADING, 0);
+				plugin.handleItemSpawned(net.runelite.api.gameval.ItemID.GRACE, new WorldPoint(2706, 3466, 2));
+			}
+			tickOnly();
+			assertFalse("variant " + variant, plugin.timeline.peek(landing).mark);
+			plugin.handleObstacleClick(SEERS_IDS[0]);
+			for (int i = 0; i < SEERS_DUR[0]; i++)
+			{
+				tickOnly();
+			}
+			agTotal += 30;
+			plugin.handleStat("Agility", agTotal);
+			tickOnly();
+		}
+	}
+
+	@Test
+	public void logoutMidLapKeepsBest()
+	{
+		when(configManager.getRSProfileConfiguration(GROUP, "bestLap.SEERS", Integer.class)).thenReturn(80);
+		onCourse();
+		obstacle(0);
+		obstacle(1);
+		plugin.handleObstacleClick(SEERS_IDS[2]);
+		tickOnly();
+		plugin.handleGameState(GameState.LOGIN_SCREEN, 99_000);
+		assertEquals(-1, plugin.agility.lapStartTick());
+		// The bests belong to the account: they are forgotten and reload when the account is back on course.
+		assertEquals(-1, plugin.agility.bestTicks());
+		assertEquals(null, plugin.regionCourse);
+		plugin.handleGameState(GameState.LOGGED_IN, 100_000);
+		onCourse();
+		assertEquals(80, plugin.agility.bestTicks());
+		assertEquals(Mode.GENERAL, plugin.buildState() == null ? Mode.GENERAL : plugin.buildState().mode);
+	}
+
+	@Test
+	public void hoppingKeepsAgility()
+	{
+		onCourse();
+		obstacle(0);
+		obstacle(1);
+		plugin.handleGameState(GameState.HOPPING, 99_000);
+		plugin.handleGameState(GameState.LOGGED_IN, 99_100);
+		assertEquals(2, plugin.agility.obstacles().size());
+		assertEquals("SEERS", plugin.regionCourse);
+	}
+
+	@Test
+	public void landingOnTheTickOfTheNextClickCounts()
+	{
+		onCourse();
+		obstacle(0);
+		plugin.handleObstacleClick(SEERS_IDS[1]);
+		for (int i = 0; i < SEERS_DUR[1]; i++)
+		{
+			tickOnly();
+		}
+		plugin.handleStat("Agility", agTotal + 40);
+		plugin.handleObstacleClick(SEERS_IDS[2]);
+		tickOnly();
+		tickOnly();
+		java.util.List<com.superhistogram.model.skill.AgilityCourse.Obstacle> o = plugin.agility.obstacles();
+		assertEquals(3, o.size());
+		assertTrue(o.get(1).endTick >= 0);
+		assertEquals(-1, o.get(2).endTick);
+	}
+
+	@Test
+	public void finalObstacleIsAlwaysReported()
+	{
+		onCourse();
+		for (int k = 0; k < 5; k++)
+		{
+			obstacle(k);
+		}
+		plugin.handleObstacleClick(SEERS_IDS[5]);
+		for (int i = 0; i < SEERS_DUR[5]; i++)
+		{
+			tickOnly();
+		}
+		at(2704, 3464);
+		plugin.handleStat("Agility", agTotal + 30);
+		tickOnly();
+		assertEquals(6, plugin.agility.obstacles().size());
+		assertEquals(6, plugin.agility.obstacles().get(5).number);
+	}
+
+	/** One full lap from obstacle 0 on the end tile; returns the lap's ticks. */
+	private int fullLap()
+	{
+		int start = ticks - 1;
+		for (int k = 0; k < 5; k++)
+		{
+			obstacle(k);
+		}
+		plugin.handleObstacleClick(SEERS_IDS[5]);
+		for (int i = 0; i < SEERS_DUR[5]; i++)
+		{
+			tickOnly();
+		}
+		at(2704, 3464);
+		plugin.handleStat("Agility", agTotal + 30);
+		int landing = ticks - 1;
+		tickOnly();
+		return landing - start;
+	}
+
+	@Test
+	public void bestDoesNotLeakToAnotherAccount()
+	{
+		when(configManager.getRSProfileConfiguration(GROUP, "bestLap.SEERS", Integer.class)).thenReturn(50);
+		onCourse();
+		assertEquals(50, plugin.agility.bestTicks());
+		plugin.handleGameState(GameState.LOGIN_SCREEN, 99_000);
+		// Account B has a slower saved best.
+		when(configManager.getRSProfileConfiguration(GROUP, "bestLap.SEERS", Integer.class)).thenReturn(90);
+		plugin.handleGameState(GameState.LOGGED_IN, 100_000);
+		onCourse();
+		assertEquals(90, plugin.agility.bestTicks());
+	}
+
+	@Test
+	public void anotherAccountWithoutBestStartsEmptyAndSavesItsFirstLap()
+	{
+		when(configManager.getRSProfileConfiguration(GROUP, "bestLap.SEERS", Integer.class)).thenReturn(40);
+		onCourse();
+		plugin.handleGameState(GameState.LOGIN_SCREEN, 99_000);
+		when(configManager.getRSProfileConfiguration(GROUP, "bestLap.SEERS", Integer.class)).thenReturn(null);
+		plugin.handleGameState(GameState.LOGGED_IN, 100_000);
+		onCourse();
+		assertEquals(-1, plugin.agility.bestTicks());
+		int lap = fullLap();
+		assertTrue(lap > 40);
+		plugin.handleObstacleClick(SEERS_IDS[0]);
+		tickOnly();
+		verify(configManager).setRSProfileConfiguration(GROUP, "bestLap.SEERS", lap);
+	}
+
+	@Test
+	public void profileChangeForgetsBests()
+	{
+		when(configManager.getRSProfileConfiguration(GROUP, "bestLap.SEERS", Integer.class)).thenReturn(50);
+		onCourse();
+		plugin.handleProfileChanged();
+		assertEquals(-1, plugin.agility.bestTicks());
+		assertEquals(null, plugin.agility.course());
+		when(configManager.getRSProfileConfiguration(GROUP, "bestLap.SEERS", Integer.class)).thenReturn(70);
+		tickOnly();
+		assertEquals(70, plugin.agility.bestTicks());
 	}
 }

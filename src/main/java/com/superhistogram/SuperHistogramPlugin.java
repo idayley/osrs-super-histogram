@@ -21,14 +21,18 @@ import com.superhistogram.model.combat.AttackTimer;
 import com.superhistogram.model.combat.Bosses;
 import com.superhistogram.model.combat.FlashRule;
 import com.superhistogram.model.combat.HitAttribution;
+import com.superhistogram.model.skill.AgilityCourse;
+import com.superhistogram.model.skill.AgilityCourses;
 import com.superhistogram.model.skill.AlchTracker;
 import com.superhistogram.model.skill.GatherRun;
 import com.superhistogram.model.skill.InventoryRun;
 import com.superhistogram.ui.BarOverlay;
 import com.superhistogram.ui.HullFlashOverlay;
 import com.superhistogram.ui.Pulse;
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -49,16 +53,19 @@ import net.runelite.api.NPC;
 import net.runelite.api.VarClientStr;
 import net.runelite.api.Player;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.gameval.ItemID;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.GameObjectDespawned;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.ItemSpawned;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.NpcDespawned;
 import net.runelite.api.events.StatChanged;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.events.RuneScapeProfileChanged;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemEquipmentStats;
 import net.runelite.client.game.ItemManager;
@@ -78,6 +85,7 @@ import net.runelite.client.ui.overlay.outline.ModelOutlineRenderer;
 public class SuperHistogramPlugin extends Plugin
 {
 	static final int TIMELINE_TICKS = 512;
+	static final String CONFIG_GROUP = "superhistogram";
 	/** A jump of more than this many tiles in one tick is a teleport, not movement. */
 	static final int MAX_STEP_TILES = 2;
 	static final int EAT_ANIMATION = AnimationID.CONSUMING;
@@ -93,6 +101,9 @@ public class SuperHistogramPlugin extends Plugin
 
 	@Inject
 	ItemManager itemManager;
+
+	@Inject
+	ConfigManager configManager;
 
 	@Inject
 	KeyManager keyManager;
@@ -124,6 +135,13 @@ public class SuperHistogramPlugin extends Plugin
 	volatile InventoryRun run;
 	volatile AlchTracker alch;
 	volatile GatherRun gather;
+	volatile AgilityCourse agility;
+	/** Id of the agility course whose region the player stands in; null off course. */
+	volatile String regionCourse;
+	/** The tick the player last gained Agility XP on a lap-end tile; -1 for none. */
+	int lapEndTick = -1;
+	/** Obstacle clicks waiting for their tick's model update: {tick, object id}. */
+	private final Deque<int[]> obstacleClicks = new ArrayDeque<>();
 	/** Free inventory slots from the newest inventory event; -1 when unknown. */
 	volatile int latestFreeSlots = -1;
 	/** The tick the last LOADING state arrived on: a scene reload despawns every object (this and the next tick are ignored). */
@@ -198,6 +216,10 @@ public class SuperHistogramPlugin extends Plugin
 		run = new InventoryRun(timeline);
 		alch = new AlchTracker(timeline);
 		gather = new GatherRun(timeline);
+		agility = new AgilityCourse(timeline);
+		regionCourse = null;
+		lapEndTick = -1;
+		obstacleClicks.clear();
 		latestFreeSlots = -1;
 		loadingTick = Integer.MIN_VALUE;
 		latestInventory = null;
@@ -243,6 +265,15 @@ public class SuperHistogramPlugin extends Plugin
 	public void onHitsplatApplied(HitsplatApplied e)
 	{
 		handleHit(e.getActor(), e.getHitsplat().getHitsplatType(), e.getHitsplat().getAmount());
+	}
+
+	@Subscribe
+	public void onItemSpawned(ItemSpawned e)
+	{
+		if (e.getItem() != null && e.getTile() != null)
+		{
+			handleItemSpawned(e.getItem().getId(), e.getTile().getWorldLocation());
+		}
 	}
 
 	@Subscribe
@@ -293,6 +324,10 @@ public class SuperHistogramPlugin extends Plugin
 				: action.name().startsWith("NPC_") ? npcKey(e.getId()) : 0;
 			handleGatherClick(gs, key, gatherTargetName(option, e.getMenuTarget()));
 		}
+		if (isObstacleAction(action) && !isBankClick(option, e.getMenuTarget()) && gs == null)
+		{
+			handleObstacleClick(e.getId());
+		}
 	}
 
 	@Subscribe
@@ -328,6 +363,12 @@ public class SuperHistogramPlugin extends Plugin
 			}
 			handleInventory(counts, GatherRun.INVENTORY - used);
 		}
+	}
+
+	@Subscribe
+	public void onRuneScapeProfileChanged(RuneScapeProfileChanged e)
+	{
+		handleProfileChanged();
 	}
 
 	@Subscribe
@@ -370,8 +411,40 @@ public class SuperHistogramPlugin extends Plugin
 		{
 			pulse.done(nowMs);
 		}
+		WorldPoint spot = me == null ? null : me.getWorldLocation();
+		AgilityCourses.Course course = spot == null ? null : AgilityCourses.byRegion(spot.getRegionID());
+		regionCourse = course == null ? null : course.id;
+		AgilityCourse ag = agility;
+		if (course != null && !course.id.equals(ag.course()))
+		{
+			ag.onCourse(course.id);
+			if (configManager != null)
+			{
+				Integer best = configManager.getRSProfileConfiguration(CONFIG_GROUP, "bestLap." + course.id, Integer.class);
+				if (best != null)
+				{
+					ag.loadBest(course.id, best);
+				}
+			}
+		}
+		boolean lapDone = ag.onTick(tick - 1, prev == null ? Collections.<XpDrop>emptyList() : prev.xp,
+			prev != null && !prev.hits.isEmpty(), lapEndTick >= 0 && lapEndTick == tick - 1);
+		// Clicks wait for the update of their own tick: a landing on the tick of the next click must count first.
+		for (int[] click = obstacleClicks.poll(); click != null; click = obstacleClicks.poll())
+		{
+			ag.onObstacleClick(click[0], click[1]);
+		}
+		if (lapDone && config.blinkWhenDone())
+		{
+			pulse.done(nowMs);
+		}
+		if (ag.takeBestChanged() && configManager != null)
+		{
+			configManager.setRSProfileConfiguration(CONFIG_GROUP, "bestLap." + ag.course(), ag.bestTicks());
+		}
 		boolean cue = beat.isBeat(tick) || (run.running() && run.finishTick() == tick)
-			|| (alch.showing(tick) && alch.nextReadyTick() == tick) || gather.cueTick() == tick;
+			|| (alch.showing(tick) && alch.nextReadyTick() == tick) || gather.cueTick() == tick
+			|| (ag.showing(tick) && ag.readyTick() == tick);
 
 		if (me != null)
 		{
@@ -411,6 +484,15 @@ public class SuperHistogramPlugin extends Plugin
 
 	void handleStat(String skill, int totalXp)
 	{
+		if ("Agility".equals(skill) && agility != null)
+		{
+			Player p = client == null ? null : client.getLocalPlayer();
+			WorldPoint w = p == null ? null : p.getWorldLocation();
+			if (w != null && AgilityCourses.isLapEnd(agility.course(), w.getX(), w.getY(), w.getPlane()))
+			{
+				lapEndTick = tick;
+			}
+		}
 		if (xp != null)
 		{
 			xp.onStat(skill, totalXp, tick);
@@ -578,6 +660,38 @@ public class SuperHistogramPlugin extends Plugin
 		if (gr != null)
 		{
 			gr.onTargetClick(tick, skill, key, name);
+		}
+	}
+
+	/** True for the five game-object options: obstacles are clicked with one of them. */
+	static boolean isObstacleAction(MenuAction a)
+	{
+		return a == MenuAction.GAME_OBJECT_FIRST_OPTION || a == MenuAction.GAME_OBJECT_SECOND_OPTION
+			|| a == MenuAction.GAME_OBJECT_THIRD_OPTION || a == MenuAction.GAME_OBJECT_FOURTH_OPTION
+			|| a == MenuAction.GAME_OBJECT_FIFTH_OPTION;
+	}
+
+	/** The player clicked a game object; it counts as an obstacle only on an agility course. */
+	void handleObstacleClick(int objectId)
+	{
+		if (agility != null && regionCourse != null && tick >= 0)
+		{
+			obstacleClicks.add(new int[]{tick, objectId});
+		}
+	}
+
+	/** A mark of grace spawned on the current course (client thread); ignored on the tick a scene loads. */
+	void handleItemSpawned(int itemId, WorldPoint where)
+	{
+		AgilityCourse ag = agility;
+		if (ag == null || where == null || itemId != ItemID.GRACE || tick == loadingTick)
+		{
+			return;
+		}
+		AgilityCourses.Course c = AgilityCourses.byRegion(where.getRegionID());
+		if (c != null && c.id.equals(ag.course()))
+		{
+			ag.onMark(tick);
 		}
 	}
 
@@ -754,6 +868,22 @@ public class SuperHistogramPlugin extends Plugin
 		}
 	}
 
+	/** The active RuneScape profile changed: the saved bests belong to another account now. */
+	void handleProfileChanged()
+	{
+		AgilityCourse ag = agility;
+		if (ag != null)
+		{
+			ag.reset();
+			if (timeline != null)
+			{
+				ag.rebind(timeline);
+			}
+		}
+		lapEndTick = -1;
+		obstacleClicks.clear();
+	}
+
 	void handleGameState(GameState state, long nowMs)
 	{
 		if (clock == null)
@@ -794,6 +924,12 @@ public class SuperHistogramPlugin extends Plugin
 				run = new InventoryRun(timeline);
 				alch.rebind(timeline);
 				gather = new GatherRun(timeline);
+				// Another account may log in next: forget the course and every best (they reload per profile).
+				agility.reset();
+				agility.rebind(timeline);
+				lapEndTick = -1;
+				regionCourse = null;
+				obstacleClicks.clear();
 				latestFreeSlots = -1;
 				loadingTick = Integer.MIN_VALUE;
 				latestInventory = null;
@@ -824,13 +960,17 @@ public class SuperHistogramPlugin extends Plugin
 		Player me = client.getLocalPlayer();
 		int tickNow = timeline.newestTick();
 		AttackTimer at = attack;
+		AgilityCourse agilityNow = agility;
+		boolean agilityOn = agilityNow != null && agilityNow.showing(tickNow);
+		// A fall hits the player; while agility shows, only an NPC target or an own attack means combat.
 		boolean combat = me != null && at != null
-			&& ModeDetector.inCombat(me.getInteracting() instanceof NPC, tickNow, lastHitTick, at.lastAttackTick());
+			&& ModeDetector.inCombat(me.getInteracting() instanceof NPC, tickNow,
+				agilityOn ? AttackTimer.NEVER : lastHitTick, at.lastAttackTick());
 		InventoryRun runNow = run;
 		AlchTracker alchNow = alch;
 		GatherRun gatherNow = gather;
 		Mode skilling = ModeDetector.skilling(alchNow != null && alchNow.showing(tickNow),
-			runNow != null && runNow.showing(tickNow), gatherNow != null && gatherNow.showing(tickNow));
+			runNow != null && runNow.showing(tickNow), agilityOn, gatherNow != null && gatherNow.showing(tickNow));
 		Mode mode = modeDetector.detect(afk, combat, skilling, config.prayerMode(), config.baseline());
 		return BarState.builder()
 			.timeline(timeline)
@@ -841,7 +981,8 @@ public class SuperHistogramPlugin extends Plugin
 			.runEnergyPct(runEnergyPct)
 			.modeName(mode == Mode.PRODUCTION ? runNow.skill()
 				: mode == Mode.GATHERING ? gatherNow.skill() : modeName(mode))
-			.modeSub(mode == Mode.GATHERING ? gatherSub(gatherNow) : modeSub(mode))
+			.modeSub(mode == Mode.GATHERING ? gatherSub(gatherNow)
+				: mode == Mode.AGILITY ? agilitySub(agilityNow) : modeSub(mode))
 			.showRunEnergy(config.showRunEnergy())
 			.showLoginTime(config.showLoginTime())
 			.mode(mode)
@@ -860,7 +1001,15 @@ public class SuperHistogramPlugin extends Plugin
 			.gather(gatherNow)
 			.alchTopRow(config.alchTopRow())
 			.rightSide(config.rightSide())
+			.agility(agilityNow)
+			.lapCompare(config.lapCompare())
 			.build();
+	}
+
+	private static String agilitySub(AgilityCourse a)
+	{
+		AgilityCourses.Course c = a == null ? null : AgilityCourses.byId(a.course());
+		return c == null ? "auto" : "auto \u00b7 " + c.name;
 	}
 
 	private static String gatherSub(GatherRun g)
@@ -882,6 +1031,7 @@ public class SuperHistogramPlugin extends Plugin
 			case ALCH:
 				return "auto \u00b7 5t";
 			case GATHERING:
+			case AGILITY:
 				return "auto";
 			case LAZY_FLICK:
 				return weaponSpeed + "t \u00b7 " + config.beatKey();
@@ -904,6 +1054,8 @@ public class SuperHistogramPlugin extends Plugin
 				return "Minimal";
 			case ALCH:
 				return "High alch";
+			case AGILITY:
+				return "Agility";
 			default:
 				return "General";
 		}

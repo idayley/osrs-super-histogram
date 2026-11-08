@@ -10,5 +10,6 @@ public enum Mode
 	ONE_TICK,
 	PRODUCTION,
 	ALCH,
-	GATHERING
+	GATHERING,
+	AGILITY
 }

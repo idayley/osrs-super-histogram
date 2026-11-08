@@ -490,4 +490,15 @@ public class AgilityCourseTest
 		ac.onObstacleClick(now + 5, 14929);
 		assertEquals(1, ac.obstacles().get(0).number);
 	}
+
+	@Test
+	public void courseSinceTickMarksTheSwitch()
+	{
+		assertEquals(-1, ac.courseSinceTick());
+		tickTo(40);
+		ac.onCourse("GNOME");
+		assertEquals(40, ac.courseSinceTick());
+		ac.onCourse("GNOME");
+		assertEquals(40, ac.courseSinceTick());
+	}
 }

@@ -3,6 +3,7 @@ package com.superhistogram.ui;
 import com.superhistogram.model.BarState;
 import com.superhistogram.model.Mode;
 import com.superhistogram.ui.modes.AfkView;
+import com.superhistogram.ui.modes.AgilityView;
 import com.superhistogram.ui.modes.AlchView;
 import com.superhistogram.ui.modes.GatherView;
 import com.superhistogram.ui.modes.GeneralView;
@@ -36,6 +37,13 @@ public final class BarPainter
 		views.put(Mode.PRODUCTION, new ProductionView());
 		views.put(Mode.ALCH, new AlchView());
 		views.put(Mode.GATHERING, new GatherView());
+		views.put(Mode.AGILITY, new AgilityView());
+	}
+
+	/** The layout the ruler, timeline and now line use: narrower ticks in the agility view, else {@code l} itself. */
+	public static BarLayout timelineLayout(BarLayout l, BarState s)
+	{
+		return s != null && s.mode == Mode.AGILITY ? l.withTickWidth(AgilityView.tickWidth(l, s.agility)) : l;
 	}
 
 	/** Paints the bar at (0,0) in the layout's size. A null state paints the empty ground. */
@@ -84,7 +92,8 @@ public final class BarPainter
 	{
 		ModeView view = views.getOrDefault(s.mode, views.get(Mode.GENERAL));
 		ReadoutPainter.left(g, l, s);
-		TimelinePainter.ruler(g, l);
+		BarLayout tl = timelineLayout(l, s);
+		TimelinePainter.ruler(g, tl);
 
 		Graphics2D tg = (Graphics2D) g.create();
 		try
@@ -92,14 +101,14 @@ public final class BarPainter
 			// A little slack on the left so XP text that starts just before a slot isn't cut hard.
 			float slack = 6f * l.u;
 			tg.clip(new Rectangle2D.Float(l.timelineX - slack, 0, l.timelineW + slack, l.height));
-			view.paintTimeline(tg, l, s);
+			view.paintTimeline(tg, tl, s);
 		}
 		finally
 		{
 			tg.dispose();
 		}
 
-		TimelinePainter.nowLine(g, l);
+		TimelinePainter.nowLine(g, tl);
 		view.paintRight(g, l, s);
 		ReadoutPainter.login(g, l, s, nowMs);
 	}

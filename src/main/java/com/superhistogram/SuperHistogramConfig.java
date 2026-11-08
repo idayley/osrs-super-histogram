@@ -4,6 +4,7 @@ import com.superhistogram.model.BaselineSetting;
 import com.superhistogram.model.RightSide;
 import com.superhistogram.model.XpDrops;
 import com.superhistogram.model.skill.AlchTopRow;
+import com.superhistogram.model.skill.LapCompare;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.PrayerMode;
 import java.awt.event.KeyEvent;
@@ -102,7 +103,7 @@ public interface SuperHistogramConfig extends Config
 		position = 7,
 		keyName = "blinkWhenDone",
 		name = "Blink when done",
-		description = "Flash the bar mint when an inventory finishes or fills, or the AFK logout warning fires"
+		description = "Flash the bar mint when an inventory finishes or fills, an agility lap ends, or the AFK logout warning fires"
 	)
 	default boolean blinkWhenDone()
 	{
@@ -250,5 +251,16 @@ public interface SuperHistogramConfig extends Config
 	default RightSide rightSide()
 	{
 		return RightSide.PER_HOUR;
+	}
+
+	@ConfigItem(
+		position = 26,
+		keyName = "lapCompare",
+		name = "Agility: compare lap to",
+		description = "Compare this lap's time with your best lap or your last lap"
+	)
+	default LapCompare lapCompare()
+	{
+		return LapCompare.BEST;
 	}
 }

@@ -3,6 +3,7 @@ package com.superhistogram.ui;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import com.superhistogram.model.BarState;
@@ -12,6 +13,7 @@ import com.superhistogram.model.XpTracker;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
 import com.superhistogram.model.combat.FlickClassifier;
+import com.superhistogram.model.skill.LapCompare;
 import com.superhistogram.ui.SampleStates.ProdPhase;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -325,7 +327,7 @@ public class BarRenderSmokeTest
 
 	private static float tickX(BarLayout l, BarState s, int tick)
 	{
-		return TimelinePainter.x(l, s, tick);
+		return TimelinePainter.x(BarPainter.timelineLayout(l, s), s, tick);
 	}
 
 	@Test
@@ -1073,6 +1075,177 @@ public class BarRenderSmokeTest
 		for (int x = (int) (l.timelineX - 6f * l.u); x < (int) l.timelineX; x++)
 		{
 			assertFalse("pill at " + x, Palette.WC_PILL.getRGB() == img.getRGB(x, y));
+		}
+	}
+
+	// ---- agility ----
+
+	private static boolean near(int argb, java.awt.Color c, int tol)
+	{
+		return (argb >>> 24) >= 250 && Math.abs(((argb >> 16) & 255) - c.getRed()) <= tol
+			&& Math.abs(((argb >> 8) & 255) - c.getGreen()) <= tol && Math.abs((argb & 255) - c.getBlue()) <= tol;
+	}
+
+	private static boolean hasNear(BufferedImage img, float x0, float x1, float y0, float y1, java.awt.Color c)
+	{
+		for (int y = Math.max(0, (int) Math.floor(y0)); y < Math.min(img.getHeight(), Math.ceil(y1)); y++)
+		{
+			for (int x = Math.max(0, (int) Math.floor(x0)); x < Math.min(img.getWidth(), Math.ceil(x1)); x++)
+			{
+				if (near(img.getRGB(x, y), c, 8))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private static final int S3 = SampleStates.lapThreeStart(SampleStates.AgilityPhase.MID_LAP);
+
+	@Test
+	public void agilityRendersAtThreeSizes()
+	{
+		for (SampleStates.AgilityPhase p : SampleStates.AgilityPhase.values())
+		{
+			BarState s = SampleStates.agility(p);
+			render(1026, 62, s, new Pulse());
+			render(1026, 46, s, new Pulse());
+			render(600, 30, s, new Pulse());
+			render(1026, 22, s, null);
+		}
+	}
+
+	@Test
+	public void otherModesKeepTickWidth()
+	{
+		BarLayout l = BarLayout.of(1026, 62);
+		assertSame(l, BarPainter.timelineLayout(l, SampleStates.cooking(ProdPhase.RUNNING)));
+		assertSame(l, BarPainter.timelineLayout(l, null));
+		BarState s = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP);
+		assertTrue(BarPainter.timelineLayout(l, s).tickWidth < l.tickWidth);
+	}
+
+	@Test
+	public void obstaclePillIsAgilityBlue()
+	{
+		BarState s = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP);
+		BarLayout l = BarLayout.of(1026, 62);
+		float tw = BarPainter.timelineLayout(l, s).tickWidth;
+		BufferedImage img = render(1026, 62, s, null);
+		assertTrue(opaque(img, (int) (tickX(l, s, S3 + 3) + tw / 2), (int) (29 * l.u), Palette.skill("Agility")));
+	}
+
+	@Test
+	public void obstacleNumberDrawn()
+	{
+		BarState s = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP);
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		float x = tickX(l, s, S3), u = l.u;
+		boolean dark = false;
+		for (int y = (int) (25 * u); y < (int) (33 * u) && !dark; y++)
+		{
+			for (int px = (int) (x + 7 * u); px <= (int) (x + 13 * u) && !dark; px++)
+			{
+				int argb = img.getRGB(px, y);
+				dark = ((argb >> 16) & 255) < 60 && ((argb >> 8) & 255) < 60 && (argb & 255) < 60;
+			}
+		}
+		assertTrue("no dark number pixel", dark);
+	}
+
+	@Test
+	public void lapStartLine()
+	{
+		BarState s = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP);
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		BufferedImage ref = render(1026, 62, SampleStates.withoutAgility(s), null);
+		int lx = (int) Math.floor(tickX(l, s, S3) - 2 * l.u), y = (int) (12 * l.u);
+		boolean lit = false;
+		for (int x = lx - 1; x <= lx + 1; x++)
+		{
+			int a = img.getRGB(x, y), b = ref.getRGB(x, y);
+			lit |= ((a >> 16) & 255) >= ((b >> 16) & 255) + 20 && ((a >> 8) & 255) >= ((b >> 8) & 255) + 20
+				&& (a & 255) >= (b & 255) + 20;
+		}
+		assertTrue("lap line", lit);
+		float x0 = tickX(l, s, S3);
+		assertTrue("lap label", hasNear(img, x0 + 2 * l.u, x0 + 30 * l.u, 51 * l.u, 60 * l.u, Palette.DIM));
+	}
+
+	@Test
+	public void lostLabelOnlyWhenEnabled()
+	{
+		BarLayout l = BarLayout.of(1026, 62);
+		BarState on = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP);
+		BarState off = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP, LapCompare.BEST, false);
+		float x0 = tickX(l, on, S3 + 31), x1 = tickX(l, on, SampleStates.NOW_TICK);
+		assertTrue(hasNear(render(1026, 62, on, null), x0, x1, 34 * l.u, 42 * l.u, Palette.LOST));
+		assertFalse(hasNear(render(1026, 62, off, null), x0, x1, 34 * l.u, 42 * l.u, Palette.LOST));
+	}
+
+	@Test
+	public void markOfGraceIsMint()
+	{
+		BarState s = SampleStates.agility(SampleStates.AgilityPhase.MID_LAP);
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u, cx = tickX(l, s, S3 + 16) - 9 * u, cy = TimelinePainter.xpY(l) - 3.5f * u;
+		assertTrue(hasNear(render(1026, 62, s, null), cx - 3 * u, cx + 3 * u, cy - 3 * u, cy + 3 * u, Palette.MINT));
+	}
+
+	@Test
+	public void agilityRightDoesNotOverlapLoginTime()
+	{
+		for (int w : new int[]{1026, 720})
+		{
+			for (SampleStates.AgilityPhase p : SampleStates.AgilityPhase.values())
+			{
+				BarState s = SampleStates.agility(p);
+				BarLayout l = BarLayout.of(w, 62);
+				BufferedImage img = render(w, 62, s, null);
+				BufferedImage ref = render(w, 62, SampleStates.withoutAgility(s), null);
+				Graphics2D g = img.createGraphics();
+				int tw = g.getFontMetrics(Fonts.semiBold(11f * l.u)).stringWidth(s.clock.format(s.nowMs));
+				g.dispose();
+				int x1 = (int) (l.width - 26f * l.u), x0 = x1 - tw - 2;
+				for (int y = (int) (14f * l.u); y < (int) (50f * l.u); y++)
+				{
+					for (int x = x0; x < l.width; x++)
+					{
+						assertEquals("w=" + w + " " + p + " paint over login time at " + x + "," + y,
+							ref.getRGB(x, y), img.getRGB(x, y));
+					}
+				}
+				boolean painted = false;
+				for (int y = 0; y < 62 && !painted; y++)
+				{
+					for (int x = (int) CombatPainter.rightX(l); x < x0 && !painted; x++)
+					{
+						painted = img.getRGB(x, y) != ref.getRGB(x, y);
+					}
+				}
+				assertTrue("w=" + w + " " + p + " readout not painted", painted);
+			}
+		}
+	}
+
+	@Test
+	public void agilitySmallLineFitsAtDefaultSize()
+	{
+		BarLayout l = BarLayout.of(1026, 62);
+		for (SampleStates.AgilityPhase p : SampleStates.AgilityPhase.values())
+		{
+			BarState s = SampleStates.agility(p);
+			String[] lines = com.superhistogram.ui.modes.AgilityView.rightLines(s);
+			Graphics2D g = render(1026, 62, s, null).createGraphics();
+			java.awt.Font f = Fonts.semiBold(10.5f * l.u);
+			float room = ReadoutPainter.rightLimit(g, l, s) - (l.timelineX + l.timelineW + com.superhistogram.ui.modes.AgilityView.RIGHT_INSET * l.u);
+			assertTrue(f.canDisplay('\u2212'));
+			assertEquals(p + " " + lines[1], lines[1], ReadoutPainter.pickSmall(g, f, room, lines[1]));
+			assertTrue(p + " " + lines[1], f.getStringBounds(lines[1], g.getFontRenderContext()).getWidth() <= room);
+			g.dispose();
 		}
 	}
 }

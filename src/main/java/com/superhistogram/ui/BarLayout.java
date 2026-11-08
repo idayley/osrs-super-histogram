@@ -20,6 +20,28 @@ public final class BarLayout
 	{
 	}
 
+	/** A copy with another tick width; the visible tick count follows and everything else is equal. */
+	public BarLayout withTickWidth(float tw)
+	{
+		BarLayout c = new BarLayout();
+		c.width = width;
+		c.height = height;
+		c.u = u;
+		c.tickWidth = tw;
+		c.rows = rows;
+		c.showLeft = showLeft;
+		c.showRight = showRight;
+		c.timelineX = timelineX;
+		c.timelineW = timelineW;
+		c.visibleTicks = (int) Math.floor(timelineW / tw);
+		c.topY = topY;
+		c.pillY = pillY;
+		c.pillH = pillH;
+		c.actionsY = actionsY;
+		c.rulerY = rulerY;
+		return c;
+	}
+
 	public static BarLayout of(int width, int height)
 	{
 		BarLayout l = new BarLayout();

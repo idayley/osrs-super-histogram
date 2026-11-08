@@ -46,6 +46,8 @@ public final class Palette
 	public static final Color WC_PILL = hex(0xb5a06a);
 	public static final Color LOG = hex(0xc89a5a);
 	public static final Color LOG_END = hex(0xe8c58f);
+	/** Lap start lines in the agility view. */
+	public static final Color LAP_LINE = new Color(255, 255, 255, Math.round(0.3f * 255));
 	public static final Color NOTCH = new Color(20, 23, 27, Math.round(0.45f * 255));
 
 	/** The coin's ring (high-alch.html). */

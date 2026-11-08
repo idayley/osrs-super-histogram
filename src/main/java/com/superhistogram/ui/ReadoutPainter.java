@@ -70,21 +70,44 @@ public final class ReadoutPainter
 		right(g, l, s, big, bigColor, small, false, fallbacks);
 	}
 
+	/**
+	 * As the first form; {@code smallFallbacks} are shorter small lines tried in order when the full one
+	 * does not fit (the first that fits is used; if none does, the full line is shortened as usual).
+	 */
+	public static void right(Graphics2D g, BarLayout l, BarState s, String big, Color bigColor, String small,
+		String[] fallbacks, String[] smallFallbacks)
+	{
+		right(g, l, s, big, bigColor, small, false, fallbacks, smallFallbacks, 10f);
+	}
+
+	/** As above, with the text starting {@code insetU} (in u) right of the timeline instead of 10u. */
+	public static void right(Graphics2D g, BarLayout l, BarState s, String big, Color bigColor, String small,
+		String[] fallbacks, String[] smallFallbacks, float insetU)
+	{
+		right(g, l, s, big, bigColor, small, false, fallbacks, smallFallbacks, insetU);
+	}
+
 	/** As the first form; with {@code coin} a gold coin is drawn before the headline (high alch). */
 	public static void right(Graphics2D g, BarLayout l, BarState s, String big, Color bigColor, String small,
 		boolean coin)
 	{
-		right(g, l, s, big, bigColor, small, coin, new String[0]);
+		right(g, l, s, big, bigColor, small, coin, new String[0], new String[0], 10f);
 	}
 
 	private static void right(Graphics2D g, BarLayout l, BarState s, String big, Color bigColor, String small,
 		boolean coin, String[] fallbacks)
 	{
+		right(g, l, s, big, bigColor, small, coin, fallbacks, new String[0], 10f);
+	}
+
+	private static void right(Graphics2D g, BarLayout l, BarState s, String big, Color bigColor, String small,
+		boolean coin, String[] fallbacks, String[] smallFallbacks, float insetU)
+	{
 		if (!l.showRight)
 		{
 			return;
 		}
-		float u = l.u, x = l.timelineX + l.timelineW + 10f * u;
+		float u = l.u, x = l.timelineX + l.timelineW + insetU * u;
 		float room = rightLimit(g, l, s) - x;
 		if (l.rows == 1)
 		{
@@ -108,7 +131,7 @@ public final class ReadoutPainter
 		}
 		Font bf = Fonts.bold(20f * u), sf = Fonts.semiBold(10.5f * u);
 		text(g, pickHeadline(g, bf, room - skip, big, fallbacks), bf, bigColor, x + skip, 33f * u);
-		String line = small;
+		String line = pickSmall(g, sf, room, small, smallFallbacks);
 		if (line != null && width(g, line, sf) > room)
 		{
 			int i = line.indexOf(LAST_PART);
@@ -118,6 +141,23 @@ public final class ReadoutPainter
 			}
 		}
 		text(g, fit(g, line, sf, room), sf, Palette.DIM, x, 48f * u);
+	}
+
+	/** The first of full, fallbacks... that fits in room; the full line when none does. */
+	static String pickSmall(Graphics2D g, Font f, float room, String full, String... fallbacks)
+	{
+		if (full == null || width(g, full, f) <= room)
+		{
+			return full;
+		}
+		for (String c : fallbacks)
+		{
+			if (c != null && width(g, c, f) <= room)
+			{
+				return c;
+			}
+		}
+		return full;
 	}
 
 	/** The first of full, fallbacks... that fits in room; the ellipsized full headline when none does. */

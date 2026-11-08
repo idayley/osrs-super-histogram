@@ -11,7 +11,7 @@ public final class ModeDetector
 	}
 
 	/**
-	 * @param skilling the skilling view to show (PRODUCTION, ALCH, GATHERING) or null; it beats the baseline
+	 * @param skilling the skilling view to show (PRODUCTION, ALCH, AGILITY, GATHERING) or null; it beats the baseline
 	 *                 but not AFK or combat
 	 */
 	public Mode detect(boolean afk, boolean inCombat, Mode skilling, PrayerMode prayerMode, BaselineSetting baseline)
@@ -40,7 +40,14 @@ public final class ModeDetector
 	/** As above; gathering comes after high alch and production. */
 	public static Mode skilling(boolean alching, boolean producing, boolean gathering)
 	{
-		return alching ? Mode.ALCH : producing ? Mode.PRODUCTION : gathering ? Mode.GATHERING : null;
+		return skilling(alching, producing, false, gathering);
+	}
+
+	/** High alch, then production, agility, gathering. */
+	public static Mode skilling(boolean alching, boolean producing, boolean agility, boolean gathering)
+	{
+		return alching ? Mode.ALCH : producing ? Mode.PRODUCTION : agility ? Mode.AGILITY
+			: gathering ? Mode.GATHERING : null;
 	}
 
 	/** In combat: interacting with an NPC, or a hit on you or your own attack within the last 10 ticks. */

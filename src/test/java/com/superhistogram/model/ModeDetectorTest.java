@@ -125,4 +125,16 @@ public class ModeDetectorTest
 		assertEquals(Mode.GATHERING,
 			detector.detect(false, false, Mode.GATHERING, PrayerMode.LAZY_FLICK, BaselineSetting.MINIMAL));
 	}
+
+	@Test
+	public void agilityOrder()
+	{
+		assertEquals(Mode.AGILITY, ModeDetector.skilling(false, false, true, true));
+		assertEquals(Mode.PRODUCTION, ModeDetector.skilling(false, true, true, true));
+		assertEquals(Mode.ALCH, ModeDetector.skilling(true, false, true, false));
+		assertEquals(Mode.GATHERING, ModeDetector.skilling(false, false, false, true));
+		assertEquals(null, ModeDetector.skilling(false, false, false, false));
+		assertEquals(Mode.GATHERING, ModeDetector.skilling(false, false, true));
+		assertEquals(Mode.ALCH, ModeDetector.skilling(true, true, true));
+	}
 }

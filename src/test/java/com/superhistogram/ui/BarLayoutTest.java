@@ -86,4 +86,20 @@ public class BarLayoutTest
 		assertEquals(46f, l.actionsY, 0.001f);
 		assertEquals(53f, l.rulerY, 0.001f);
 	}
+
+	@Test
+	public void withTickWidthKeepsGeometry()
+	{
+		BarLayout l = BarLayout.of(1026, 62);
+		BarLayout n = l.withTickWidth(14f);
+		assertEquals(14f, n.tickWidth, 0f);
+		assertEquals(49, n.visibleTicks);
+		assertEquals(l.timelineX, n.timelineX, 0f);
+		assertEquals(l.timelineW, n.timelineW, 0f);
+		assertEquals(l.rows, n.rows);
+		assertEquals(l.u, n.u, 0f);
+		assertEquals(l.width, n.width);
+		assertEquals(l.pillY, n.pillY, 0f);
+		assertEquals(32f, l.tickWidth, 0f);
+	}
 }

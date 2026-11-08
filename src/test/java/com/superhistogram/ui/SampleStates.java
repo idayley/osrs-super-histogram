@@ -13,10 +13,12 @@ import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
 import com.superhistogram.model.combat.FlickClassifier;
 import com.superhistogram.model.combat.FoodKind;
+import com.superhistogram.model.skill.AgilityCourse;
 import com.superhistogram.model.skill.AlchTopRow;
 import com.superhistogram.model.skill.AlchTracker;
 import com.superhistogram.model.skill.GatherRun;
 import com.superhistogram.model.skill.InventoryRun;
+import com.superhistogram.model.skill.LapCompare;
 import com.superhistogram.model.RightSide;
 import java.util.HashMap;
 import java.util.Map;
@@ -838,5 +840,106 @@ public final class SampleStates
 			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
 			.alchTopRow(s.alchTopRow)
 			.build();
+	}
+
+	// ---- agility (agility.html) ----
+
+	/** Where the Seers' rooftop sample stands (lap 3 of 3). */
+	public enum AgilityPhase
+	{
+		/** Obstacle 5 clicked on NOW_TICK, 34 ticks into lap 3; best lap 50 ticks. */
+		MID_LAP,
+		/** Lap 3 (52 ticks) lands its last obstacle on NOW_TICK; best lap 50 ticks. */
+		LAP_DONE,
+		/** As LAP_DONE with no saved best, so lap 3 is the new best. */
+		NEW_BEST
+	}
+
+	public static final int[] SEERS_IDS = {14927, 14928, 14932, 14929, 14930, 14931};
+	public static final int[] SEERS_DUR = {7, 9, 6, 8, 11, 7};
+	private static final int[] SEERS_XP = {30, 40, 25, 35, 60, 30};
+
+	/** First click of lap 3 in the sample. */
+	public static int lapThreeStart(AgilityPhase p)
+	{
+		return NOW_TICK - (p == AgilityPhase.MID_LAP ? 34 : 52);
+	}
+
+	public static BarState agility(AgilityPhase p)
+	{
+		return agility(p, LapCompare.BEST, true);
+	}
+
+	/** Real AgilityCourse and XpTracker driven the way the plugin does (onTick before that tick's click). */
+	public static BarState agility(AgilityPhase p, LapCompare compare, boolean wastedTicks)
+	{
+		Timeline t = new Timeline(512);
+		XpTracker xp = new XpTracker(t);
+		AgilityCourse ac = new AgilityCourse(t);
+		int[] now = {-1};
+		long[] total = {2_000_000};
+		java.util.function.IntConsumer tickTo = target ->
+		{
+			while (now[0] < target)
+			{
+				now[0]++;
+				t.at(now[0]);
+				ac.onTick(now[0], t.at(now[0]).xp, false, false);
+			}
+		};
+		xp.onStat("Agility", (int) total[0], 0);
+		ac.onCourse("SEERS");
+		if (p != AgilityPhase.NEW_BEST)
+		{
+			ac.loadBest("SEERS", 50);
+		}
+		int s3 = lapThreeStart(p);
+		int[][] lapGaps = {{1, 0, 1, 3, 0}, {0, 1, 0, 2, 2}, {0, 0, 1, 3, 0}};
+		int[] starts = {s3 - 112, s3 - 56, s3};
+		for (int lap = 0; lap < 3; lap++)
+		{
+			int c = starts[lap];
+			int obstacles = lap == 2 && p == AgilityPhase.MID_LAP ? 5 : 6;
+			for (int k = 0; k < obstacles; k++)
+			{
+				tickTo.accept(c);
+				ac.onObstacleClick(c, SEERS_IDS[k]);
+				if (lap == 2 && k == 4 && p == AgilityPhase.MID_LAP)
+				{
+					break;
+				}
+				int l = c + SEERS_DUR[k];
+				tickTo.accept(l - 1);
+				now[0] = l;
+				t.at(l);
+				total[0] += SEERS_XP[k];
+				xp.onStat("Agility", (int) total[0], l);
+				ac.onTick(l, t.at(l).xp, false, k == 5);
+				if (lap == 2 && k == 1)
+				{
+					ac.onMark(l);
+				}
+				c = l + (k < 5 ? lapGaps[lap][k] : 0);
+			}
+		}
+		tickTo.accept(NOW_TICK);
+		SessionClock clock = new SessionClock();
+		clock.onLoggedIn(NOW_MS - (2 * 3600 + 14 * 60 + 7) * 1000L);
+		return BarState.builder()
+			.timeline(t).nowTick(NOW_TICK).xp(xp).idle(new IdleTracker(60)).clock(clock)
+			.runEnergyPct(64).modeName("Agility").modeSub("auto \u00b7 Seers'").showRunEnergy(true)
+			.showLoginTime(true).mode(Mode.AGILITY).nowMs(NOW_MS)
+			.agility(ac).lapCompare(compare).wastedTicks(wastedTicks)
+			.build();
+	}
+
+	/** The same state without its agility course. */
+	public static BarState withoutAgility(BarState s)
+	{
+		return BarState.builder()
+			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
+			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
+			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.wastedTicks(s.wastedTicks).build();
 	}
 }

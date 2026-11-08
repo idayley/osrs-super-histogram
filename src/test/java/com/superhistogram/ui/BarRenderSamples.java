@@ -217,6 +217,29 @@ public class BarRenderSamples
 		sheet(new File(dir, "task18b-contact.png"), rows);
 	}
 
+	/**
+	 * Agility contact sheet: each AgilityPhase at 1026x62, 720x62, 480x62 and 1026x31, then MID_LAP with
+	 * "last" and without the lost label, 2x. Writes task19b-contact.png.
+	 */
+	@Test
+	public void writeAgilityContactSheet() throws IOException
+	{
+		String dir = System.getProperty("superhistogram.renderDir");
+		assumeTrue(dir != null && !dir.isEmpty());
+		java.util.List<Object[]> rows = new java.util.ArrayList<>();
+		int[][] sizes = {{1026, 62}, {720, 62}, {480, 62}, {1026, 31}, {400, 36}};
+		for (int[] wh : sizes)
+		{
+			for (SampleStates.AgilityPhase p : SampleStates.AgilityPhase.values())
+			{
+				rows.add(new Object[]{wh[0], wh[1], SampleStates.agility(p)});
+			}
+		}
+		rows.add(new Object[]{1026, 62, SampleStates.agility(SampleStates.AgilityPhase.MID_LAP,
+			com.superhistogram.model.skill.LapCompare.LAST, false)});
+		sheet(new File(dir, "task19b-contact.png"), rows);
+	}
+
 	private static void sheet(File file, java.util.List<Object[]> rows) throws IOException
 	{
 		int pad = 8, total = pad;

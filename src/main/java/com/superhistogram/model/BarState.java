@@ -3,10 +3,12 @@ package com.superhistogram.model;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
 import com.superhistogram.model.combat.FlickClassifier;
+import com.superhistogram.model.skill.AgilityCourse;
 import com.superhistogram.model.skill.AlchTopRow;
 import com.superhistogram.model.skill.AlchTracker;
 import com.superhistogram.model.skill.GatherRun;
 import com.superhistogram.model.skill.InventoryRun;
+import com.superhistogram.model.skill.LapCompare;
 
 /**
  * Read-only snapshot of everything the painters need for one frame. Any
@@ -46,6 +48,9 @@ public final class BarState
 	/** Gathering run; null when none. */
 	public final GatherRun gather;
 	public final RightSide rightSide;
+	/** Agility course; null when none. */
+	public final AgilityCourse agility;
+	public final LapCompare lapCompare;
 
 	private BarState(Builder b)
 	{
@@ -75,6 +80,8 @@ public final class BarState
 		alchTopRow = b.alchTopRow;
 		gather = b.gather;
 		rightSide = b.rightSide;
+		agility = b.agility;
+		lapCompare = b.lapCompare;
 	}
 
 	public static Builder builder()
@@ -107,6 +114,8 @@ public final class BarState
 		private AlchTopRow alchTopRow = AlchTopRow.GOLD;
 		private GatherRun gather;
 		private RightSide rightSide = RightSide.PER_HOUR;
+		private AgilityCourse agility;
+		private LapCompare lapCompare = LapCompare.BEST;
 
 		public Builder timeline(Timeline v)
 		{
@@ -268,6 +277,22 @@ public final class BarState
 			if (v != null)
 			{
 				rightSide = v;
+			}
+			return this;
+		}
+
+		public Builder agility(AgilityCourse v)
+		{
+			agility = v;
+			return this;
+		}
+
+		/** A null keeps the default (BEST). */
+		public Builder lapCompare(LapCompare v)
+		{
+			if (v != null)
+			{
+				lapCompare = v;
 			}
 			return this;
 		}

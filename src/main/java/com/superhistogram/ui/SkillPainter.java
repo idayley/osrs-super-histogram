@@ -159,4 +159,17 @@ public final class SkillPainter
 		g.setStroke(new BasicStroke(1.2f * u));
 		g.draw(new Ellipse2D.Float(x - 3 * u, y - 3 * u, 6 * u, 6 * u));
 	}
+
+	/** Mark of grace: a MINT diamond centred on (cx, cy), 4u wide and 4.5u tall each way. */
+	public static void mark(Graphics2D g, float cx, float cy, float u)
+	{
+		Path2D p = new Path2D.Float();
+		p.moveTo(cx, cy - 4.5f * u);
+		p.lineTo(cx + 4 * u, cy);
+		p.lineTo(cx, cy + 4.5f * u);
+		p.lineTo(cx - 4 * u, cy);
+		p.closePath();
+		g.setColor(Palette.MINT);
+		g.fill(p);
+	}
 }
