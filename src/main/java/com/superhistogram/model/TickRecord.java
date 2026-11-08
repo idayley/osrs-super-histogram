@@ -27,6 +27,12 @@ public final class TickRecord
 	public boolean bankClick;
 	/** Ticks between the run's finish and the bank click; set with bankClick. */
 	public int wasted;
+	/** A confirmed high-alch cast landed this tick. */
+	public boolean cast;
+	/** Profit of that cast (null = unknown price). */
+	public Long castProfit;
+	/** Ticks lost since the previous cast was ready (0 when on time or after a pause). */
+	public int castLost;
 
 	public TickRecord(int tick)
 	{

@@ -13,7 +13,10 @@ import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
 import com.superhistogram.model.combat.FlickClassifier;
 import com.superhistogram.model.combat.FoodKind;
+import com.superhistogram.model.skill.AlchTopRow;
+import com.superhistogram.model.skill.AlchTracker;
 import com.superhistogram.model.skill.InventoryRun;
+import com.superhistogram.model.RightSide;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -531,6 +534,105 @@ public final class SampleStates
 			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
 			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
 			.weaponSpeed(s.weaponSpeed).actionsRow(s.actionsRow).showEatCosts(s.showEatCosts)
+			.build();
+	}
+
+	// ---- high alch (high-alch.html) ----
+
+	/** Cast ticks of the alch sample; the last one (NOW_TICK - 2) has no price. */
+	public static final int CAST_LATE = NOW_TICK - 12, CAST_LOSS = NOW_TICK - 7, CAST_LAST = NOW_TICK - 2;
+	/** Profit of the late cast. */
+	public static final long LATE_PROFIT = 236;
+
+	/**
+	 * Drives a real AlchTracker like the plugin: casts at NOW-29 (236), -24 (212), -19 (198), CAST_LATE
+	 * (236, two ticks late), CAST_LOSS (-40) and CAST_LAST (unpriced), each a click on the tick before and a
+	 * Magic 65 drop on the cast tick. Online for 1 h.
+	 */
+	public static BarState alch(AlchTopRow top, RightSide side)
+	{
+		return alch(top, side, false);
+	}
+
+	/** As above; {@code fletch} adds Fletching 15 on every even tick of the last 20. */
+	public static BarState alch(AlchTopRow top, RightSide side, boolean fletch)
+	{
+		return alch(top, side, fletch, true);
+	}
+
+	public static BarState alch(AlchTopRow top, RightSide side, boolean fletch, boolean wastedTicks)
+	{
+		int[] ticks = {NOW_TICK - 29, NOW_TICK - 24, NOW_TICK - 19, CAST_LATE, CAST_LOSS, CAST_LAST};
+		Long[] profits = {236L, 212L, 198L, LATE_PROFIT, -40L, null};
+		return alchRun(top, side, fletch, wastedTicks, ticks, profits, 13_034_301);
+	}
+
+	/** Casts every 5 ticks ending at CAST_LAST with the given profits (oldest first); Magic starts at 13,034,301. */
+	public static BarState alchText(Long... profits)
+	{
+		return alchText(AlchTopRow.GOLD, RightSide.PER_HOUR, profits);
+	}
+
+	public static BarState alchText(AlchTopRow top, RightSide side, Long... profits)
+	{
+		int[] ticks = new int[profits.length];
+		for (int i = 0; i < ticks.length; i++)
+		{
+			ticks[i] = CAST_LAST - (ticks.length - 1 - i) * AlchTracker.CAST_TICKS;
+		}
+		return alchRun(top, side, false, true, ticks, profits, 13_034_301);
+	}
+
+	private static BarState alchRun(AlchTopRow top, RightSide side, boolean fletch, boolean wastedTicks, int[] castTicks,
+		Long[] profits, int magicBase)
+	{
+		Timeline t = new Timeline(512);
+		XpTracker xp = new XpTracker(t);
+		AlchTracker alch = new AlchTracker(t);
+		int first = NOW_TICK - 40;
+		xp.onStat("Magic", magicBase, first);
+		xp.onStat("Fletching", 1_000_000, first);
+		int magic = magicBase, fle = 1_000_000;
+		for (int tick = first + 1; tick <= NOW_TICK; tick++)
+		{
+			t.at(tick);
+			for (int i = 0; i < castTicks.length; i++)
+			{
+				if (castTicks[i] - 1 == tick)
+				{
+					alch.onCastClick(tick, profits[i]);
+				}
+				if (castTicks[i] == tick)
+				{
+					magic += AlchTracker.XP;
+					xp.onStat("Magic", magic, tick);
+				}
+			}
+			if (fletch && tick > NOW_TICK - 20 && tick % 2 == 0)
+			{
+				fle += 15;
+				xp.onStat("Fletching", fle, tick);
+			}
+			alch.onTick(tick, t.at(tick).xp);
+		}
+		SessionClock clock = new SessionClock();
+		clock.onLoggedIn(NOW_MS - 3_600_000L);
+		return BarState.builder()
+			.timeline(t).nowTick(NOW_TICK).xp(xp).idle(new IdleTracker(60)).clock(clock)
+			.runEnergyPct(64).modeName("High alch").modeSub("auto \u00b7 5t").showRunEnergy(true)
+			.showLoginTime(true).mode(Mode.ALCH).nowMs(NOW_MS)
+			.alch(alch).alchTopRow(top).rightSide(side).wastedTicks(wastedTicks)
+			.build();
+	}
+
+	/** The same state without its alch tracker. */
+	public static BarState withoutAlch(BarState s)
+	{
+		return BarState.builder()
+			.timeline(s.timeline).nowTick(s.nowTick).xp(s.xp).idle(s.idle).clock(s.clock)
+			.runEnergyPct(s.runEnergyPct).modeName(s.modeName).modeSub(s.modeSub)
+			.showRunEnergy(s.showRunEnergy).showLoginTime(s.showLoginTime).mode(s.mode).nowMs(s.nowMs)
+			.alchTopRow(s.alchTopRow)
 			.build();
 	}
 }

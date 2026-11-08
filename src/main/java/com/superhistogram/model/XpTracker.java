@@ -67,6 +67,12 @@ public final class XpTracker
 		return gained.getOrDefault(skill, 0L) * 3_600_000L / sessionMs;
 	}
 
+	/** XP gained in the skill this session. */
+	public long sessionXp(String skill)
+	{
+		return gained.getOrDefault(skill, 0L);
+	}
+
 	/** Skill with the most XP gained this session, or null if none. */
 	public String topSkill()
 	{

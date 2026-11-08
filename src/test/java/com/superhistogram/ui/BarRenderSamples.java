@@ -157,6 +157,59 @@ public class BarRenderSamples
 		ImageIO.write(sheet, "png", new File(dir, "task17a-contact.png"));
 	}
 
+	/**
+	 * High-alch contact sheet, stacked and scaled 2x. Writes task17b-contact.png (GOLD, XP, BOTH at 1026x62 and
+	 * BOTH at 720x62) and task17b-contact-all.png (every top row x right side at 1026x62, plus 1026x46 and 600x30).
+	 */
+	@Test
+	public void writeAlchContactSheet() throws IOException
+	{
+		String dir = System.getProperty("superhistogram.renderDir");
+		assumeTrue(dir != null && !dir.isEmpty());
+		com.superhistogram.model.skill.AlchTopRow[] tops = com.superhistogram.model.skill.AlchTopRow.values();
+		com.superhistogram.model.RightSide per = com.superhistogram.model.RightSide.PER_HOUR,
+			ses = com.superhistogram.model.RightSide.SESSION;
+		java.util.List<Object[]> main = new java.util.ArrayList<>();
+		for (com.superhistogram.model.skill.AlchTopRow top : tops)
+		{
+			main.add(new Object[]{1026, 62, SampleStates.alch(top, per)});
+		}
+		main.add(new Object[]{720, 62, SampleStates.alch(com.superhistogram.model.skill.AlchTopRow.BOTH, per)});
+		sheet(new File(dir, "task17b-contact.png"), main);
+		java.util.List<Object[]> all = new java.util.ArrayList<>();
+		for (com.superhistogram.model.skill.AlchTopRow top : tops)
+		{
+			all.add(new Object[]{1026, 62, SampleStates.alch(top, per)});
+			all.add(new Object[]{1026, 62, SampleStates.alch(top, ses)});
+		}
+		all.add(new Object[]{1026, 46, SampleStates.alch(com.superhistogram.model.skill.AlchTopRow.BOTH, per)});
+		all.add(new Object[]{600, 30, SampleStates.alch(com.superhistogram.model.skill.AlchTopRow.GOLD, per)});
+		sheet(new File(dir, "task17b-contact-all.png"), all);
+	}
+
+	private static void sheet(File file, java.util.List<Object[]> rows) throws IOException
+	{
+		int pad = 8, total = pad;
+		for (Object[] r : rows)
+		{
+			total += ((Integer) r[1] + pad) * 2;
+		}
+		java.awt.image.BufferedImage sheet = new java.awt.image.BufferedImage(1026 * 2 + 2 * pad, total,
+			java.awt.image.BufferedImage.TYPE_INT_RGB);
+		java.awt.Graphics2D g = sheet.createGraphics();
+		g.setColor(new java.awt.Color(0x2b3521));
+		g.fillRect(0, 0, sheet.getWidth(), sheet.getHeight());
+		int y = pad;
+		for (Object[] r : rows)
+		{
+			java.awt.image.BufferedImage img = BarRenderSmokeTest.render((Integer) r[0], (Integer) r[1], (BarState) r[2], null);
+			g.drawImage(img, pad, y, img.getWidth() * 2, img.getHeight() * 2, null);
+			y += ((Integer) r[1] + pad) * 2;
+		}
+		g.dispose();
+		ImageIO.write(sheet, "png", file);
+	}
+
 	private static void write(String dir, String name, int w, int h, BarState s) throws IOException
 	{
 		ImageIO.write(BarRenderSmokeTest.render(w, h, s, null), "png", new File(dir, name));

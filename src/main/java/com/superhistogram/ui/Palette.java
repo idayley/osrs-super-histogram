@@ -42,6 +42,9 @@ public final class Palette
 	public static final Color BURNT = hex(0x6b737c);
 	public static final Color WASTED_LINE = new Color(255, 255, 255, Math.round(0.55f * 255));
 
+	/** The coin's ring (high-alch.html). */
+	public static final Color COIN_RING = hex(0xb8901d);
+
 	/** Alpha of walk / run / idle pills. */
 	public static final float FAINT_ALPHA = 0.22f;
 

@@ -1,11 +1,14 @@
 package com.superhistogram.ui;
 
 import com.superhistogram.model.BarState;
+import com.superhistogram.model.Mode;
 import com.superhistogram.model.TickRecord;
 import com.superhistogram.model.Timeline;
 import com.superhistogram.model.XpDrop;
 import com.superhistogram.model.XpDrops;
 import com.superhistogram.model.combat.ActionsRow;
+import com.superhistogram.model.skill.AlchTopRow;
+import com.superhistogram.ui.modes.AlchView;
 import java.awt.Graphics2D;
 import java.awt.geom.Ellipse2D;
 import java.util.ArrayList;
@@ -84,7 +87,14 @@ final class XpRow
 	private static void layout(Graphics2D g, BarLayout l, BarState s, Row row, boolean draw,
 		List<float[]> reserved, List<float[]> ranges)
 	{
-		if (s == null || s.timeline == null || s.nowTick < 0 || s.xpDrops == XpDrops.OFF)
+		if (s == null || s.timeline == null || s.nowTick < 0)
+		{
+			return;
+		}
+		// High alch puts each cast's profit in the top row; that stays even when XP drops are off.
+		boolean alch = row == Row.TOP && s.mode == Mode.ALCH && s.alch != null;
+		boolean xpOff = s.xpDrops == XpDrops.OFF;
+		if (xpOff && !alch)
 		{
 			return;
 		}
@@ -102,15 +112,34 @@ final class XpRow
 		for (int t = TimelinePainter.oldestTick(l, s); t <= s.nowTick; t++)
 		{
 			TickRecord r = s.timeline.peek(t);
-			if (r == null || r.xp.isEmpty())
+			boolean gold = alch && r != null && r.cast && s.alchTopRow != AlchTopRow.XP;
+			if (r == null || (r.xp.isEmpty() && !gold) || (xpOff && !gold))
 			{
 				continue;
 			}
 			float x = TimelinePainter.x(l, s, t) + (row == Row.LOW && swords && r.attackLate >= 0 ? 8f : -4f) * u;
 			float groupLeft = x, groupRight = -1;
 			boolean dropNumbers = false;
+			if (gold)
+			{
+				String text = AlchView.formatProfit(r.castProfit);
+				int w = g.getFontMetrics().stringWidth(text);
+				if (draw)
+				{
+					SkillPainter.coin(g, x + 3f * u, baseline - 3.5f * u, 3.4f * u);
+					g.setColor(r.castProfit == null ? Palette.DIM : r.castProfit >= 0 ? Palette.DAMAGE : Palette.TEXT);
+					g.drawString(text, x + 9f * u, baseline);
+				}
+				x += 9f * u + w + 6f * u;
+				busyTo = x + 2f * u;
+			}
 			for (XpDrop d : r.xp)
 			{
+				if (xpOff || (gold && s.alchTopRow == AlchTopRow.GOLD && d.skill.equals("Magic")
+					&& d.amount == com.superhistogram.model.skill.AlchTracker.XP))
+				{
+					continue;
+				}
 				g.setColor(Palette.skill(d.skill));
 				if (s.xpDrops == XpDrops.DOTS_ONLY || frequent.contains(d.skill))
 				{

@@ -64,6 +64,19 @@ public final class ReadoutPainter
 	public static void right(Graphics2D g, BarLayout l, BarState s, String big, Color bigColor, String small,
 		String... fallbacks)
 	{
+		right(g, l, s, big, bigColor, small, false, fallbacks);
+	}
+
+	/** As the first form; with {@code coin} a gold coin is drawn before the headline (high alch). */
+	public static void right(Graphics2D g, BarLayout l, BarState s, String big, Color bigColor, String small,
+		boolean coin)
+	{
+		right(g, l, s, big, bigColor, small, coin, new String[0]);
+	}
+
+	private static void right(Graphics2D g, BarLayout l, BarState s, String big, Color bigColor, String small,
+		boolean coin, String[] fallbacks)
+	{
 		if (!l.showRight)
 		{
 			return;
@@ -74,11 +87,24 @@ public final class ReadoutPainter
 		{
 			float size = Math.max(10f, 20f * u);
 			Font f = Fonts.bold(size);
-			text(g, pickHeadline(g, f, room, big, fallbacks), f, bigColor, x, l.height / 2f + size * 0.35f);
+			float cy = l.height / 2f, skip = 0f;
+			if (coin)
+			{
+				// The coin is 0.6 of the headline's size across; the text starts 0.75 of it later.
+				SkillPainter.coin(g, x + 0.3f * size, cy, 0.3f * size);
+				skip = 0.75f * size;
+			}
+			text(g, pickHeadline(g, f, room - skip, big, fallbacks), f, bigColor, x + skip, cy + size * 0.35f);
 			return;
 		}
+		float skip = 0f;
+		if (coin)
+		{
+			SkillPainter.coin(g, x + 6f * u, 26f * u, 6f * u);
+			skip = 15f * u;
+		}
 		Font bf = Fonts.bold(20f * u), sf = Fonts.semiBold(10.5f * u);
-		text(g, pickHeadline(g, bf, room, big, fallbacks), bf, bigColor, x, 33f * u);
+		text(g, pickHeadline(g, bf, room - skip, big, fallbacks), bf, bigColor, x + skip, 33f * u);
 		String line = small;
 		if (line != null && width(g, line, sf) > room)
 		{

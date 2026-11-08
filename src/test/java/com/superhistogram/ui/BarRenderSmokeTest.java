@@ -696,4 +696,154 @@ public class BarRenderSmokeTest
 		int x = (int) (tickX(l, s, NOW - 3) + 8 * l.u), y = (int) (22 * l.u + 1);
 		assertEquals(Palette.GROUND.getRGB(), img.getRGB(x, y));
 	}
+
+	// ---- high alch ----
+
+	private static final java.awt.Color TEXT = Palette.TEXT, DMG = Palette.DAMAGE;
+
+	@Test
+	public void alchRendersAtThreeSizes()
+	{
+		for (com.superhistogram.model.skill.AlchTopRow top : com.superhistogram.model.skill.AlchTopRow.values())
+		{
+			for (com.superhistogram.model.RightSide side : com.superhistogram.model.RightSide.values())
+			{
+				BarState s = SampleStates.alch(top, side);
+				render(1026, 62, s, new Pulse());
+				render(1026, 46, s, new Pulse());
+				render(600, 30, s, new Pulse());
+			}
+		}
+	}
+
+	private static BarState alchGold()
+	{
+		return SampleStates.alch(com.superhistogram.model.skill.AlchTopRow.GOLD,
+			com.superhistogram.model.RightSide.PER_HOUR);
+	}
+
+	@Test
+	public void castPillIsMagicBlue()
+	{
+		BarState s = alchGold();
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		int x = (int) (tickX(l, s, SampleStates.CAST_LOSS) + 16 * l.u), y = (int) (29 * l.u);
+		assertTrue(opaque(img, x, y, Palette.PRAYER_MAGIC));
+	}
+
+	@Test
+	public void goldHasCoin()
+	{
+		for (com.superhistogram.model.skill.AlchTopRow top : com.superhistogram.model.skill.AlchTopRow.values())
+		{
+			BarState s = SampleStates.alch(top, com.superhistogram.model.RightSide.PER_HOUR);
+			BarLayout l = BarLayout.of(1026, 62);
+			float u = l.u, cx = tickX(l, s, SampleStates.CAST_LATE) - 1 * u, cy = 11.5f * u;
+			boolean has = hasPixel(render(1026, 62, s, null), cx - u, cx + u, cy - u, cy + u, DMG);
+			assertEquals(top.toString(), top != com.superhistogram.model.skill.AlchTopRow.XP, has);
+		}
+	}
+
+	@Test
+	public void goldModeSkipsMagicDropXpModeKeepsIt()
+	{
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage gold = render(1026, 62, alchGold(), null);
+		assertFalse(hasPixel(gold, 0, l.width, 5 * l.u, 17 * l.u, MAG));
+		BarState xp = SampleStates.alch(com.superhistogram.model.skill.AlchTopRow.XP,
+			com.superhistogram.model.RightSide.PER_HOUR);
+		assertTrue(hasPixel(render(1026, 62, xp, null), 0, l.width, 5 * l.u, 17 * l.u, MAG));
+		BarState both = SampleStates.alch(com.superhistogram.model.skill.AlchTopRow.BOTH,
+			com.superhistogram.model.RightSide.PER_HOUR);
+		assertTrue(hasPixel(render(1026, 62, both, null), 0, l.width, 5 * l.u, 17 * l.u, MAG));
+	}
+
+	@Test
+	public void profitNegativeShowsMinus()
+	{
+		BarState s = alchGold();
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		float u = l.u, x = tickX(l, s, SampleStates.CAST_LOSS);
+		assertTrue(hasPixel(img, x + 5 * u, x + 25 * u, 7 * u, 16 * u, TEXT));
+		assertFalse(hasPixel(img, x + 5 * u, x + 25 * u, 7 * u, 16 * u, DMG));
+	}
+
+	@Test
+	public void lostTicksLabel()
+	{
+		BarState s = alchGold();
+		BarLayout l = BarLayout.of(1026, 62);
+		float u = l.u, x0 = tickX(l, s, SampleStates.CAST_LATE - 2), x1 = tickX(l, s, SampleStates.CAST_LATE);
+		assertTrue(hasPixel(render(1026, 62, s, null), x0, x1, 34 * u, 42 * u, Palette.LOST));
+		BarState off = SampleStates.alch(com.superhistogram.model.skill.AlchTopRow.GOLD,
+			com.superhistogram.model.RightSide.PER_HOUR, false, false);
+		assertFalse(hasPixel(render(1026, 62, off, null), x0, x1, 34 * u, 42 * u, Palette.LOST));
+	}
+
+	@Test
+	public void nextCastCaretAhead()
+	{
+		BarState s = alchGold();
+		BarLayout l = BarLayout.of(1026, 62);
+		float x = tickX(l, s, NOW + 3), u = l.u;
+		assertTrue(hasPixelAlpha(render(1026, 62, s, null), x - 3 * u, x + 3 * u, 57 * u, 60 * u));
+		BarLayout l46 = BarLayout.of(1026, 46);
+		float x46 = tickX(l46, s, NOW + 3);
+		assertFalse(hasPixelAlpha(render(1026, 46, s, null), x46 - 3 * l46.u, x46 + 3 * l46.u, 57 * l46.u,
+			Math.min(45, 60 * l46.u)));
+	}
+
+	@Test
+	public void alchFletchShowsDots()
+	{
+		BarState s = SampleStates.alch(com.superhistogram.model.skill.AlchTopRow.GOLD,
+			com.superhistogram.model.RightSide.PER_HOUR, true);
+		BarLayout l = BarLayout.of(1026, 62);
+		BufferedImage img = render(1026, 62, s, null);
+		float u = l.u, x = tickX(l, s, NOW - 4);
+		assertTrue(hasPixel(img, x - 1.4f * u - 2 * u, x - 1.4f * u + 2 * u, 10 * u, 14 * u, FLE));
+		assertFalse(hasPixel(img, x + 4 * u, x + 20 * u, 5 * u, 17 * u, FLE));
+	}
+
+	@Test
+	public void alchRightDoesNotOverlapLoginTime()
+	{
+		for (int w : new int[]{1026, 720})
+		{
+			for (com.superhistogram.model.skill.AlchTopRow top : com.superhistogram.model.skill.AlchTopRow.values())
+			{
+				for (com.superhistogram.model.RightSide side : com.superhistogram.model.RightSide.values())
+				{
+					BarState s = SampleStates.alch(top, side);
+					BarLayout l = BarLayout.of(w, 62);
+					BufferedImage img = render(w, 62, s, null);
+					BufferedImage ref = render(w, 62, SampleStates.withoutAlch(s), null);
+					Graphics2D g = img.createGraphics();
+					int tw = g.getFontMetrics(Fonts.semiBold(11f * l.u)).stringWidth(s.clock.format(s.nowMs));
+					g.dispose();
+					int x1 = (int) (l.width - 26f * l.u), x0 = x1 - tw - 2;
+					String id = "w=" + w + " " + top + " " + side;
+					for (int y = (int) (14f * l.u); y < (int) (50f * l.u); y++)
+					{
+						for (int x = x0; x < l.width; x++)
+						{
+							assertEquals(id + " paint over login time at " + x + "," + y, ref.getRGB(x, y),
+								img.getRGB(x, y));
+						}
+					}
+					boolean painted = false;
+					for (int y = 0; y < 62 && !painted; y++)
+					{
+						for (int x = (int) CombatPainter.rightX(l); x < x0 && !painted; x++)
+						{
+							painted = img.getRGB(x, y) != ref.getRGB(x, y);
+						}
+					}
+					assertTrue(id + " readout not painted", painted);
+				}
+			}
+		}
+	}
 }

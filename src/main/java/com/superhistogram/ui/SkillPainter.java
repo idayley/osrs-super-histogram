@@ -3,6 +3,7 @@ package com.superhistogram.ui;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
@@ -71,6 +72,19 @@ public final class SkillPainter
 			g.fill(new Rectangle2D.Float(x + px * u, y - 1 * u, 2 * u, 5 * u));
 		}
 		g.fill(new Rectangle2D.Float(x - 6 * u, y + 4.5f * u, 12 * u, 1.6f * u));
+	}
+
+	/** Gold coin: a DAMAGE disc of radius r with a darker ring at 0.53r (stroke 0.26r). */
+	public static void coin(Graphics2D g, float cx, float cy, float r)
+	{
+		g.setColor(Palette.DAMAGE);
+		g.fill(new Ellipse2D.Float(cx - r, cy - r, 2 * r, 2 * r));
+		float rr = 0.53f * r;
+		g.setColor(Palette.COIN_RING);
+		java.awt.Stroke old = g.getStroke();
+		g.setStroke(new BasicStroke(0.26f * r));
+		g.draw(new Ellipse2D.Float(cx - rr, cy - rr, 2 * rr, 2 * rr));
+		g.setStroke(old);
 	}
 
 	/** The wasted-ticks mark: a line from x0 to x1 at 45.25u with "+n" centred above it. */

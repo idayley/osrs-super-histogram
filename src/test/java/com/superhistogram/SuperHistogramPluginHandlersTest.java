@@ -17,6 +17,8 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import net.runelite.api.Client;
+import net.runelite.api.ItemComposition;
+import net.runelite.api.MenuAction;
 import net.runelite.api.GameState;
 import net.runelite.api.HitsplatID;
 import net.runelite.api.NPC;
@@ -701,5 +703,142 @@ public class SuperHistogramPluginHandlersTest
 		cookRun(5);
 		plugin.handleGameState(GameState.HOPPING, 100_000);
 		assertTrue(plugin.run.running());
+	}
+
+	// ---- high alch ----
+
+	private static final int RUNE_PLATEBODY = 1127, RUNE_PLATEBODY_NOTED = 1128;
+	private static final int NATURE_RUNE = net.runelite.api.gameval.ItemID.NATURERUNE;
+
+	private void priceAlchItems(int haPrice, long itemPrice, long natPrice)
+	{
+		ItemComposition comp = mock(ItemComposition.class);
+		when(comp.getHaPrice()).thenReturn(haPrice);
+		when(itemManager.canonicalize(RUNE_PLATEBODY)).thenReturn(RUNE_PLATEBODY);
+		when(itemManager.canonicalize(RUNE_PLATEBODY_NOTED)).thenReturn(RUNE_PLATEBODY);
+		when(itemManager.getItemComposition(RUNE_PLATEBODY)).thenReturn(comp);
+		when(itemManager.getItemPrice(RUNE_PLATEBODY)).thenReturn(itemPrice);
+		when(itemManager.getItemPrice(NATURE_RUNE)).thenReturn(natPrice);
+	}
+
+	@Test
+	public void alchProfitFromPrices()
+	{
+		priceAlchItems(39000, 38500, 100);
+		assertEquals(Long.valueOf(400), plugin.alchProfit(RUNE_PLATEBODY));
+	}
+
+	@Test
+	public void notedItemUsesBasePrice()
+	{
+		priceAlchItems(39000, 38500, 100);
+		assertEquals(Long.valueOf(400), plugin.alchProfit(RUNE_PLATEBODY_NOTED));
+	}
+
+	@Test
+	public void alchProfitUnknownWhenNoPrice()
+	{
+		priceAlchItems(39000, 0, 100);
+		assertNull(plugin.alchProfit(RUNE_PLATEBODY));
+		priceAlchItems(39000, 38500, 0);
+		assertNull(plugin.alchProfit(RUNE_PLATEBODY));
+		priceAlchItems(39000, 38500, 100);
+		assertNull(plugin.alchProfit(-1));
+		when(itemManager.getItemComposition(RUNE_PLATEBODY)).thenReturn(null);
+		assertNull(plugin.alchProfit(RUNE_PLATEBODY));
+	}
+
+	@Test
+	public void highAlchClickDetected()
+	{
+		String target = "<col=00ff00>High Level Alchemy</col><col=ffffff> -> <col=ff9040>Rune platebody";
+		assertTrue(SuperHistogramPlugin.isHighAlchClick(MenuAction.WIDGET_TARGET_ON_WIDGET, target));
+		assertFalse(SuperHistogramPlugin.isHighAlchClick(MenuAction.WIDGET_TARGET_ON_WIDGET,
+			"<col=00ff00>Low Level Alchemy</col><col=ffffff> -> <col=ff9040>Rune platebody"));
+		assertFalse(SuperHistogramPlugin.isHighAlchClick(MenuAction.CC_OP, target));
+		assertFalse(SuperHistogramPlugin.isHighAlchClick(MenuAction.WIDGET_TARGET_ON_WIDGET, null));
+	}
+
+	/** Baseline tick with a Magic stat, then a click on the item, the tick the cast lands on and its XP. */
+	private void magicBaseline()
+	{
+		ticks = 0;
+		tickOnly();
+		plugin.handleStat("Magic", 1_000_000);
+	}
+
+	private void alchCast(int k)
+	{
+		plugin.handleCastClick(RUNE_PLATEBODY);
+		tickOnly();
+		plugin.handleStat("Magic", 1_000_000 + 65 * k);
+	}
+
+	private void twoCasts()
+	{
+		alchCast(1);
+		for (int i = 0; i < 4; i++)
+		{
+			tickOnly();
+		}
+		alchCast(2);
+		tickOnly();
+	}
+
+	@Test
+	public void alchModeAfterTwoCasts()
+	{
+		priceAlchItems(39000, 38500, 100);
+		magicBaseline();
+		alchCast(1);
+		for (int i = 0; i < 4; i++)
+		{
+			tickOnly();
+		}
+		assertEquals(Mode.GENERAL, plugin.buildState().mode);
+		alchCast(2);
+		tickOnly();
+		BarState s = plugin.buildState();
+		assertEquals(Mode.ALCH, s.mode);
+		assertEquals("High alch", s.modeName);
+		assertEquals("auto \u00b7 5t", s.modeSub);
+		assertEquals(800, s.alch.sessionGold());
+	}
+
+	@Test
+	public void alchBeatsProductionInPlugin()
+	{
+		priceAlchItems(39000, 38500, 100);
+		cookingBaseline();
+		plugin.handleStat("Magic", 1_000_000);
+		cookAction(1);
+		cookAction(2);
+		tickOnly();
+		assertEquals(Mode.PRODUCTION, plugin.buildState().mode);
+		twoCasts();
+		assertEquals(Mode.ALCH, plugin.buildState().mode);
+	}
+
+	@Test
+	public void logoutKeepsGoldClearsCasts()
+	{
+		priceAlchItems(39000, 38500, 100);
+		magicBaseline();
+		twoCasts();
+		assertEquals(800, plugin.alch.sessionGold());
+		plugin.handleGameState(GameState.LOGIN_SCREEN, 100_000);
+		assertEquals(800, plugin.alch.sessionGold());
+		assertEquals(-1, plugin.alch.lastCastTick());
+	}
+
+	@Test
+	public void unpricedClickCountsAsUnpricedCast()
+	{
+		priceAlchItems(39000, 0, 100);
+		magicBaseline();
+		alchCast(1);
+		tickOnly();
+		assertEquals(1, plugin.alch.unpricedCasts());
+		assertEquals(0, plugin.alch.sessionGold());
 	}
 }

@@ -1,7 +1,9 @@
 package com.superhistogram;
 
 import com.superhistogram.model.BaselineSetting;
+import com.superhistogram.model.RightSide;
 import com.superhistogram.model.XpDrops;
+import com.superhistogram.model.skill.AlchTopRow;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.PrayerMode;
 import java.awt.event.KeyEvent;
@@ -226,5 +228,27 @@ public interface SuperHistogramConfig extends Config
 	default boolean xpDots()
 	{
 		return true;
+	}
+
+	@ConfigItem(
+		position = 22,
+		keyName = "alchTopRow",
+		name = "Alch top row",
+		description = "What the top row shows for each high-alch cast: its profit, its Magic XP, or both"
+	)
+	default AlchTopRow alchTopRow()
+	{
+		return AlchTopRow.GOLD;
+	}
+
+	@ConfigItem(
+		position = 23,
+		keyName = "rightSide",
+		name = "Right side shows",
+		description = "Whether the right readout's big number is the hourly rate or the session total"
+	)
+	default RightSide rightSide()
+	{
+		return RightSide.PER_HOUR;
 	}
 }

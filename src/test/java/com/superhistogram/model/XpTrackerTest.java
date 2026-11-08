@@ -72,4 +72,18 @@ public class XpTrackerTest
 		assertEquals(0, x.xpPerHour("Fishing", 0));
 		assertEquals(0, x.xpPerHour("Cooking", 3_600_000));
 	}
+
+	@Test
+	public void sessionXpPerSkill()
+	{
+		Timeline t = new Timeline(512);
+		XpTracker x = new XpTracker(t);
+		x.onStat("Magic", 1_000_000, 1);
+		x.onStat("Fishing", 500, 1);
+		x.onStat("Magic", 1_000_065, 2);
+		x.onStat("Magic", 1_000_130, 3);
+		x.onStat("Fishing", 550, 3);
+		assertEquals(130, x.sessionXp("Magic"));
+		assertEquals(0, x.sessionXp("Cooking"));
+	}
 }

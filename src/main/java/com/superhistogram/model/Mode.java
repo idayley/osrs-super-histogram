@@ -8,5 +8,6 @@ public enum Mode
 	MINIMAL,
 	LAZY_FLICK,
 	ONE_TICK,
-	PRODUCTION
+	PRODUCTION,
+	ALCH
 }

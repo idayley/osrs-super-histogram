@@ -21,6 +21,7 @@ import com.superhistogram.model.combat.AttackTimer;
 import com.superhistogram.model.combat.Bosses;
 import com.superhistogram.model.combat.FlashRule;
 import com.superhistogram.model.combat.HitAttribution;
+import com.superhistogram.model.skill.AlchTracker;
 import com.superhistogram.model.skill.InventoryRun;
 import com.superhistogram.ui.BarOverlay;
 import com.superhistogram.ui.HullFlashOverlay;
@@ -36,8 +37,10 @@ import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameState;
 import net.runelite.api.HitsplatID;
 import net.runelite.api.InventoryID;
+import net.runelite.api.ItemComposition;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
+import net.runelite.api.MenuAction;
 import net.runelite.api.NPC;
 import net.runelite.api.VarClientStr;
 import net.runelite.api.Player;
@@ -114,6 +117,7 @@ public class SuperHistogramPlugin extends Plugin
 	private PrayerCollector prayers;
 	volatile FlickClassifier flicks;
 	volatile InventoryRun run;
+	volatile AlchTracker alch;
 	/** Newest inventory item counts; null before the first inventory event and after logout. */
 	volatile Map<Integer, Integer> latestInventory;
 	private int lastHitTick = AttackTimer.NEVER;
@@ -182,6 +186,7 @@ public class SuperHistogramPlugin extends Plugin
 		prayers = new PrayerCollector(timeline);
 		flicks = new FlickClassifier();
 		run = new InventoryRun(timeline);
+		alch = new AlchTracker(timeline);
 		latestInventory = null;
 		lastHitTick = AttackTimer.NEVER;
 		idleThreshold = config.afkAfterSeconds();
@@ -253,6 +258,10 @@ public class SuperHistogramPlugin extends Plugin
 		{
 			handleBankClick();
 		}
+		if (isHighAlchClick(e.getMenuAction(), e.getMenuTarget()))
+		{
+			handleCastClick(e.getItemId());
+		}
 	}
 
 	@Subscribe
@@ -319,7 +328,9 @@ public class SuperHistogramPlugin extends Plugin
 		{
 			pulse.done(nowMs);
 		}
-		boolean cue = beat.isBeat(tick) || (run.running() && run.finishTick() == tick);
+		alch.onTick(tick - 1, prev == null ? Collections.<XpDrop>emptyList() : prev.xp);
+		boolean cue = beat.isBeat(tick) || (run.running() && run.finishTick() == tick)
+			|| (alch.showing(tick) && alch.nextReadyTick() == tick);
 
 		Player me = client.getLocalPlayer();
 		if (me != null)
@@ -513,6 +524,48 @@ public class SuperHistogramPlugin extends Plugin
 		return "Use".equals(option) && target != null && Text.removeTags(target).contains("Bank");
 	}
 
+	/** The player cast High Level Alchemy on an item (client thread). */
+	void handleCastClick(int itemId)
+	{
+		AlchTracker a = alch;
+		if (a != null)
+		{
+			a.onCastClick(tick, alchProfit(itemId));
+		}
+	}
+
+	/** True for the click that casts High Level Alchemy on an inventory item. */
+	static boolean isHighAlchClick(MenuAction action, String target)
+	{
+		return action == MenuAction.WIDGET_TARGET_ON_WIDGET && target != null
+			&& Text.removeTags(target).startsWith("High Level Alchemy");
+	}
+
+	/**
+	 * Alch value minus the item's GE price and a nature rune's, or null when any price is unknown
+	 * (untradeable item, no price data). Noted items use their base item.
+	 */
+	Long alchProfit(int itemId)
+	{
+		if (itemManager == null || itemId <= 0)
+		{
+			return null;
+		}
+		int id = itemManager.canonicalize(itemId);
+		ItemComposition comp = itemManager.getItemComposition(id);
+		if (comp == null)
+		{
+			return null;
+		}
+		long ha = comp.getHaPrice(), item = itemManager.getItemPrice(id);
+		long nat = itemManager.getItemPrice(net.runelite.api.gameval.ItemID.NATURERUNE);
+		if (ha <= 0 || item <= 0 || nat <= 0)
+		{
+			return null;
+		}
+		return ha - item - nat;
+	}
+
 	/** itemId is the equipped weapon, or -1 for none. */
 	void handleWeapon(int itemId)
 	{
@@ -599,6 +652,7 @@ public class SuperHistogramPlugin extends Plugin
 				prayers = new PrayerCollector(timeline);
 				flicks.reset();
 				run = new InventoryRun(timeline);
+				alch.rebind(timeline);
 				latestInventory = null;
 				lastHitTick = AttackTimer.NEVER;
 				tick = -1;
@@ -630,7 +684,9 @@ public class SuperHistogramPlugin extends Plugin
 		boolean combat = me != null && at != null
 			&& ModeDetector.inCombat(me.getInteracting() instanceof NPC, tickNow, lastHitTick, at.lastAttackTick());
 		InventoryRun runNow = run;
-		Mode skilling = runNow != null && runNow.showing(tickNow) ? Mode.PRODUCTION : null;
+		AlchTracker alchNow = alch;
+		Mode skilling = ModeDetector.skilling(alchNow != null && alchNow.showing(tickNow),
+			runNow != null && runNow.showing(tickNow));
 		Mode mode = modeDetector.detect(afk, combat, skilling, config.prayerMode(), config.baseline());
 		return BarState.builder()
 			.timeline(timeline)
@@ -655,6 +711,9 @@ public class SuperHistogramPlugin extends Plugin
 			.wastedTicks(config.wastedTicks())
 			.xpDrops(config.xpDrops())
 			.xpDots(config.xpDots())
+			.alch(alchNow)
+			.alchTopRow(config.alchTopRow())
+			.rightSide(config.rightSide())
 			.build();
 	}
 
@@ -668,6 +727,8 @@ public class SuperHistogramPlugin extends Plugin
 				return "every tick";
 			case PRODUCTION:
 				return "auto";
+			case ALCH:
+				return "auto \u00b7 5t";
 			case LAZY_FLICK:
 				return weaponSpeed + "t \u00b7 " + config.beatKey();
 			default:
@@ -687,6 +748,8 @@ public class SuperHistogramPlugin extends Plugin
 				return "AFK";
 			case MINIMAL:
 				return "Minimal";
+			case ALCH:
+				return "High alch";
 			default:
 				return "General";
 		}

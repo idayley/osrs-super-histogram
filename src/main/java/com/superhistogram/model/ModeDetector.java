@@ -31,6 +31,12 @@ public final class ModeDetector
 		return baseline == BaselineSetting.MINIMAL ? Mode.MINIMAL : Mode.GENERAL;
 	}
 
+	/** The skilling view to show: high alch beats production; null when neither is going on. */
+	public static Mode skilling(boolean alching, boolean producing)
+	{
+		return alching ? Mode.ALCH : producing ? Mode.PRODUCTION : null;
+	}
+
 	/** In combat: interacting with an NPC, or a hit on you or your own attack within the last 10 ticks. */
 	public static boolean inCombat(boolean interactingNpc, int tick, int lastHitTick, int lastAttackTick)
 	{

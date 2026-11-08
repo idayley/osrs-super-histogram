@@ -86,4 +86,20 @@ public class ModeDetectorTest
 		assertEquals(Mode.AFK,
 			detector.detect(true, false, Mode.PRODUCTION, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
 	}
+
+	@Test
+	public void skillingPrefersAlch()
+	{
+		assertEquals(Mode.ALCH, ModeDetector.skilling(true, true));
+		assertEquals(Mode.PRODUCTION, ModeDetector.skilling(false, true));
+		assertEquals(Mode.ALCH, ModeDetector.skilling(true, false));
+		assertEquals(null, ModeDetector.skilling(false, false));
+	}
+
+	@Test
+	public void combatBeatsAlch()
+	{
+		assertEquals(Mode.LAZY_FLICK,
+			detector.detect(false, true, Mode.ALCH, PrayerMode.LAZY_FLICK, BaselineSetting.GENERAL));
+	}
 }

@@ -3,6 +3,8 @@ package com.superhistogram.model;
 import com.superhistogram.model.combat.ActionsRow;
 import com.superhistogram.model.combat.Beat;
 import com.superhistogram.model.combat.FlickClassifier;
+import com.superhistogram.model.skill.AlchTopRow;
+import com.superhistogram.model.skill.AlchTracker;
 import com.superhistogram.model.skill.InventoryRun;
 
 /**
@@ -37,6 +39,10 @@ public final class BarState
 	public final XpDrops xpDrops;
 	/** Frequent skills (5+ drop ticks in the last 10) draw as dots. */
 	public final boolean xpDots;
+	/** High-alch tracker; null when none. */
+	public final AlchTracker alch;
+	public final AlchTopRow alchTopRow;
+	public final RightSide rightSide;
 
 	private BarState(Builder b)
 	{
@@ -62,6 +68,9 @@ public final class BarState
 		wastedTicks = b.wastedTicks;
 		xpDrops = b.xpDrops;
 		xpDots = b.xpDots;
+		alch = b.alch;
+		alchTopRow = b.alchTopRow;
+		rightSide = b.rightSide;
 	}
 
 	public static Builder builder()
@@ -90,6 +99,9 @@ public final class BarState
 		private boolean timeToFinish = true, wastedTicks = true;
 		private XpDrops xpDrops = XpDrops.NUMBERS;
 		private boolean xpDots = true;
+		private AlchTracker alch;
+		private AlchTopRow alchTopRow = AlchTopRow.GOLD;
+		private RightSide rightSide = RightSide.PER_HOUR;
 
 		public Builder timeline(Timeline v)
 		{
@@ -220,6 +232,32 @@ public final class BarState
 		public Builder xpDots(boolean v)
 		{
 			xpDots = v;
+			return this;
+		}
+
+		public Builder alch(AlchTracker v)
+		{
+			alch = v;
+			return this;
+		}
+
+		/** A null keeps the default (GOLD). */
+		public Builder alchTopRow(AlchTopRow v)
+		{
+			if (v != null)
+			{
+				alchTopRow = v;
+			}
+			return this;
+		}
+
+		/** A null keeps the default (PER_HOUR). */
+		public Builder rightSide(RightSide v)
+		{
+			if (v != null)
+			{
+				rightSide = v;
+			}
 			return this;
 		}
 

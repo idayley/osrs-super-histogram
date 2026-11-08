@@ -3,6 +3,7 @@ package com.superhistogram.ui;
 import com.superhistogram.model.BarState;
 import com.superhistogram.model.Mode;
 import com.superhistogram.ui.modes.AfkView;
+import com.superhistogram.ui.modes.AlchView;
 import com.superhistogram.ui.modes.GeneralView;
 import com.superhistogram.ui.modes.LazyFlickView;
 import com.superhistogram.ui.modes.MinimalView;
@@ -32,6 +33,7 @@ public final class BarPainter
 		views.put(Mode.LAZY_FLICK, new LazyFlickView());
 		views.put(Mode.ONE_TICK, new OneTickView());
 		views.put(Mode.PRODUCTION, new ProductionView());
+		views.put(Mode.ALCH, new AlchView());
 	}
 
 	/** Paints the bar at (0,0) in the layout's size. A null state paints the empty ground. */
