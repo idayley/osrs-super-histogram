@@ -3,8 +3,6 @@ package com.superhistogram.model.skill;
 import com.superhistogram.model.TickRecord;
 import com.superhistogram.model.Timeline;
 import com.superhistogram.model.XpDrop;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,7 +31,7 @@ public final class SpellRun
 	static final int GAPS = 8;
 
 	/** Runes and coins: spent by casts, never their input. */
-	static final Set<Integer> RUNES = runes();
+	static final Set<Integer> RUNES = GameIds.RUNES;
 
 	private Timeline timeline;
 	private String pendingSpell;
@@ -52,28 +50,6 @@ public final class SpellRun
 	public SpellRun(Timeline timeline)
 	{
 		this.timeline = timeline;
-	}
-
-	private static Set<Integer> runes()
-	{
-		Set<Integer> out = new HashSet<>();
-		try
-		{
-			for (Field f : Class.forName("net.runelite.api.gameval.ItemID").getFields())
-			{
-				String n = f.getName();
-				if (Modifier.isStatic(f.getModifiers()) && f.getType() == int.class
-					&& (n.matches("[A-Z]+RUNE") || n.equals("COINS")))
-				{
-					out.add(f.getInt(null));
-				}
-			}
-		}
-		catch (ReflectiveOperationException e)
-		{
-			// No item table: no runes known.
-		}
-		return Collections.unmodifiableSet(out);
 	}
 
 	/**

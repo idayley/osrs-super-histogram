@@ -3,8 +3,6 @@ package com.superhistogram.model.skill;
 import com.superhistogram.model.TickRecord;
 import com.superhistogram.model.Timeline;
 import com.superhistogram.model.XpDrop;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -64,31 +62,9 @@ public final class TrapTracker
 	private static Map<Integer, State> trapTable()
 	{
 		Map<Integer, State> out = new HashMap<>();
-		try
-		{
-			for (Field f : Class.forName("net.runelite.api.gameval.ObjectID").getFields())
-			{
-				String n = f.getName();
-				if (!Modifier.isStatic(f.getModifiers()) || f.getType() != int.class || !n.startsWith("HUNTING_")
-					|| !(n.contains("BOXTRAP") || n.contains("OJIBWAY") || n.contains("SNARE") || n.contains("DEADFALL")
-					|| n.contains("IMPTRAP") || n.contains("MONKEYTRAP")))
-				{
-					continue;
-				}
-				State s = n.contains("_FULL") || n.contains("SNARE_RABBIT") || n.contains("FOR_TAKING") ? State.CAUGHT
-					: n.contains("FAILED") || n.contains("BROKEN") ? State.DOWN
-					: n.contains("UNSET") || n.contains("CHECKING") ? null
-					: State.SET;
-				if (s != null)
-				{
-					out.put(f.getInt(null), s);
-				}
-			}
-		}
-		catch (ReflectiveOperationException e)
-		{
-			// No object table (never in the client): no traps.
-		}
+		GameIds.TRAP_SET.forEach(id -> out.put(id, State.SET));
+		GameIds.TRAP_CAUGHT.forEach(id -> out.put(id, State.CAUGHT));
+		GameIds.TRAP_DOWN.forEach(id -> out.put(id, State.DOWN));
 		return Collections.unmodifiableMap(out);
 	}
 

@@ -24,7 +24,7 @@ public final class GatherRun
 	public static final Set<String> SKILLS = Collections.unmodifiableSet(new LinkedHashSet<>(
 		Arrays.asList("Woodcutting", "Mining", "Fishing", "Firemaking", "Sailing")));
 	/** Shipwreck salvage items: Sailing XP is a salvaging success only when one of these came in recently. */
-	public static final Set<Integer> SALVAGE = salvageIds();
+	public static final Set<Integer> SALVAGE = GameIds.SALVAGE;
 	/** Sailing XP this long after salvage came in is salvaging (the hook pulls every few ticks). */
 	static final int SALVAGE_WINDOW = 12;
 	private static final String SAILING = "Sailing";
@@ -624,27 +624,5 @@ public final class GatherRun
 		Arrays.fill(succeeded, false);
 		windowPos = 0;
 		lastEntryTick = -1;
-	}
-
-	/** Item ids in RuneLite's ItemID whose name ends in SHIPWRECK_SALVAGE. */
-	private static Set<Integer> salvageIds()
-	{
-		Set<Integer> out = new HashSet<>();
-		try
-		{
-			for (java.lang.reflect.Field f : Class.forName("net.runelite.api.gameval.ItemID").getFields())
-			{
-				if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) && f.getType() == int.class
-					&& f.getName().endsWith("SHIPWRECK_SALVAGE"))
-				{
-					out.add(f.getInt(null));
-				}
-			}
-		}
-		catch (ReflectiveOperationException e)
-		{
-			// No item table (never in the client): no salvage.
-		}
-		return Collections.unmodifiableSet(out);
 	}
 }

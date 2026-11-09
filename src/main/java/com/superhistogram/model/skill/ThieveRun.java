@@ -4,8 +4,6 @@ import com.superhistogram.model.Span;
 import com.superhistogram.model.TickRecord;
 import com.superhistogram.model.Timeline;
 import com.superhistogram.model.XpDrop;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,7 +43,7 @@ public final class ThieveRun
 	public static final String CAP_MESSAGE = "empty your coin pouches";
 
 	/** Every coin pouch item id. */
-	public static final Set<Integer> POUCHES = idsStartingWith("PICKPOCKET_COIN_POUCH");
+	public static final Set<Integer> POUCHES = GameIds.POUCHES;
 
 	private Timeline timeline;
 	private int pendingTick = -1;
@@ -69,27 +67,6 @@ public final class ThieveRun
 	public ThieveRun(Timeline timeline)
 	{
 		this.timeline = timeline;
-	}
-
-	/** Item ids in RuneLite's ItemID whose constant name starts with {@code prefix}. */
-	static Set<Integer> idsStartingWith(String prefix)
-	{
-		Set<Integer> out = new HashSet<>();
-		try
-		{
-			for (Field f : Class.forName("net.runelite.api.gameval.ItemID").getFields())
-			{
-				if (Modifier.isStatic(f.getModifiers()) && f.getType() == int.class && f.getName().startsWith(prefix))
-				{
-					out.add(f.getInt(null));
-				}
-			}
-		}
-		catch (ReflectiveOperationException e)
-		{
-			// No item table (never in the client): nothing counts.
-		}
-		return Collections.unmodifiableSet(out);
 	}
 
 	/** You clicked Pickpocket (or Steal-from on a stall, {@code stall}); the game acts on it at {@code tick}. */

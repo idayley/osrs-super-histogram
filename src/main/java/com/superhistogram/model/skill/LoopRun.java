@@ -2,8 +2,6 @@ package com.superhistogram.model.skill;
 
 import com.superhistogram.model.Timeline;
 import com.superhistogram.model.XpDrop;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -65,9 +63,9 @@ public final class LoopRun
 	static final int MARKS_KEPT = 16;
 
 	/** Every essence a rune is crafted from (not Guardians of the Rift's, which is a minigame). */
-	static final Set<Integer> ESSENCE = essence();
+	static final Set<Integer> ESSENCE = GameIds.ESSENCE;
 	/** Every bird house object (empty spot, built, full). */
-	static final Set<Integer> BIRDHOUSES = birdhouses();
+	static final Set<Integer> BIRDHOUSES = GameIds.BIRDHOUSES;
 
 	private final Kind kind;
 	private Timeline timeline;
@@ -90,49 +88,6 @@ public final class LoopRun
 	{
 		this.kind = kind;
 		this.timeline = timeline;
-	}
-
-	private static Set<Integer> essence()
-	{
-		Set<Integer> out = new HashSet<>();
-		try
-		{
-			for (Field f : Class.forName("net.runelite.api.gameval.ItemID").getFields())
-			{
-				String n = f.getName();
-				if (Modifier.isStatic(f.getModifiers()) && f.getType() == int.class && !n.startsWith("GOTR_")
-					&& (n.startsWith("BLANKRUNE") || n.endsWith("_ESSENCE") && !n.startsWith("BLOOD_")
-					|| n.startsWith("ARCEUUS_ESSENCE_BLOCK") || n.equals("BIGBLANKRUNE")))
-				{
-					out.add(f.getInt(null));
-				}
-			}
-		}
-		catch (ReflectiveOperationException e)
-		{
-			// No item table: no essence known.
-		}
-		return Collections.unmodifiableSet(out);
-	}
-
-	private static Set<Integer> birdhouses()
-	{
-		Set<Integer> out = new HashSet<>();
-		try
-		{
-			for (Field f : Class.forName("net.runelite.api.gameval.ObjectID").getFields())
-			{
-				if (Modifier.isStatic(f.getModifiers()) && f.getType() == int.class && f.getName().startsWith("BIRDHOUSE_"))
-				{
-					out.add(f.getInt(null));
-				}
-			}
-		}
-		catch (ReflectiveOperationException e)
-		{
-			// No object table: no bird houses.
-		}
-		return Collections.unmodifiableSet(out);
 	}
 
 	/** True for a bird house object (or the empty spot one goes on). */
