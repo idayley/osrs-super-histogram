@@ -1,0 +1,19 @@
+name: Idea for a view
+description: An activity the bar could show better, or something you'd like it to show.
+title: "[Idea] "
+labels: ["idea"]
+body:
+  - type: input
+    id: activity
+    attributes:
+      label: Activity
+      placeholder: e.g. Barbarian fishing, Sepulchre, Blast Furnace
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What would help you while doing it
+      description: What you look at while training it, and what you wish you could see at a glance.
+    validations:
+      required: true

@@ -23,7 +23,7 @@ public final class BarOverlay extends Overlay
 
 	private final Supplier<BarState> state;
 	private final BarPainter painter;
-	private volatile BarPosition barPosition = BarPosition.REPLACE_CHAT;
+	private volatile BarPosition barPosition = BarPosition.FLOATING;
 	private volatile Supplier<BarPlacement.Rect> chatArea = () -> null;
 	/** The spot the user dragged the bar to, kept while another position is selected. */
 	private Point floatingLocation;
@@ -33,7 +33,7 @@ public final class BarOverlay extends Overlay
 		this.state = state;
 		this.painter = new BarPainter(pulse);
 		setLayer(OverlayLayer.ABOVE_WIDGETS);
-		applyPosition(BarPosition.REPLACE_CHAT);
+		applyPosition(BarPosition.FLOATING);
 	}
 
 	/** The chat text area in canvas pixels; null when unknown (the bar then floats at RuneLite's spot). */
@@ -54,7 +54,7 @@ public final class BarOverlay extends Overlay
 
 	public void applyPosition(BarPosition p)
 	{
-		BarPosition next = p == null ? BarPosition.REPLACE_CHAT : p;
+		BarPosition next = p == null ? BarPosition.FLOATING : p;
 		if (barPosition == BarPosition.FLOATING && next != BarPosition.FLOATING)
 		{
 			floatingLocation = getPreferredLocation();
@@ -100,7 +100,14 @@ public final class BarOverlay extends Overlay
 	{
 		Dimension pref = getPreferredSize();
 		int h = pref == null ? DEFAULT_H : pref.height;
-		BarPlacement.Rect spot = BarPlacement.place(barPosition, chatArea.get(), h);
+		BarPlacement.Rect chat = chatArea.get();
+		if (barPosition == BarPosition.FLOATING && getPreferredLocation() == null && chat != null)
+		{
+			// Floating with no spot of its own yet (first launch): start just above the chat, not the top-left corner.
+			BarPlacement.Rect above = BarPlacement.place(BarPosition.ABOVE_CHAT, chat, h);
+			setPreferredLocation(new Point(above.x, Math.max(0, above.y)));
+		}
+		BarPlacement.Rect spot = BarPlacement.place(barPosition, chat, h);
 		if (spot != null)
 		{
 			// Chat positions: drawn at the chat's own canvas coordinates (a DYNAMIC overlay is not translated).

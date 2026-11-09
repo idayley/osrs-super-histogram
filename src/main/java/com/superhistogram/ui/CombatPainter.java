@@ -29,7 +29,7 @@ public final class CombatPainter
 	/** One fish in the LOST colour; (cx, cy) is the mockup's x, y. */
 	public static void fish(Graphics2D g, float cx, float cy, float u)
 	{
-		g.setColor(Palette.LOST);
+		g.setColor(Palette.lost());
 		g.fill(Icons.icon(Icons.Icon.FOOD, cx + 0.5f * u, cy + 3.2f * u, u));
 	}
 
@@ -50,13 +50,13 @@ public final class CombatPainter
 		switch (spanKind)
 		{
 			case "pray-melee":
-				return Palette.PRAYER_MELEE;
+				return Palette.prayerMelee();
 			case "pray-ranged":
-				return Palette.PRAYER_RANGED;
+				return Palette.prayerRanged();
 			case "pray-magic":
-				return Palette.PRAYER_MAGIC;
+				return Palette.prayerMagic();
 			default:
-				return Palette.PRAYER_OTHER;
+				return Palette.prayerOther();
 		}
 	}
 
@@ -84,7 +84,7 @@ public final class CombatPainter
 				continue;
 			}
 			g.setColor(c);
-			g.fill(new RoundRectangle2D.Float(x0, y, x1 - x0, h, h, h));
+			g.fill(Px.round(x0, y, x1 - x0, h, h, h));
 			// Prayer points used while it was on.
 			if (labels)
 			{

@@ -46,7 +46,7 @@ import org.junit.Test;
  */
 public class UsabilityReplay
 {
-	static final int W = 583;
+	static final int W = Integer.getInteger("superhistogram.renderW", 583);
 	static final int FRAMES_PER_TICK = 12;
 
 	private Client client;
@@ -109,7 +109,7 @@ public class UsabilityReplay
 		{
 			f.delete();
 		}
-		height = h;
+		height = Integer.getInteger("superhistogram.renderH", h);
 		client = mock(Client.class);
 		me = mock(Player.class);
 		npc = mock(NPC.class);

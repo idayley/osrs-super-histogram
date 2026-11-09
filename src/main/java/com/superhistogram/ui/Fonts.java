@@ -5,14 +5,11 @@ import java.io.InputStream;
 
 /**
  * Bar text faces. All text uses the Tiny5 pixel font, snapped to whole multiples of its 8 px design size so
- * it stays sharp when RuneLite's Stretched Mode enlarges the game image. (The Outfit faces are kept for
- * comparison.) Falls back to a logical font if loading fails.
+ * it stays sharp when RuneLite's Stretched Mode enlarges the game image. Falls back to a logical font if
+ * loading fails.
  */
 public final class Fonts
 {
-	private static final Font REGULAR = load("Outfit-Regular.ttf", Font.PLAIN);
-	private static final Font SEMI_BOLD = load("Outfit-SemiBold.ttf", Font.BOLD);
-	private static final Font BOLD = load("Outfit-Bold.ttf", Font.BOLD);
 	private static final Font PIXEL = load("Tiny5.ttf", Font.PLAIN);
 	/** Tiny5's pixel grid: it is only sharp at multiples of this size. */
 	static final float PIXEL_PX = 8f;

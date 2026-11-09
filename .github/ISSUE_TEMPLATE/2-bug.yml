@@ -1,0 +1,17 @@
+name: Something's broken
+description: The bar flickers, jumps, gets stuck, disappears, or a setting doesn't work.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Screenshots or a clip welcome.
+    validations:
+      required: true
+  - type: input
+    id: settings
+    attributes:
+      label: Settings you changed
+      placeholder: e.g. smooth scrolling off, floating position, stretched mode on

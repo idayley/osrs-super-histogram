@@ -75,4 +75,19 @@ test {
 	{
 		systemProperty 'superhistogram.renderDir', project.property('renderDir')
 	}
+	// Optional bar size for the rendered frames (README screenshots use 1026 x 62).
+	['renderW', 'renderH'].each { p ->
+		if (project.hasProperty(p))
+		{
+			systemProperty "superhistogram.${p}", project.property(p)
+		}
+	}
+}
+
+tasks.register('runClient', JavaExec) {
+	group = 'application'
+	description = 'Launches RuneLite with Super Histogram loaded'
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = pluginMainClass
+	jvmArgs '-ea'
 }

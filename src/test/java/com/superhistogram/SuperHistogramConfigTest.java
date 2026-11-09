@@ -33,7 +33,7 @@ public class SuperHistogramConfigTest
 	@Test
 	public void mockupDefaults()
 	{
-		assertEquals(BarPosition.REPLACE_CHAT, c.position());
+		assertEquals(BarPosition.FLOATING, c.position());
 		assertEquals(62, c.barHeight());
 		assertEquals(ModeSetting.AUTO, c.mode());
 		assertEquals(BaselineSetting.GENERAL, c.baseline());
@@ -93,13 +93,19 @@ public class SuperHistogramConfigTest
 	{
 		assertEquals(Arrays.asList("position", "barHeight", "mode", "baseline", "afkAfterSeconds", "afkWarning",
 			"nowLinePercent", "showLoginTime", "smoothScroll", "pingShift", "pingFixedMs"), keysIn("bar"));
-		assertEquals(Arrays.asList("metronome", "metronomeStyle", "blinkWhenDone"), keysIn("feedback"));
+		assertEquals(Arrays.asList("metronome", "metronomeIn", "metronomeStyle", "blinkWhenDone"), keysIn("feedback"));
 		assertEquals(Arrays.asList("prayerMode", "clickWindowMs", "combatHoldSeconds", "beatKey", "beatTicks", "beatRuns", "actionsRow", "showEatCosts", "hullFlash",
 			"hullFlashAtBosses", "hullFlashMisses", "ignoreEnemies"), keysIn("combat"));
 		assertEquals(Arrays.asList("xpDrops", "xpDots", "alchTopRow", "rightSide"), keysIn("xpGold"));
 		assertEquals(Arrays.asList("timeToFinish", "wastedTicks"), keysIn("skilling"));
 		assertEquals(Arrays.asList("damageColour", "mintColour", "runEnergyColour", "backgroundColour"),
 			keysIn("colours"));
+		assertEquals(Arrays.asList("prayerMeleeColour", "prayerRangedColour", "prayerMagicColour", "prayerOtherColour"),
+			keysIn("prayerColours"));
+		assertEquals(Arrays.asList("fightColour", "missFlashColour"), keysIn("combatColours"));
+		assertEquals(Arrays.asList("rimTickColour", "rimTockColour"), keysIn("metronomeColours"));
+		assertEquals(Arrays.asList("nowLineColour", "actionColour", "lostColour"), keysIn("lineColours"));
+		assertEquals(24, keysIn("skillColours").size());
 	}
 
 	@Test
@@ -118,10 +124,11 @@ public class SuperHistogramConfigTest
 		for (java.lang.reflect.Field f : fields)
 		{
 			names.add(f.getAnnotation(ConfigSection.class).name());
-			assertEquals(f.getAnnotation(ConfigSection.class).name().equals("Colours"),
+			assertEquals(f.getAnnotation(ConfigSection.class).name().contains("olours"),
 				f.getAnnotation(ConfigSection.class).closedByDefault());
 		}
-		assertEquals(Arrays.asList("Bar", "Feedback", "Combat", "XP & gold", "Skilling", "Colours"), names);
+		assertEquals(Arrays.asList("Bar", "Feedback", "Combat", "XP & gold", "Skilling", "Colours", "Prayer colours",
+			"Combat colours", "Metronome colours", "Bar line colours", "Skill colours"), names);
 	}
 
 	@Test

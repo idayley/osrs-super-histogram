@@ -9,6 +9,7 @@ import com.superhistogram.ui.DoingLane;
 import com.superhistogram.ui.Icons;
 import com.superhistogram.ui.Lane;
 import com.superhistogram.ui.Lens;
+import com.superhistogram.ui.Px;
 import com.superhistogram.ui.Palette;
 import com.superhistogram.ui.ReadoutPainter;
 import com.superhistogram.ui.SkillPainter;
@@ -71,7 +72,7 @@ public final class ProductionView implements Lens
 			{
 				g.setStroke(new BasicStroke(sw));
 				g.setColor(Palette.withAlpha(c, 0.45f));
-				g.draw(new RoundRectangle2D.Float(x0 + sw / 2, y + sw / 2, xf - x0 - sw, h - sw, h - sw, h - sw));
+				g.draw(Px.round(x0 + sw / 2, y + sw / 2, xf - x0 - sw, h - sw, h - sw, h - sw));
 			}
 		}
 	}

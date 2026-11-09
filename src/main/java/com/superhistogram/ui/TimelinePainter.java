@@ -82,11 +82,37 @@ public final class TimelinePainter
 	public static final int LAG_MS = 750;
 	private static final float MAX_STRETCH = 2.5f;
 
-	/** Width of a tick's slot: wider in proportion for a lag tick. */
+	/** A tick this short right after a long one means the long one was a hitch on your side, not server lag. */
+	static final int CATCH_UP_MS = 450;
+
+	/**
+	 * Width of a tick's slot: wider in proportion for a lag tick. A tick counts as lag once the tick after it is
+	 * over and wasn't a catch-up (a late tick then an early one is your client hitching, not the server), and
+	 * it widens gradually over the next tick with smooth scrolling, so older ticks never jump left.
+	 */
 	public static float slotW(BarLayout l, BarState s, int tick)
 	{
-		TickRecord r = s.timeline == null || tick >= s.nowTick ? null : s.timeline.peek(tick);
-		return r == null || r.lengthMs < LAG_MS ? l.tickWidth : l.tickWidth * Math.min(MAX_STRETCH, r.lengthMs / 600f);
+		if (s.timeline == null || tick + 1 >= s.nowTick)
+		{
+			return l.tickWidth;
+		}
+		TickRecord r = s.timeline.peek(tick);
+		if (r == null || r.lengthMs < LAG_MS)
+		{
+			return l.tickWidth;
+		}
+		TickRecord next = s.timeline.peek(tick + 1);
+		if (next != null && next.lengthMs > 0 && next.lengthMs < CATCH_UP_MS)
+		{
+			return l.tickWidth;
+		}
+		float extra = l.tickWidth * (Math.min(MAX_STRETCH, r.lengthMs / 600f) - 1f);
+		if (tick + 2 == s.nowTick && s.smooth && l.tickWidth > 0)
+		{
+			float t = Math.min(1f, l.glide / l.tickWidth);
+			extra *= 1f - (1f - t) * (1f - t);
+		}
+		return l.tickWidth + extra;
 	}
 
 	/** Left edge of a tick's slot. Lag ticks before it push it left. */
@@ -136,8 +162,8 @@ public final class TimelinePainter
 
 	public static void nowLine(Graphics2D g, BarLayout l)
 	{
-		g.setColor(Palette.NOW_LINE);
-		g.fill(new RoundRectangle2D.Float(nowX(l) - 1f, l.height * 0.22f, 2f, l.height * 0.6f, 2f, 2f));
+		g.setColor(Palette.nowLine());
+		g.fill(Px.round(nowX(l) - 1f, l.height * 0.22f, 2f, l.height * 0.6f, 2f, 2f));
 	}
 
 	// ---- pills ----
@@ -151,7 +177,7 @@ public final class TimelinePainter
 		{
 			return;
 		}
-		Shape pill = new RoundRectangle2D.Float(x0 + 1f, y, w, h, h, h);
+		Shape pill = Px.round(x0 + 1f, y, w, h, h, h);
 		g.setColor(faint ? Palette.withAlpha(c, Palette.FAINT_ALPHA) : c);
 		g.fill(pill);
 		label(g, l, x0, x1, y, h, label, faint ? Palette.PILL_LABEL_FAINT

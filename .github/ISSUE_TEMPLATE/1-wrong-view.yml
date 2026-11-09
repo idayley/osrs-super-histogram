@@ -1,0 +1,24 @@
+name: Wrong view or wrong numbers
+description: The bar shows the wrong activity, misses an action, or a count or time is off.
+title: "[Wrong view] "
+labels: ["detection"]
+body:
+  - type: input
+    id: activity
+    attributes:
+      label: What you were doing
+      placeholder: e.g. cooking karambwans at Rogues' Den, pickpocketing Ardougne knights
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What the bar showed, and what you expected
+      description: A screenshot or short clip helps a lot.
+    validations:
+      required: true
+  - type: input
+    id: size
+    attributes:
+      label: Bar size and position
+      placeholder: e.g. 62 px tall, replacing the chatbox

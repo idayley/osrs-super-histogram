@@ -37,4 +37,35 @@ public class LagTickTest
 		BarState s = state(6, 700);
 		assertEquals(L.tickWidth, TimelinePainter.slotW(L, s, 6), 0f);
 	}
+
+	@Test
+	public void aLateTickThenAnEarlyOneIsAClientHitchNotLag()
+	{
+		BarState s = state(6, 930);
+		s.timeline.at(7).lengthMs = 270;
+		assertEquals(L.tickWidth, TimelinePainter.slotW(L, s, 6), 0f);
+	}
+
+	@Test
+	public void theNewestTickIsNotWidenedUntilTheTickAfterItIsOver()
+	{
+		// Tick 9 just ended long; tick 10 (now) hasn't shown whether it was a catch-up.
+		assertEquals(L.tickWidth, TimelinePainter.slotW(L, state(9, 930), 9), 0f);
+	}
+
+	@Test
+	public void aLagTickWidensGraduallyWhileScrolling()
+	{
+		Timeline t = state(8, 930).timeline;
+		BarState s = BarState.builder().timeline(t).nowTick(10).tickMs(1000).smooth(true).build();
+		float full = L.tickWidth * 930f / 600f;
+		assertEquals(L.tickWidth, TimelinePainter.slotW(L.withGlide(0f), s, 8), 0.01f);
+		float half = TimelinePainter.slotW(L.withGlide(L.tickWidth / 2f), s, 8);
+		assertEquals(true, half > L.tickWidth && half < full);
+		assertEquals(full, TimelinePainter.slotW(L.withGlide(L.tickWidth), s, 8), 0.01f);
+		// A tick later it is fully wide from the start, so nothing jumps.
+		BarState next = BarState.builder().timeline(t).nowTick(11).tickMs(1000).smooth(true).build();
+		t.at(10).lengthMs = 600;
+		assertEquals(full, TimelinePainter.slotW(L.withGlide(0f), next, 8), 0.01f);
+	}
 }

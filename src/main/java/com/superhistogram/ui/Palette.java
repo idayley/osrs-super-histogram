@@ -152,11 +152,73 @@ public final class Palette
 		return active().runEnergy;
 	}
 
-	/** Colour for a skill by its RuneLite display name; text colour if unknown. */
+	/** Colour for a skill by its RuneLite display name (the user's, else the default); text colour if unknown. */
 	public static Color skill(String name)
 	{
 		Color c = name == null ? null : SKILLS.get(name.toLowerCase());
+		return c == null ? TEXT : active().get(Colours.skillKey(name), c);
+	}
+
+	/** Default colour of a skill, for the settings; text colour if unknown. */
+	public static Color defaultSkill(String name)
+	{
+		Color c = SKILLS.get(name.toLowerCase());
 		return c == null ? TEXT : c;
+	}
+
+	public static Color prayerMelee()
+	{
+		return active().get(Colours.PRAYER_MELEE, PRAYER_MELEE);
+	}
+
+	public static Color prayerRanged()
+	{
+		return active().get(Colours.PRAYER_RANGED, PRAYER_RANGED);
+	}
+
+	public static Color prayerMagic()
+	{
+		return active().get(Colours.PRAYER_MAGIC, PRAYER_MAGIC);
+	}
+
+	public static Color prayerOther()
+	{
+		return active().get(Colours.PRAYER_OTHER, PRAYER_OTHER);
+	}
+
+	public static Color fight()
+	{
+		return active().get(Colours.FIGHT, FIGHT);
+	}
+
+	public static Color missFlash()
+	{
+		return active().get(Colours.MISS_FLASH, MISS_FLASH);
+	}
+
+	public static Color rimTick()
+	{
+		return active().get(Colours.RIM_TICK, RIM_TICK);
+	}
+
+	public static Color rimTock()
+	{
+		return active().get(Colours.RIM_TOCK, RIM_TOCK);
+	}
+
+	public static Color nowLine()
+	{
+		return active().get(Colours.NOW_LINE, NOW_LINE);
+	}
+
+	public static Color action()
+	{
+		return active().get(Colours.ACTION, ACTION);
+	}
+
+	public static Color lost()
+	{
+		return active().get(Colours.LOST, LOST);
 	}
 
 	/** A dark fill, which needs light text on it. */

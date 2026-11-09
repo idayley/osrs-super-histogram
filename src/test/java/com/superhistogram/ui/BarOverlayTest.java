@@ -106,9 +106,22 @@ public class BarOverlayTest
 	}
 
 	@Test
+	public void floatingStartsJustAboveTheChatUntilMoved()
+	{
+		BarOverlay o = overlay();
+		o.setChatArea(() -> CHAT);
+		render(o, canvas());
+		assertEquals(new Point(0, 338 - 62), o.getPreferredLocation());
+		o.setPreferredLocation(new Point(120, 40));
+		render(o, canvas());
+		assertEquals(new Point(120, 40), o.getPreferredLocation());
+	}
+
+	@Test
 	public void sizePresetSetsTheHeight()
 	{
 		BarOverlay o = overlay();
+		o.applyPosition(BarPosition.REPLACE_CHAT);
 		o.setChatArea(() -> CHAT);
 		o.applySize(BarSize.LARGE.height());
 		assertEquals(new Dimension(519, 80), o.getPreferredSize());

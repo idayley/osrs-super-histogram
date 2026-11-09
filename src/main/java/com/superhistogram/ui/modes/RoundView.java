@@ -6,6 +6,7 @@ import com.superhistogram.ui.BarLayout;
 import com.superhistogram.ui.Fonts;
 import com.superhistogram.ui.Lane;
 import com.superhistogram.ui.Lens;
+import com.superhistogram.ui.Px;
 import com.superhistogram.ui.Palette;
 import com.superhistogram.ui.ReadoutPainter;
 import com.superhistogram.ui.TimelinePainter;
@@ -59,7 +60,7 @@ public final class RoundView implements Lens
 					continue;
 				}
 				g.setColor(Palette.LAP_LINE);
-				g.fill(new Rectangle2D.Float(lx - 0.5f, top, 1f, bottom - top));
+				g.fill(Px.rect(lx - 0.5f, top, 1f, bottom - top));
 				if (l.rows == 3 && lx >= l.timelineX)
 				{
 					g.setFont(label);

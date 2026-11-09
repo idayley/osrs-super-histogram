@@ -81,7 +81,7 @@ public final class HullFlashOverlay extends Overlay
 		{
 			return null;
 		}
-		Color base = t.miss ? Palette.MISS_FLASH : colours.damage;
+		Color base = t.miss ? colours.get(Colours.MISS_FLASH, Palette.MISS_FLASH) : colours.damage;
 		Color c = new Color(base.getRed(), base.getGreen(), base.getBlue(), Math.round(255 * a));
 		renderer.drawOutline(t.npc, t.miss ? MISS_WIDTH : WIDTH, c, FEATHER);
 		return null;

@@ -11,6 +11,7 @@ import com.superhistogram.ui.Fonts;
 import com.superhistogram.ui.Icons;
 import com.superhistogram.ui.Lane;
 import com.superhistogram.ui.Lens;
+import com.superhistogram.ui.Px;
 import com.superhistogram.ui.Palette;
 import com.superhistogram.ui.ReadoutPainter;
 import com.superhistogram.ui.TimelinePainter;
@@ -51,7 +52,7 @@ public final class LazyFlickView implements Lens
 		}
 		float u = l.u, baseline = l.laneY(Lane.INPUTS) + l.laneH(Lane.INPUTS) - 0.5f * u;
 		g.setFont(Fonts.bold(9f * u));
-		g.setColor(Palette.LOST);
+		g.setColor(Palette.lost());
 		for (int t = TimelinePainter.oldestTick(l, s); t <= s.nowTick; t++)
 		{
 			TickRecord r = s.timeline.peek(t);
@@ -103,7 +104,7 @@ public final class LazyFlickView implements Lens
 		if (n > 0)
 		{
 			g.setColor(Palette.TRAIL_LINE);
-			g.fill(new Rectangle2D.Float(tx, 32f * u + dy, trailEnd - tx, 1f));
+			g.fill(Px.rect(tx, 32f * u + dy, trailEnd - tx, 1f));
 		}
 		for (int i = 0; i < n; i++)
 		{
@@ -112,13 +113,13 @@ public final class LazyFlickView implements Lens
 			if (v == Beat.Verdict.ON_TIME)
 			{
 				g.setColor(Palette.withAlpha(Palette.mint(), 0.8f));
-				g.fill(new RoundRectangle2D.Float(x, 30f * u + dy, 7f * u, 4f * u, 4f * u, 4f * u));
+				g.fill(Px.round(x, 30f * u + dy, 7f * u, 4f * u, 4f * u, 4f * u));
 			}
 			else
 			{
 				g.setColor(Palette.WHITE);
 				float y = (v == Beat.Verdict.LATE ? 16f : 32f) * u + dy;
-				g.fill(new RoundRectangle2D.Float(x, y, 7f * u, 16f * u, 4f * u, 4f * u));
+				g.fill(Px.round(x, y, 7f * u, 16f * u, 4f * u, 4f * u));
 			}
 		}
 		if (text)

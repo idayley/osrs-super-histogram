@@ -116,7 +116,7 @@ public final class BarPainter
 			{
 				float sw = Pulse.CUE_WIDTH;
 				g.setStroke(new BasicStroke(sw));
-				g.setColor(Palette.withAlpha(pulse.phase() == 0 ? Palette.RIM_TICK : Palette.RIM_TOCK,
+				g.setColor(Palette.withAlpha(pulse.phase() == 0 ? Palette.rimTick() : Palette.rimTock(),
 					pulse.alternateAlpha(nowMs)));
 				g.draw(Squircle.of(sw / 2, sw / 2, w - sw, h - sw, CORNER_U * l.u - sw / 2));
 			}
@@ -210,7 +210,7 @@ public final class BarPainter
 		{
 			// A little slack on the left so XP text that starts just before a slot isn't cut hard.
 			float slack = 6f * l.u;
-			tg.clip(new Rectangle2D.Float(l.timelineX - slack, 0, l.timelineW + slack, l.height));
+			tg.clip(Px.rect(l.timelineX - slack, 0, l.timelineW + slack, l.height));
 			// Smooth scrolling: slide everything left through the current tick, so the next tick's
 			// one-slot step lands exactly where the slide ends and nothing jumps.
 			tg.translate(tl.lag - glide, 0);

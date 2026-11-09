@@ -100,10 +100,12 @@ public class BarRenderSmokeTest
 	}
 
 	@Test
-	public void noActionsRowAt46()
+	public void noActionsRowBelowFullLanes()
 	{
+		// Bars shorter than the full-lanes size (44 px) have no actions row.
+		int h = BarLayout.FULL_LANES_FROM - 2;
 		assertTrue(hasWhiteInActionsBand(render(1026, 62, SampleStates.singleClick(), null), 62));
-		assertFalse(hasWhiteInActionsBand(render(1026, 46, SampleStates.singleClick(), null), 46));
+		assertFalse(hasWhiteInActionsBand(render(1026, h, SampleStates.singleClick(), null), h));
 	}
 
 	/** Looks for opaque pure-white pixels in the timeline between 42u and 50u. */

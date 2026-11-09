@@ -42,6 +42,7 @@ import com.superhistogram.ui.Colours;
 import com.superhistogram.ui.HullFlashOverlay;
 import com.superhistogram.ui.Pulse;
 import java.util.ArrayDeque;
+import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -107,7 +108,9 @@ import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.overlay.outline.ModelOutlineRenderer;
 
 @PluginDescriptor(
-	name = "Super Histogram"
+	name = "Super Histogram",
+	description = "A tick timeline bar of what you're doing: actions, clicks, hits, XP and a readout for each activity",
+	tags = {"tick", "timeline", "histogram", "xp", "overlay", "flick", "prayer", "skilling", "combat", "metronome"}
 )
 public class SuperHistogramPlugin extends Plugin
 {
@@ -222,7 +225,10 @@ public class SuperHistogramPlugin extends Plugin
 	@Inject
 	WorldService worldService;
 
-	private java.util.concurrent.ScheduledExecutorService pingExecutor;
+	/** RuneLite's shared background executor, for the world ping (never the client thread). */
+	@Inject
+	java.util.concurrent.ScheduledExecutorService executor;
+	private java.util.concurrent.ScheduledFuture<?> pingTask;
 	/** Recent round-trip pings to the current world, newest last; read on the client thread. */
 	private final Deque<Integer> pings = new java.util.concurrent.ConcurrentLinkedDeque<>();
 	/** Free inventory slots from the newest inventory event; -1 when unknown. */
@@ -284,22 +290,21 @@ public class SuperHistogramPlugin extends Plugin
 		pulse = new Pulse();
 		overlay = new BarOverlay(this::buildState, pulse);
 		overlay.setChatArea(this::chatArea);
+		// Before add: RuneLite wipes (and saves the wipe of) the dragged spot of an overlay that isn't movable
+		// when added, so a floating bar must already be movable then or it forgets its place on every launch.
+		overlay.applyPosition(config.position());
 		overlayManager.add(overlay);
 		// RuneLite restores a saved (hand-dragged) size on add; only fill in the preset when there is none.
 		overlay.applySizeIfUnset(config.barHeight());
 		syncHeightSetting();
-		overlay.applyPosition(config.position());
 		hullOverlay = new HullFlashOverlay(outlineRenderer, this::flashTarget);
 		overlayManager.add(hullOverlay);
 		applyColours();
 		keyManager.registerKeyListener(beatHotkey);
-		pingExecutor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r ->
+		if (executor != null)
 		{
-			Thread t = new Thread(r, "super-histogram-ping");
-			t.setDaemon(true);
-			return t;
-		});
-		pingExecutor.scheduleWithFixedDelay(this::measurePing, 2, 5, java.util.concurrent.TimeUnit.SECONDS);
+			pingTask = executor.scheduleWithFixedDelay(this::measurePing, 2, 5, java.util.concurrent.TimeUnit.SECONDS);
+		}
 	}
 
 	/** Pings the current world (off the client thread), the way the World Hopper does. */
@@ -366,10 +371,10 @@ public class SuperHistogramPlugin extends Plugin
 	protected void shutDown() throws Exception
 	{
 		keyManager.unregisterKeyListener(beatHotkey);
-		if (pingExecutor != null)
+		if (pingTask != null)
 		{
-			pingExecutor.shutdownNow();
-			pingExecutor = null;
+			pingTask.cancel(false);
+			pingTask = null;
 		}
 		pings.clear();
 		if (hullOverlay != null)
@@ -716,21 +721,65 @@ public class SuperHistogramPlugin extends Plugin
 				overlay.applyPosition(config.position());
 				overlayManager.saveOverlay(overlay);
 				break;
-			case "damageColour":
-			case "mintColour":
-			case "runEnergyColour":
-			case "backgroundColour":
-				applyColours();
-				break;
 			default:
+				if (key.endsWith("Colour"))
+				{
+					applyColours();
+				}
 				break;
 		}
+	}
+
+	/** Each skill's colour setting, by display name. */
+	private java.util.Map<String, java.util.function.Supplier<Color>> skillColours()
+	{
+		java.util.Map<String, java.util.function.Supplier<Color>> m = new java.util.LinkedHashMap<>();
+		m.put("Attack", config::attackColour);
+		m.put("Strength", config::strengthColour);
+		m.put("Defence", config::defenceColour);
+		m.put("Ranged", config::rangedColour);
+		m.put("Prayer", config::prayerColour);
+		m.put("Magic", config::magicColour);
+		m.put("Runecraft", config::runecraftColour);
+		m.put("Construction", config::constructionColour);
+		m.put("Hitpoints", config::hitpointsColour);
+		m.put("Agility", config::agilityColour);
+		m.put("Herblore", config::herbloreColour);
+		m.put("Thieving", config::thievingColour);
+		m.put("Crafting", config::craftingColour);
+		m.put("Fletching", config::fletchingColour);
+		m.put("Slayer", config::slayerColour);
+		m.put("Hunter", config::hunterColour);
+		m.put("Mining", config::miningColour);
+		m.put("Smithing", config::smithingColour);
+		m.put("Fishing", config::fishingColour);
+		m.put("Cooking", config::cookingColour);
+		m.put("Firemaking", config::firemakingColour);
+		m.put("Woodcutting", config::woodcuttingColour);
+		m.put("Farming", config::farmingColour);
+		m.put("Sailing", config::sailingColour);
+		return m;
 	}
 
 	private void applyColours()
 	{
 		Colours c = Colours.orDefaults(config.backgroundColour(), config.damageColour(), config.mintColour(),
-			config.runEnergyColour());
+				config.runEnergyColour())
+			.with(Colours.PRAYER_MELEE, config.prayerMeleeColour())
+			.with(Colours.PRAYER_RANGED, config.prayerRangedColour())
+			.with(Colours.PRAYER_MAGIC, config.prayerMagicColour())
+			.with(Colours.PRAYER_OTHER, config.prayerOtherColour())
+			.with(Colours.FIGHT, config.fightColour())
+			.with(Colours.MISS_FLASH, config.missFlashColour())
+			.with(Colours.RIM_TICK, config.rimTickColour())
+			.with(Colours.RIM_TOCK, config.rimTockColour())
+			.with(Colours.NOW_LINE, config.nowLineColour())
+			.with(Colours.ACTION, config.actionColour())
+			.with(Colours.LOST, config.lostColour());
+		for (java.util.Map.Entry<String, java.util.function.Supplier<Color>> sk : skillColours().entrySet())
+		{
+			c = c.with(Colours.skillKey(sk.getKey()), sk.getValue().get());
+		}
 		if (overlay != null)
 		{
 			overlay.setColours(c);
@@ -767,6 +816,16 @@ public class SuperHistogramPlugin extends Plugin
 			return new BarPlacement.Rect(b.x, b.y, b.width, Math.max(0, b.height - bh));
 		}
 		return BarPlacement.fallbackChat(client.getCanvasHeight());
+	}
+
+	/**
+	 * The newest tick the bar shows: the last one whose GameTick has run. A tick opened early by a server event
+	 * waits for its GameTick, because the scroll clock ({@link #tickMs}) only restarts then; showing it before
+	 * would slide the whole timeline a slot left for a frame or two and back.
+	 */
+	int shownTick()
+	{
+		return tickOpened ? timeline.newestTick() - 1 : timeline.newestTick();
 	}
 
 	/** A server event arrived: it belongs to the tick whose GameTick comes next. */
@@ -935,7 +994,8 @@ public class SuperHistogramPlugin extends Plugin
 		}
 		int idleSeconds = Math.min(client.getMouseIdleTicks(), client.getKeyboardIdleTicks()) / 50;
 		idle.update(idleSeconds, nowMs);
-		SuperHistogramConfig.Metronome metronome = config.metronome();
+		SuperHistogramConfig.Metronome metronome = metronomeHere(shownMode) ? config.metronome()
+			: SuperHistogramConfig.Metronome.OFF;
 		pulse.setAlternate(config.metronomeStyle() == SuperHistogramConfig.MetronomeStyle.ALTERNATE);
 		if (metronome == SuperHistogramConfig.Metronome.EVERY_TICK)
 		{
@@ -948,6 +1008,49 @@ public class SuperHistogramPlugin extends Plugin
 		if (idle.warningFired() && config.afkWarning() && config.blinkWhenDone())
 		{
 			pulse.done(nowMs);
+		}
+	}
+
+	/** The view on the bar, from the last frame drawn; null before one. */
+	volatile Mode shownMode;
+
+	/** True when the metronome may pulse in view {@code mode} (the "Metronome in" setting). */
+	boolean metronomeHere(Mode mode)
+	{
+		java.util.Set<SuperHistogramConfig.MetronomeActivity> in = config.metronomeIn();
+		return in == null || in.contains(metronomeActivity(mode));
+	}
+
+	static SuperHistogramConfig.MetronomeActivity metronomeActivity(Mode mode)
+	{
+		if (mode == null)
+		{
+			return SuperHistogramConfig.MetronomeActivity.OTHER;
+		}
+		switch (mode)
+		{
+			case LAZY_FLICK:
+			case ONE_TICK:
+				return SuperHistogramConfig.MetronomeActivity.COMBAT;
+			case AGILITY:
+				return SuperHistogramConfig.MetronomeActivity.AGILITY;
+			case ALCH:
+			case CASTING:
+				return SuperHistogramConfig.MetronomeActivity.MAGIC;
+			case GATHERING:
+				return SuperHistogramConfig.MetronomeActivity.GATHERING;
+			case PRODUCTION:
+				return SuperHistogramConfig.MetronomeActivity.PRODUCTION;
+			case THIEVING:
+				return SuperHistogramConfig.MetronomeActivity.THIEVING;
+			case HUNTER:
+				return SuperHistogramConfig.MetronomeActivity.HUNTER;
+			case RUNS:
+				return SuperHistogramConfig.MetronomeActivity.RUNS;
+			case ROUNDS:
+				return SuperHistogramConfig.MetronomeActivity.MINIGAMES;
+			default:
+				return SuperHistogramConfig.MetronomeActivity.OTHER;
 		}
 	}
 
@@ -1130,7 +1233,9 @@ public class SuperHistogramPlugin extends Plugin
 			return -1;
 		}
 		LocalPoint lp = me.getLocalLocation();
-		WorldPoint wp = lp == null ? me.getWorldLocation() : WorldPoint.fromLocalInstance(client, lp);
+		// No scene for that point yet (loading, or a world view that just closed): fall back to where you stand.
+		boolean scene = lp != null && client.getWorldView(lp.getWorldView()) != null;
+		WorldPoint wp = scene ? WorldPoint.fromLocalInstance(client, lp) : me.getWorldLocation();
 		return wp == null ? -1 : wp.getRegionID();
 	}
 
@@ -2067,7 +2172,7 @@ public class SuperHistogramPlugin extends Plugin
 		IdleTracker idleNow = idle;
 		boolean afk = idleNow != null && idleNow.isAfk();
 		Player me = client.getLocalPlayer();
-		int tickNow = timeline.newestTick();
+		int tickNow = shownTick();
 		AttackTimer at = attack;
 		AgilityCourse agilityNow = agility;
 		boolean agilityOn = agilityNow != null && agilityNow.showing(tickNow);
@@ -2088,6 +2193,7 @@ public class SuperHistogramPlugin extends Plugin
 			loopNow != null, thieveNow != null && thieveNow.showing(tickNow),
 			huntNow != null && huntNow.showing(tickNow), gatherNow != null && gatherNow.showing(tickNow));
 		Mode mode = modeDetector.detect(config.mode(), afk, combat, skilling, config.prayerMode(), config.baseline());
+		shownMode = mode;
 		if (alchNow != null && mode != Mode.ALCH && mode != Mode.AFK && mode != Mode.GENERAL && mode != Mode.MINIMAL)
 		{
 			// Another activity took the bar (salvaging, a fight): the next alch starts a new run.
@@ -2097,7 +2203,7 @@ public class SuperHistogramPlugin extends Plugin
 		String foe = lastFightName != null ? lastFightName : npcName(me == null ? null : me.getInteracting());
 		return BarState.builder()
 			.timeline(timeline)
-			.nowTick(timeline == null ? -1 : timeline.newestTick())
+			.nowTick(timeline == null ? -1 : shownTick())
 			.xp(xp)
 			.idle(idleNow)
 			.clock(clock)

@@ -91,7 +91,7 @@ public final class BaseTimeline
 			{
 				for (int i = -1; i <= l.visibleTicks + 1; i++)
 				{
-					g.fill(new Rectangle2D.Float(l.timelineX + i * l.tickWidth - w / 2f, y, w, h));
+					g.fill(Px.rect(l.timelineX + i * l.tickWidth - w / 2f, y, w, h));
 				}
 				return;
 			}
@@ -103,7 +103,7 @@ public final class BaseTimeline
 				{
 					break;
 				}
-				g.fill(new Rectangle2D.Float(x - w / 2f, y, w, h));
+				g.fill(Px.rect(x - w / 2f, y, w, h));
 			}
 			lagNotes(g, l, s, oldest, y, h);
 		}
@@ -133,8 +133,8 @@ public final class BaseTimeline
 			String txt = Integer.toString(r.lengthMs);
 			float tw = fm.stringWidth(txt), tx = (x0 + x1 - tw) / 2f;
 			g.setColor(Palette.LAG_LINE);
-			g.fill(new Rectangle2D.Float(x0, mid - lh / 2f, Math.max(0f, tx - pad - x0), lh));
-			g.fill(new Rectangle2D.Float(tx + tw + pad, mid - lh / 2f, Math.max(0f, x1 - tx - tw - pad), lh));
+			g.fill(Px.rect(x0, mid - lh / 2f, Math.max(0f, tx - pad - x0), lh));
+			g.fill(Px.rect(tx + tw + pad, mid - lh / 2f, Math.max(0f, x1 - tx - tw - pad), lh));
 			g.setColor(Palette.DIM);
 			g.drawString(txt, tx, mid + fm.getAscent() * 0.42f);
 		}
@@ -169,7 +169,7 @@ public final class BaseTimeline
 		float right = l.timelineX + l.timelineW - 4f * u;
 		float x = Math.min(TimelinePainter.x(l, s, next), right);
 		g.setColor(Palette.NEXT_BEAT_GUIDE);
-		g.fill(new Rectangle2D.Float(x - 0.75f * u, l.laneY(Lane.TOP), 1.5f * u, y - l.laneY(Lane.TOP)));
+		g.fill(Px.rect(x - 0.75f * u, l.laneY(Lane.TOP), 1.5f * u, y - l.laneY(Lane.TOP)));
 		CombatPainter.caret(g, x, y, u, Palette.WHITE);
 		g.setFont(Fonts.bold(Math.max(8f, 9f * u)));
 		g.setColor(Palette.WHITE);
@@ -232,14 +232,14 @@ public final class BaseTimeline
 				landed |= !h.blocked;
 			}
 			float x = TimelinePainter.x(l, s, t);
-			g.setColor(landed ? Palette.damage() : Palette.MISS_FLASH);
+			g.setColor(landed ? Palette.damage() : Palette.missFlash());
 			if (l.rows == 1)
 			{
-				g.fill(new Rectangle2D.Float(x + l.tickWidth / 2f - 1.5f, y0, 3f, l.laneY(Lane.DOING) - y0 + 1f));
+				g.fill(Px.rect(x + l.tickWidth / 2f - 1.5f, y0, 3f, l.laneY(Lane.DOING) - y0 + 1f));
 				continue;
 			}
 			float w = Math.max(1f, 1.5f * u);
-			g.fill(new RoundRectangle2D.Float(x - w / 2f, y0, w, y1 - y0, w, w));
+			g.fill(Px.round(x - w / 2f, y0, w, y1 - y0, w, w));
 			float tx = x + 4f * u, end = x;
 			for (float[] range : xp)
 			{
@@ -255,7 +255,7 @@ public final class BaseTimeline
 				{
 					continue;
 				}
-				g.setColor(h.blocked ? Palette.MISS_FLASH : Palette.damage());
+				g.setColor(h.blocked ? Palette.missFlash() : Palette.damage());
 				String text = String.valueOf(h.amount);
 				g.drawString(text, tx, baseline);
 				end = tx + g.getFontMetrics().stringWidth(text);
@@ -507,13 +507,13 @@ public final class BaseTimeline
 		for (Float f : r.clickGhosts)
 		{
 			float cx = x + (f == null ? 0f : f) * slotW;
-			g.fill(new RoundRectangle2D.Float(cx - u, y, 2f * u, h, 2f * u, 2f * u));
+			g.fill(Px.round(cx - u, y, 2f * u, h, 2f * u, 2f * u));
 		}
 		g.setColor(Palette.WHITE);
 		for (Float f : r.clicks)
 		{
 			float cx = x + (f == null ? 0f : f) * slotW;
-			g.fill(new RoundRectangle2D.Float(cx - u, y, 2f * u, h, 2f * u, 2f * u));
+			g.fill(Px.round(cx - u, y, 2f * u, h, 2f * u, 2f * u));
 		}
 	}
 
@@ -532,7 +532,7 @@ public final class BaseTimeline
 					break;
 				case SPEC:
 					icon = Icons.Icon.BOLT;
-					g.setColor(Palette.RIM_TICK);
+					g.setColor(Palette.rimTick());
 					break;
 				case WALK:
 					icon = Icons.Icon.STEPS;
@@ -540,7 +540,7 @@ public final class BaseTimeline
 					break;
 				default:
 					icon = Icons.Icon.POT;
-					g.setColor(Palette.RIM_TOCK);
+					g.setColor(Palette.rimTock());
 					break;
 			}
 			g.fill(Icons.icon(icon, cx, bottom, k * 0.8f));
@@ -558,7 +558,7 @@ public final class BaseTimeline
 		{
 			return;
 		}
-		g.setColor(r.swingHit == 0 ? Palette.MISS_FLASH : Palette.damage());
+		g.setColor(r.swingHit == 0 ? Palette.missFlash() : Palette.damage());
 		g.drawString(Integer.toString(r.swingHit), swordX(l, x) + 5f * l.u, bottom - 0.5f * l.u);
 		g.setColor(Palette.WHITE);
 	}
@@ -602,7 +602,7 @@ public final class BaseTimeline
 				return;
 			}
 		}
-		g.setColor(free ? Palette.mint() : Palette.LOST);
+		g.setColor(free ? Palette.mint() : Palette.lost());
 		g.drawString(text, tx, bottom - 0.5f * u);
 		g.setColor(Palette.WHITE);
 	}

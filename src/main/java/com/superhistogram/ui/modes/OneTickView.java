@@ -11,6 +11,7 @@ import com.superhistogram.ui.Fonts;
 import com.superhistogram.ui.Icons;
 import com.superhistogram.ui.Lane;
 import com.superhistogram.ui.Lens;
+import com.superhistogram.ui.Px;
 import com.superhistogram.ui.Palette;
 import com.superhistogram.ui.ReadoutPainter;
 import com.superhistogram.ui.TimelinePainter;
@@ -65,7 +66,7 @@ public final class OneTickView implements Lens
 		for (int t = TimelinePainter.oldestTick(l, s); t <= s.nowTick; t++)
 		{
 			float cx = TimelinePainter.x(l, s, t);
-			g.fill(new RoundRectangle2D.Float(cx - half, y, 2f * half, h + l.u, 2f * l.u, 2f * l.u));
+			g.fill(Px.round(cx - half, y, 2f * half, h + l.u, 2f * l.u, 2f * l.u));
 		}
 	}
 
@@ -99,7 +100,7 @@ public final class OneTickView implements Lens
 			if (x1 - x0 > 2f * sw && ih > 0)
 			{
 				g.setColor(Palette.WHITE);
-				g.draw(new RoundRectangle2D.Float(x0 + sw, y + sw, x1 - x0 - 2f * sw, ih, ih, ih));
+				g.draw(Px.round(x0 + sw, y + sw, x1 - x0 - 2f * sw, ih, ih, ih));
 			}
 			t = end;
 		}
@@ -124,7 +125,7 @@ public final class OneTickView implements Lens
 				case SPLIT:
 					g.setColor(Palette.WHITE);
 					float oh = ph - 2f * sw;
-					g.draw(new RoundRectangle2D.Float(cx - 5f * q, y + sw, 14f * q, oh, oh, oh));
+					g.draw(Px.round(cx - 5f * q, y + sw, 14f * q, oh, oh, oh));
 					break;
 				case SKIP:
 					float mx = x + l.tickWidth / 2f;
@@ -232,7 +233,7 @@ public final class OneTickView implements Lens
 		{
 			max = Math.max(max, n);
 		}
-		Shape box = new RoundRectangle2D.Float(hx, 9f * f, hw, 26f * f, 8f * u, 8f * u);
+		Shape box = Px.round(hx, 9f * f, hw, 26f * f, 8f * u, 8f * u);
 		g.setColor(Palette.withAlpha(Palette.WHITE, 0.04f));
 		g.fill(box);
 		Graphics2D zg = (Graphics2D) g.create();
@@ -255,7 +256,7 @@ public final class OneTickView implements Lens
 			}
 			float bh = 22f * f * bins[i] / max;
 			g.setColor(i < FlickClassifier.SPLIT_BIN ? Palette.mint() : Palette.WHITE);
-			g.fill(new RoundRectangle2D.Float(hx + pitch * i + pitch / 8f, 33f * f - bh, pitch * 0.75f, bh,
+			g.fill(Px.round(hx + pitch * i + pitch / 8f, 33f * f - bh, pitch * 0.75f, bh,
 				3f * u, 3f * u));
 		}
 		Font lf = Fonts.bold(10f * u);

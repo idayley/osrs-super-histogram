@@ -103,7 +103,7 @@ public final class DoingLane
 		{
 			if (FightCollector.KIND.equals(sp.kind))
 			{
-				clipped(g, l, s, sp, covered, y, h, Palette.FIGHT, false, details ? sp.label : null);
+				clipped(g, l, s, sp, covered, y, h, Palette.fight(), false, details ? sp.label : null);
 				fights.add(new int[]{sp.startTick, spanEnd(s, sp)});
 			}
 		}
@@ -143,7 +143,7 @@ public final class DoingLane
 						details ? (sp.label != null ? sp.label : "running") : null);
 					break;
 				default:
-					clipped(g, l, s, sp, covered, y, h, Palette.ACTION, false, details ? sp.label : null);
+					clipped(g, l, s, sp, covered, y, h, Palette.action(), false, details ? sp.label : null);
 			}
 		}
 	}
@@ -160,7 +160,7 @@ public final class DoingLane
 			case TrapTracker.KIND:
 				return Palette.skill(TrapTracker.SKILL);
 			case SpellRun.KIND:
-				return Palette.PRAYER_MAGIC;
+				return Palette.prayerMagic();
 			default:
 				return null;
 		}
@@ -268,7 +268,7 @@ public final class DoingLane
 			: TimelinePainter.x(l, s, Math.min(s.nowTick + 1, endTick));
 		float solidEnd = Math.max(x0 + h, solidX);
 		g.setColor(c);
-		g.fill(new RoundRectangle2D.Float(x0, y, solidEnd - x0, h, h, h));
+		g.fill(Px.round(x0, y, solidEnd - x0, h, h, h));
 		if ("Cooking".equals(sp.kind) && icons)
 		{
 			float ix = Math.max(x0 + 11f * u, l.timelineX + 11f * u);
@@ -299,7 +299,7 @@ public final class DoingLane
 		float x1 = p.endTick == -1 ? TimelinePainter.liveX(l) : TimelinePainter.x(l, s, Math.min(p.endTick, s.nowTick + 1));
 		g.setColor(wood ? Palette.WC_PILL : Palette.skill(p.skill));
 		// No clamp to the timeline's left edge: the clip trims it, and smooth scrolling shifts the timeline.
-		g.fill(new RoundRectangle2D.Float(x0, y, Math.max(h, x1 - x0), h, h, h));
+		g.fill(Px.round(x0, y, Math.max(h, x1 - x0), h, h, h));
 		if (!details)
 		{
 			return;
@@ -317,7 +317,7 @@ public final class DoingLane
 			float x = TimelinePainter.x(l, s, t);
 			if (r != null && r.roll && x > ix + 6f * u && x < x1)
 			{
-				g.fill(new RoundRectangle2D.Float(x - 0.6f * u, y + 3f * k, 1.2f * u, h - 6f * k, 1.2f * u, 1.2f * u));
+				g.fill(Px.round(x - 0.6f * u, y + 3f * k, 1.2f * u, h - 6f * k, 1.2f * u, 1.2f * u));
 			}
 		}
 	}
@@ -330,7 +330,7 @@ public final class DoingLane
 		boolean casting = t + AlchTracker.CAST_TICKS > s.nowTick + 1;
 		TimelinePainter.pill(g, l, TimelinePainter.x(l, s, t),
 			casting ? TimelinePainter.liveX(l) : TimelinePainter.x(l, s, t + AlchTracker.CAST_TICKS),
-			y, h, Palette.PRAYER_MAGIC, false, null);
+			y, h, Palette.prayerMagic(), false, null);
 	}
 
 	// ---- agility ----
@@ -350,7 +350,7 @@ public final class DoingLane
 		float x2 = o.endTick == -1 ? TimelinePainter.liveX(l) : TimelinePainter.x(l, s, Math.min(o.endTick, s.nowTick + 1));
 		float px0 = x1 + 1f;
 		g.setColor(o.failed ? Palette.withAlpha(solid, Palette.FAINT_ALPHA) : solid);
-		g.fill(new RoundRectangle2D.Float(px0, y, Math.max(h, x2 - 1f - px0), h, h, h));
+		g.fill(Px.round(px0, y, Math.max(h, x2 - 1f - px0), h, h, h));
 		float nx = x1 + 10f * u;
 		if (numbers && o.number > 0 && nx < x2 - 6f * u && nx > l.timelineX)
 		{

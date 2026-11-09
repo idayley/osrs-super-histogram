@@ -56,6 +56,7 @@ public class SuperHistogramPluginHandlersTest
 		when(config.afkAfterSeconds()).thenReturn(60);
 		when(config.baseline()).thenReturn(com.superhistogram.model.BaselineSetting.GENERAL);
 		when(config.metronome()).thenReturn(SuperHistogramConfig.Metronome.OFF);
+		when(config.metronomeIn()).thenReturn(java.util.EnumSet.allOf(SuperHistogramConfig.MetronomeActivity.class));
 		when(config.beatTicks()).thenReturn(4);
 		when(config.showLoginTime()).thenReturn(true);
 		when(config.afkWarning()).thenReturn(true);
@@ -572,6 +573,20 @@ public class SuperHistogramPluginHandlersTest
 		pressAfterTick0();
 		assertTrue(alphaAtTick3 > 0f && alphaAtTick3 < 0.5f);
 		assertTrue(plugin.pulse.outlineAlpha(2400) > 0.9f);
+	}
+
+	@Test
+	public void metronomeStaysStillInActivitiesUntickedInMetronomeIn()
+	{
+		when(config.metronome()).thenReturn(SuperHistogramConfig.Metronome.EVERY_TICK);
+		when(config.metronomeIn()).thenReturn(java.util.EnumSet.of(SuperHistogramConfig.MetronomeActivity.COMBAT));
+		plugin.shownMode = com.superhistogram.model.Mode.GATHERING;
+		plugin.handleTick(0);
+		plugin.handleTick(600);
+		assertEquals(0f, plugin.pulse.outlineAlpha(650), 0f);
+		plugin.shownMode = com.superhistogram.model.Mode.LAZY_FLICK;
+		plugin.handleTick(1200);
+		assertTrue(plugin.pulse.outlineAlpha(1250) > 0f);
 	}
 
 	@Test
@@ -1821,6 +1836,48 @@ public class SuperHistogramPluginHandlersTest
 	}
 
 	@Test
+	public void aTickOpenedEarlyByAServerEventIsShownOnlyAtItsGameTick()
+	{
+		plugin.handleTick(1000);
+		plugin.handleTick(1600);
+		int shown = plugin.buildState(1700).nowTick;
+		plugin.openServerTick();
+		// The scroll clock still runs from the last GameTick: the bar must not step yet.
+		assertEquals(shown, plugin.buildState(1750).nowTick);
+		plugin.handleTick(2200);
+		assertEquals(shown + 1, plugin.buildState(2250).nowTick);
+	}
+
+	@Test
+	public void floatingBarIsMovableWhenRuneLiteRestoresItsSpot() throws Exception
+	{
+		// RuneLite wipes the saved spot of an overlay that isn't movable when added, on every launch.
+		plugin.overlayManager = mock(net.runelite.client.ui.overlay.OverlayManager.class);
+		plugin.keyManager = mock(net.runelite.client.input.KeyManager.class);
+		when(config.position()).thenReturn(com.superhistogram.model.BarPosition.FLOATING);
+		when(config.barHeight()).thenReturn(62);
+		boolean[] movableAtAdd = {false};
+		org.mockito.Mockito.doAnswer(inv ->
+		{
+			Object o = inv.getArgument(0);
+			if (o instanceof com.superhistogram.ui.BarOverlay)
+			{
+				movableAtAdd[0] = ((com.superhistogram.ui.BarOverlay) o).isMovable();
+			}
+			return true;
+		}).when(plugin.overlayManager).add(org.mockito.ArgumentMatchers.any());
+		plugin.startUp();
+		try
+		{
+			assertTrue(movableAtAdd[0]);
+		}
+		finally
+		{
+			plugin.shutDown();
+		}
+	}
+
+	@Test
 	public void configChangePushesColoursAndSize()
 	{
 		com.superhistogram.ui.BarOverlay o = new com.superhistogram.ui.BarOverlay(plugin::buildState, null);
@@ -1854,7 +1911,7 @@ public class SuperHistogramPluginHandlersTest
 		}
 		when(me.getAnimation()).thenReturn(422);
 		plugin.handleAnimation(me);
-		int swing = plugin.buildState().nowTick;
+		int swing = plugin.timeline.newestTick();
 		assertTrue(plugin.buildState().timeline.peek(swing).attackLate < 0);
 		plugin.handleTick(3000);
 		plugin.handleTick(3600);
@@ -1874,7 +1931,7 @@ public class SuperHistogramPluginHandlersTest
 		plugin.handleAttackClick(7);
 		when(me.getAnimation()).thenReturn(422);
 		plugin.handleAnimation(me);
-		int first = plugin.buildState().nowTick;
+		int first = plugin.timeline.newestTick();
 		plugin.handleTick(1600);
 		plugin.handleHit(npc, HitsplatID.DAMAGE_ME, 12, 1600, true);
 		for (int i = 0; i < 4; i++)
@@ -1882,7 +1939,7 @@ public class SuperHistogramPluginHandlersTest
 			plugin.handleTick(2200 + 600 * i);
 		}
 		plugin.handleAnimation(me);
-		int second = plugin.buildState().nowTick;
+		int second = plugin.timeline.newestTick();
 		plugin.handleTick(5000);
 		plugin.handleHit(npc, HitsplatID.BLOCK_ME, 0, 5000, true);
 		assertEquals(12, plugin.buildState().timeline.peek(first).swingHit);

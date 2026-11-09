@@ -29,7 +29,7 @@ public final class SkillPainter
 		float iconBottom = y0 + Icons.BOX * u;
 		if (y1 > iconBottom)
 		{
-			g.fill(new Rectangle2D.Float(x - 0.75f * u, iconBottom, 1.5f * u, y1 - iconBottom));
+			g.fill(Px.rect(x - 0.75f * u, iconBottom, 1.5f * u, y1 - iconBottom));
 		}
 	}
 
@@ -63,10 +63,10 @@ public final class SkillPainter
 		float u = l.u;
 		float lineY = l.laneY(Lane.PRAYER) + l.laneH(Lane.PRAYER) + 0.25f * u;
 		g.setColor(Palette.WASTED_LINE);
-		g.fill(new Rectangle2D.Float(x0, lineY, x1 - x0, 1.5f * u));
+		g.fill(Px.rect(x0, lineY, x1 - x0, 1.5f * u));
 		String text = "+" + n;
 		g.setFont(Fonts.bold(9f * u));
-		g.setColor(Palette.LOST);
+		g.setColor(Palette.lost());
 		float w = g.getFontMetrics().stringWidth(text);
 		float tx = (x0 + x1) / 2f - w / 2f;
 		// The number sits in the (dimmed) prayer lane: leave out any that would print over a prayer label.
