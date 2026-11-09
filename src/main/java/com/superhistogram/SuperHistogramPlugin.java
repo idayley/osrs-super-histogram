@@ -54,13 +54,13 @@ import java.util.Map;
 import java.util.Set;
 import javax.inject.Inject;
 import net.runelite.api.Actor;
-import net.runelite.api.AnimationID;
+import net.runelite.api.gameval.AnimationID;
 import net.runelite.api.Client;
 import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameState;
 import net.runelite.api.Hitsplat;
 import net.runelite.api.HitsplatID;
-import net.runelite.api.InventoryID;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
@@ -68,7 +68,7 @@ import net.runelite.api.KeyCode;
 import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
 import net.runelite.api.NPC;
-import net.runelite.api.VarClientStr;
+import net.runelite.api.gameval.VarClientID;
 import net.runelite.api.Player;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.gameval.VarbitID;
@@ -118,7 +118,7 @@ public class SuperHistogramPlugin extends Plugin
 	static final String CONFIG_GROUP = "superhistogram";
 	/** A jump of more than this many tiles in one tick is a teleport, not movement. */
 	static final int MAX_STEP_TILES = 2;
-	static final int EAT_ANIMATION = AnimationID.CONSUMING;
+	static final int EAT_ANIMATION = AnimationID.HUMAN_EAT;
 
 	@Inject
 	Client client;
@@ -319,7 +319,7 @@ public class SuperHistogramPlugin extends Plugin
 			}
 			net.runelite.http.api.worlds.WorldResult worlds = worldService.getWorlds();
 			net.runelite.http.api.worlds.World w = worlds == null ? null : worlds.findWorld(client.getWorld());
-			int ms = w == null ? -1 : Ping.ping(w);
+			int ms = w == null ? -1 : Ping.ping(w, false);
 			if (ms > 0)
 			{
 				pings.addLast(ms);
@@ -517,7 +517,7 @@ public class SuperHistogramPlugin extends Plugin
 	{
 		long now = System.currentTimeMillis();
 		handleClick(now);
-		int group = e.getWidgetId() >>> 16;
+		int group = e.getParam1() >>> 16;
 		String option = e.getMenuOption();
 		if ((group == PRAYERBOOK_GROUP || group == ORBS_GROUP)
 			&& ("Activate".equals(option) || "Deactivate".equals(option)))
@@ -662,12 +662,12 @@ public class SuperHistogramPlugin extends Plugin
 		{
 			return;
 		}
-		if (e.getContainerId() == InventoryID.EQUIPMENT.getId())
+		if (e.getContainerId() == InventoryID.WORN)
 		{
 			Item w = c.getItem(EquipmentInventorySlot.WEAPON.getSlotIdx());
 			handleWeapon(w == null ? -1 : w.getId());
 		}
-		else if (e.getContainerId() == InventoryID.INVENTORY.getId())
+		else if (e.getContainerId() == InventoryID.INV)
 		{
 			Map<Integer, Integer> counts = new HashMap<>();
 			int used = 0;
@@ -1872,7 +1872,7 @@ public class SuperHistogramPlugin extends Plugin
 		{
 			return;
 		}
-		String typed = client.getVarcStrValue(VarClientStr.CHATBOX_TYPED_TEXT);
+		String typed = client.getVarcStrValue(VarClientID.CHATINPUT);
 		if (typed != null && !typed.isEmpty())
 		{
 			return;

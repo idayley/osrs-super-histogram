@@ -70,21 +70,27 @@ public final class PrayerCollector
 		return used + (used == 1 ? " pt" : " pts");
 	}
 
+	/** Whether a prayer is on, read from its varbit (Client.isPrayerActive is deprecated). */
+	private static boolean on(Client c, Prayer p)
+	{
+		return c.getVarbitValue(p.getVarbit()) == 1;
+	}
+
 	public static String overheadKind(Client c)
 	{
-		if (c.isPrayerActive(Prayer.PROTECT_FROM_MELEE))
+		if (on(c, Prayer.PROTECT_FROM_MELEE))
 		{
 			return "melee";
 		}
-		if (c.isPrayerActive(Prayer.PROTECT_FROM_MISSILES))
+		if (on(c, Prayer.PROTECT_FROM_MISSILES))
 		{
 			return "ranged";
 		}
-		if (c.isPrayerActive(Prayer.PROTECT_FROM_MAGIC))
+		if (on(c, Prayer.PROTECT_FROM_MAGIC))
 		{
 			return "magic";
 		}
-		if (c.isPrayerActive(Prayer.RETRIBUTION) || c.isPrayerActive(Prayer.REDEMPTION) || c.isPrayerActive(Prayer.SMITE))
+		if (on(c, Prayer.RETRIBUTION) || on(c, Prayer.REDEMPTION) || on(c, Prayer.SMITE))
 		{
 			return "other";
 		}

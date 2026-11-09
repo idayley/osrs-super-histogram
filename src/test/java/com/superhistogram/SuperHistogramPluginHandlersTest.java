@@ -461,7 +461,7 @@ public class SuperHistogramPluginHandlersTest
 		when(me.getInteracting()).thenReturn(npc);
 		when(npc.getCombatLevel()).thenReturn(2);
 		plugin.handleHit(npc, HitsplatID.DAMAGE_ME, 2);
-		when(client.getVarcStrValue(net.runelite.api.VarClientStr.CHATBOX_TYPED_TEXT)).thenReturn("");
+		when(client.getVarcStrValue(net.runelite.api.gameval.VarClientID.CHATINPUT)).thenReturn("");
 	}
 
 	private float alphaAtTick3;
@@ -514,7 +514,7 @@ public class SuperHistogramPluginHandlersTest
 	public void beatSetToAlwaysWorksOutOfCombatAndKeepsGoing()
 	{
 		when(config.beatRuns()).thenReturn(SuperHistogramConfig.BeatRuns.ALWAYS);
-		when(client.getVarcStrValue(net.runelite.api.VarClientStr.CHATBOX_TYPED_TEXT)).thenReturn("");
+		when(client.getVarcStrValue(net.runelite.api.gameval.VarClientID.CHATINPUT)).thenReturn("");
 		plugin.handleTick(0);
 		plugin.handleBeatKey();
 		for (int i = 1; i <= 40; i++)
@@ -528,7 +528,7 @@ public class SuperHistogramPluginHandlersTest
 	public void beatOnlyInCombatIgnoresTheHotkeyOutOfCombat()
 	{
 		when(config.beatRuns()).thenReturn(SuperHistogramConfig.BeatRuns.IN_COMBAT);
-		when(client.getVarcStrValue(net.runelite.api.VarClientStr.CHATBOX_TYPED_TEXT)).thenReturn("");
+		when(client.getVarcStrValue(net.runelite.api.gameval.VarClientID.CHATINPUT)).thenReturn("");
 		plugin.handleTick(0);
 		plugin.handleBeatKey();
 		assertFalse(plugin.buildState().beat.active());
@@ -593,7 +593,7 @@ public class SuperHistogramPluginHandlersTest
 	public void hotkeyIgnoredWhileTypingInChat()
 	{
 		when(me.getInteracting()).thenReturn(npc);
-		when(client.getVarcStrValue(net.runelite.api.VarClientStr.CHATBOX_TYPED_TEXT)).thenReturn("f");
+		when(client.getVarcStrValue(net.runelite.api.gameval.VarClientID.CHATINPUT)).thenReturn("f");
 		plugin.handleTick(0);
 		plugin.handleBeatKey();
 		assertFalse(plugin.beat.active());
@@ -603,7 +603,7 @@ public class SuperHistogramPluginHandlersTest
 	public void hotkeyIgnoredOutOfCombatInPlugin()
 	{
 		when(me.getInteracting()).thenReturn(null);
-		when(client.getVarcStrValue(net.runelite.api.VarClientStr.CHATBOX_TYPED_TEXT)).thenReturn("");
+		when(client.getVarcStrValue(net.runelite.api.gameval.VarClientID.CHATINPUT)).thenReturn("");
 		plugin.handleTick(0);
 		plugin.handleBeatKey();
 		assertFalse(plugin.beat.active());
@@ -631,7 +631,7 @@ public class SuperHistogramPluginHandlersTest
 	public void prayerObservedEachTick()
 	{
 		plugin.handleTick(0);
-		when(client.isPrayerActive(net.runelite.api.Prayer.PROTECT_FROM_MAGIC)).thenReturn(true);
+		when(client.getVarbitValue(net.runelite.api.Prayer.PROTECT_FROM_MAGIC.getVarbit())).thenReturn(1);
 		plugin.handleTick(600);
 		plugin.handleTick(1200);
 		List<Span> spans = plugin.buildState().timeline.spansBetween(0, 10);

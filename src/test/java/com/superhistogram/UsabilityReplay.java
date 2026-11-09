@@ -99,6 +99,19 @@ public class UsabilityReplay
 			});
 	}
 
+	/** A varbit's value: 1 for a prayer that is on, else whatever the scenario set. */
+	private int prayerVarbit(int id)
+	{
+		for (Map.Entry<Prayer, Boolean> e : prayers.entrySet())
+		{
+			if (e.getValue() && e.getKey().getVarbit() == id)
+			{
+				return 1;
+			}
+		}
+		return varbits.getOrDefault(id, 0);
+	}
+
 	private void setUp(String name, int h) throws Exception
 	{
 		String root = System.getProperty("superhistogram.renderDir");
@@ -117,10 +130,9 @@ public class UsabilityReplay
 		when(client.getEnergy()).thenReturn(8000);
 		when(client.getMouseIdleTicks()).thenReturn(0);
 		when(client.getKeyboardIdleTicks()).thenReturn(0);
-		when(client.isPrayerActive(any(Prayer.class))).thenAnswer(i -> prayers.getOrDefault(i.getArgument(0), false));
 		when(client.getBoostedSkillLevel(Skill.PRAYER)).thenAnswer(i -> prayerPoints);
 		when(me.getAnimation()).thenReturn(-1);
-		when(client.getVarbitValue(anyInt())).thenAnswer(i -> varbits.getOrDefault((Integer) i.getArgument(0), 0));
+		when(client.getVarbitValue(anyInt())).thenAnswer(i -> prayerVarbit(i.getArgument(0)));
 		when(client.getVarpValue(anyInt())).thenAnswer(i -> varps.getOrDefault((Integer) i.getArgument(0), 0));
 		when(me.getWorldLocation()).thenAnswer(i -> new WorldPoint(x, y, 0));
 		when(npc.getIndex()).thenReturn(7);
